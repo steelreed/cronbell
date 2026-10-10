@@ -9,9 +9,9 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.steelreed</groupId>
-	<artifactId>cron-server</artifactId>
+	<artifactId>cronbell-server</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>cron-server</name>
+	<name>cronbell-server</name>
 	<description/>
 	<url/>
 	<licenses>

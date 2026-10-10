@@ -1,13 +1,14 @@
-# Steelreed Cron — design
+# Cronbell — design
 
 Status: **draft for v0.1**, revised 2026-10-10 to self-hosted first. This is the specification. Behaviour described here is what the tests
 assert; change this file first, then the code.
 
-"Steelreed Cron" is a working name.
+Cronbell is a Steelreed product (name decided 2026-10-11). Page: https://steelreed.com/cronbell/, repository:
+github.com/steelreed/cronbell.
 
 ## 1. What it does
 
-Scheduled jobs fail silently: a job that never runs throws nothing and logs nothing. Steelreed Cron
+Scheduled jobs fail silently: a job that never runs throws nothing and logs nothing. Cronbell
 expects every job to report each run, knows when the next run is due, and alerts when a run is
 missed, late, failing or unusually slow.
 
@@ -18,14 +19,14 @@ Users, in order of priority:
 
 1. **Anyone with scheduled jobs, in any language**: Linux cron, shell scripts, backups, Docker
    containers, Kubernetes CronJobs, Node/Python/PHP/Go workers. They add one `curl` to the job.
-2. **Spring Boot teams** add `cron-spring-boot-starter`. It finds every `@Scheduled`, Quartz and
+2. **Spring Boot teams** add `cronbell-spring-boot-starter`. It finds every `@Scheduled`, Quartz and
    ShedLock job, registers it with its real schedule, and reports every run with no job code
    changes. This is the integration competitors do not have.
 
 Self-hosting must take under a minute:
 
 ```
-docker run -d -p 8080:8080 -v cron-data:/data ghcr.io/steelreed/cron
+docker run -d -p 8080:8080 -v cronbell-data:/data ghcr.io/steelreed/cronbell
 ```
 
 Non-goals for v0.1: uptime checks of URLs, log storage, status pages, Zalo (needs approved message
@@ -104,7 +105,7 @@ Rules:
 - `rid`: a `success`/`fail` with a different `rid` than the open run's finishes an older,
   overlapping run and leaves the newer run open. Without `rid`, a finish closes the open run.
 - Pings older than the last recorded ping (clock skew, retries) are stored but do not change state.
-- Detection runs every 15 seconds (`cron.detector.interval`). Alerts are therefore up to 15 s
+- Detection runs every 15 seconds (`cronbell.detector.interval`). Alerts are therefore up to 15 s
   late; this is documented. On UP → DOWN and DOWN → UP the server publishes an internal
   `CheckEvent` after the transaction commits; the notifier (§8) listens to it.
 - Detection must be safe to run on several server instances: it claims due checks with
@@ -157,16 +158,16 @@ POST /api/v1/checks/{slug}/pause    PAUSED until the next ping
 letters, digits, `.`, `_`, `-`. Changing the schedule recomputes `next_due_at` from now. Errors
 are RFC 9457 problem details (`400` invalid definition, `401` missing or unknown key).
 
-API keys look like `crn_<43 random characters>`; only their SHA-256 is stored. On first start,
-when no project exists, the server creates a `Default` project and one key: `CRON_API_KEY` if set,
+API keys look like `cb_<43 random characters>`; only their SHA-256 is stored. On first start,
+when no project exists, the server creates a `Default` project and one key: `CRONBELL_API_KEY` if set,
 otherwise a generated key printed once to the log.
 
 ## 7. Spring Boot starter
 
-Artifact `com.steelreed:cron-spring-boot-starter`. Baseline **Java 17, Spring Boot 3.x and 4.x**,
+Artifact `com.steelreed:cronbell-spring-boot-starter`. Baseline **Java 17, Spring Boot 3.x and 4.x**,
 so existing applications can use it. License Apache-2.0 so it never affects the user's licence.
 
-- Disabled unless `steelreed.cron.key` is set.
+- Disabled unless `cronbell.key` is set.
 - Discovers jobs from `ScheduledTaskHolder` (`@Scheduled`), Quartz `Scheduler` triggers, and wraps
   ShedLock-locked methods.
 - Slug: `<bean>.<method>` for `@Scheduled`, `<group>.<name>` for Quartz. Overridable with
@@ -194,7 +195,7 @@ starter/  Java 17 library for user applications (later)
 
 - **Two databases, one schema.** SQLite (file in `/data`) is the default, so the Docker image
   needs nothing else. PostgreSQL is used by the cloud and by larger self-hosted installs
-  (`CRON_DATABASE_URL=postgres://…`). Every test runs against both.
+  (`CRONBELL_DATABASE_URL=postgres://…`). Every test runs against both.
 - One set of Flyway migrations (`db/migration`) runs unchanged on both, so it uses portable types
   only: ids are UUIDv7 strings made by the server (`VARCHAR(36)`), times are epoch milliseconds
   (`BIGINT`, UTC). A per-vendor folder is added only if a migration cannot be portable.
@@ -204,9 +205,9 @@ starter/  Java 17 library for user applications (later)
   `SELECT … FOR UPDATE SKIP LOCKED`.
 - A ping is one insert plus one update. Old pings are pruned daily (§10).
 - The server serves the built web app as static files: one container, one port.
-- Image: `ghcr.io/steelreed/cron`, multi-arch (amd64, arm64). Target: under 300 MB of RAM at
+- Image: `ghcr.io/steelreed/cronbell`, multi-arch (amd64, arm64). Target: under 300 MB of RAM at
   1,000 checks.
-- First start creates an admin account from `CRON_ADMIN_EMAIL` / `CRON_ADMIN_PASSWORD`, or shows a
+- First start creates an admin account from `CRONBELL_ADMIN_EMAIL` / `CRONBELL_ADMIN_PASSWORD`, or shows a
   one-time setup page.
 
 ## 10. Plans
@@ -226,8 +227,6 @@ Billing is not built in v0.1.
 
 ## 11. Open questions
 
-- Product name. "Steelreed Cron" until there are users.
 - Sign-in on the cloud: magic-link email (Spring Security one-time tokens) or GitHub OAuth first?
   Self-hosted uses email and password.
 - Billing provider usable from Vietnam.
-- Name and domain, once there are users.
