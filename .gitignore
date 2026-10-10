@@ -13,3 +13,5 @@ dist/
 .env
 .env.*
 !.env.example
+# Server data (SQLite)
+/server/data/
