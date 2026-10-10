@@ -1,6 +1,6 @@
 # Steelreed Cron — design
 
-Status: **draft for v0.1**. This is the specification. Behaviour described here is what the tests
+Status: **draft for v0.1**, revised 2026-10-10 to self-hosted first. This is the specification. Behaviour described here is what the tests
 assert; change this file first, then the code.
 
 "Steelreed Cron" is a working name.
@@ -11,11 +11,22 @@ Scheduled jobs fail silently: a job that never runs throws nothing and logs noth
 expects every job to report each run, knows when the next run is due, and alerts when a run is
 missed, late, failing or unusually slow.
 
-Users:
+It is open source and **self-hosted first**: one Docker command gives anyone a working instance.
+The hosted cloud version is how the project earns money (§10).
 
-- A Spring Boot team adds `cron-spring-boot-starter`. The starter finds every `@Scheduled`, Quartz
-  and ShedLock job, registers it with its real schedule, and reports every run. No job code changes.
-- Anyone else (shell scripts, Kubernetes CronJobs, other languages) sends HTTP pings by hand.
+Users, in order of priority:
+
+1. **Anyone with scheduled jobs, in any language**: Linux cron, shell scripts, backups, Docker
+   containers, Kubernetes CronJobs, Node/Python/PHP/Go workers. They add one `curl` to the job.
+2. **Spring Boot teams** add `cron-spring-boot-starter`. It finds every `@Scheduled`, Quartz and
+   ShedLock job, registers it with its real schedule, and reports every run with no job code
+   changes. This is the integration competitors do not have.
+
+Self-hosting must take under a minute:
+
+```
+docker run -d -p 8080:8080 -v cron-data:/data ghcr.io/steelreed/cron
+```
 
 Non-goals for v0.1: uptime checks of URLs, log storage, status pages, Zalo (needs approved message
 templates), on-call rotations, SSO.
@@ -127,26 +138,44 @@ channel in the dashboard.
 ## 9. Architecture
 
 ```
-server/   Spring Boot 4.1, Java 25, PostgreSQL, Flyway. One process:
+server/   Spring Boot 4.1, Java 25, Flyway. One process:
           ping endpoint · management API · detector · notifier · serves web/dist
 web/      Vite + React 19 + TypeScript + TanStack Router/Query + Tailwind + shadcn/ui
 starter/  Java 17 library for user applications (later)
 ```
 
-- Pings are written straight to Postgres; a ping is one insert plus one update.
-- `pings` is partitioned by month and pruned by plan (30 days free, 1 year paid).
-- The server serves the built web app as static files, so there is one deployable.
+- **Two databases, one schema.** SQLite (file in `/data`) is the default, so the Docker image
+  needs nothing else. PostgreSQL is used by the cloud and by larger self-hosted installs
+  (`CRON_DATABASE_URL=postgres://…`). Every test runs against both.
+- With SQLite there is exactly one server instance and the detector claims nothing. With
+  PostgreSQL several instances may run, and the detector claims due checks with
+  `SELECT … FOR UPDATE SKIP LOCKED`.
+- A ping is one insert plus one update. Old pings are pruned daily (§10).
+- The server serves the built web app as static files: one container, one port.
+- Image: `ghcr.io/steelreed/cron`, multi-arch (amd64, arm64). Target: under 300 MB of RAM at
+  1,000 checks.
+- First start creates an admin account from `CRON_ADMIN_EMAIL` / `CRON_ADMIN_PASSWORD`, or shows a
+  one-time setup page.
 
-## 10. Plans (planned, not built in v0.1)
+## 10. Plans
 
-| | Free | Team | Self-hosted |
+Self-hosted is complete and free forever: no feature is removed to push people to the cloud.
+The cloud sells not having to run it, plus team features.
+
+| | Self-hosted | Cloud Free | Cloud Team (planned ~$9/mo) |
 |---|---|---|---|
-| Checks | 20 | 200 | unlimited |
-| Channels | email, Telegram | + Slack, webhook (Zalo later) | all |
-| History | 30 days | 1 year | configurable |
+| Checks | unlimited | 20 | 200 |
+| Channels | all | email, Telegram | all, incl. Slack, webhook, Zalo later |
+| History | configurable (default 90 days) | 30 days | 1 year |
+| Members | unlimited | 1 | 10 |
+| Support | GitHub issues | GitHub issues | email |
+
+Billing is not built in v0.1.
 
 ## 11. Open questions
 
-- Sign-in: magic-link email (Spring Security one-time tokens) or GitHub OAuth first?
+- Product name. "Steelreed Cron" until there are users.
+- Sign-in on the cloud: magic-link email (Spring Security one-time tokens) or GitHub OAuth first?
+  Self-hosted uses email and password.
 - Billing provider usable from Vietnam.
 - Name and domain, once there are users.
