@@ -1,0 +1,152 @@
+# Steelreed Cron — design
+
+Status: **draft for v0.1**. This is the specification. Behaviour described here is what the tests
+assert; change this file first, then the code.
+
+"Steelreed Cron" is a working name.
+
+## 1. What it does
+
+Scheduled jobs fail silently: a job that never runs throws nothing and logs nothing. Steelreed Cron
+expects every job to report each run, knows when the next run is due, and alerts when a run is
+missed, late, failing or unusually slow.
+
+Users:
+
+- A Spring Boot team adds `cron-spring-boot-starter`. The starter finds every `@Scheduled`, Quartz
+  and ShedLock job, registers it with its real schedule, and reports every run. No job code changes.
+- Anyone else (shell scripts, Kubernetes CronJobs, other languages) sends HTTP pings by hand.
+
+Non-goals for v0.1: uptime checks of URLs, log storage, status pages, Zalo (needs approved message
+templates), on-call rotations, SSO.
+
+## 2. Concepts
+
+| Term | Meaning |
+|---|---|
+| **Account** | A person who signs in. |
+| **Project** | A group of checks, owned by one account in v0.1. Has API keys and alert channels. |
+| **Check** | One job being watched. Identified publicly by a random UUID (`ping key`) and inside a project by a `slug`. |
+| **Schedule** | Either a cron expression with a time zone, or a fixed period. |
+| **Grace** | How long after the due time a run may still arrive before it counts as missed. |
+| **Ping** | One message from a job: `start`, `success`, `fail`, or `log`. |
+| **Run** | A `start` followed by its `success` or `fail`, or a lone `success`/`fail`. |
+| **Channel** | Where alerts go: email, Telegram, Slack, webhook. |
+
+## 3. Check states
+
+```
+            first ping                 run missed / failed / too long
+   NEW ───────────────────▶ UP ─────────────────────────────────────▶ DOWN
+                             ▲                                          │
+                             └──────────── successful run ──────────────┘
+   PAUSED: set by the user; no alerts; the next ping returns it to UP.
+```
+
+- **NEW**: created, never pinged. Never alerts. A check that stays NEW for 24 hours is flagged in
+  the dashboard, not alerted.
+- **UP**: the last run succeeded and the next run is not overdue.
+- **DOWN**: one of the conditions in §4. An alert is sent on the transition UP → DOWN and on
+  DOWN → UP, never repeatedly while the state holds (v0.1 has no reminder emails).
+
+Each check stores `status`, `last_ping_at`, `last_success_at`, `last_start_at`, `next_due_at`,
+`down_reason`.
+
+## 4. When a check goes DOWN
+
+Let `due` be the next expected run time computed from the schedule after the last completed run
+(or after creation for a check that has run once and never again).
+
+| Reason | Condition |
+|---|---|
+| `MISSED` | `now > due + grace` and no ping since `due` |
+| `FAILED` | a `fail` ping arrived (any exit code ≠ 0 counts as fail) |
+| `RUNNING_TOO_LONG` | a `start` arrived and neither `success` nor `fail` followed within `max_runtime` (default: grace) |
+| `SLOW` | v0.2: duration above the p95 of the last 30 runs times a factor. Not in v0.1. |
+
+Rules:
+
+- Schedule evaluation uses the check's time zone (default `UTC`), including daylight-saving gaps:
+  a run that falls in a skipped hour is due at the first valid instant after it.
+- A `success` that arrives early (before `due`) is accepted and moves `due` forward.
+- Pings older than the last recorded ping (clock skew, retries) are stored but do not change state.
+- Detection runs every 15 seconds. Alerts are therefore up to 15 s late; this is documented.
+- Detection must be safe to run on several server instances: it claims due checks with
+  `SELECT … FOR UPDATE SKIP LOCKED`.
+
+## 5. Ping API
+
+Compatible with the Healthchecks.io URL shape, so moving over is a host change.
+
+```
+GET|POST /ping/{pingKey}              success
+GET|POST /ping/{pingKey}/start        start of a run
+GET|POST /ping/{pingKey}/fail         failure
+GET|POST /ping/{pingKey}/{exitCode}   0 = success, anything else = failure
+GET|POST /ping/{pingKey}/log          log only, no state change
+```
+
+- The request body (up to 10 KB, truncated beyond) is stored with the ping as its log excerpt.
+- Optional query `rid=<uuid>` ties a `start` to its `success`/`fail` when runs overlap.
+- Responses: `200 OK` with body `OK`; `404` for an unknown key. Never `5xx` for a valid key unless
+  the database is down.
+- No authentication: the ping key is the secret. Rate limit: 5 pings per second per check.
+
+## 6. Management API (used by the web app and the starter)
+
+JSON over `/api/v1`, documented by OpenAPI at `/api/v1/openapi.json`.
+
+- Web app: session cookie + CSRF token (same origin).
+- Starter and scripts: `Authorization: Bearer <project API key>`.
+
+Key endpoint for the starter: `PUT /api/v1/checks/{slug}` creates or updates a check by slug and
+returns its ping key, so registration at startup is idempotent.
+
+## 7. Spring Boot starter
+
+Artifact `com.steelreed:cron-spring-boot-starter`. Baseline **Java 17, Spring Boot 3.x and 4.x**,
+so existing applications can use it. License Apache-2.0 so it never affects the user's licence.
+
+- Disabled unless `steelreed.cron.key` is set.
+- Discovers jobs from `ScheduledTaskHolder` (`@Scheduled`), Quartz `Scheduler` triggers, and wraps
+  ShedLock-locked methods.
+- Slug: `<bean>.<method>` for `@Scheduled`, `<group>.<name>` for Quartz. Overridable with
+  `@CronCheck("slug")` for users who want stable names.
+- Reports `start`, then `success` or `fail` with the exception class and message as the log.
+- All reporting is asynchronous with a bounded queue; when the server is unreachable it drops
+  pings and logs a warning once per minute. **A monitoring outage must never slow or break a job.**
+
+## 8. Alerts
+
+Channels in v0.1: email, Telegram bot, Slack incoming webhook, generic webhook (JSON POST).
+
+An alert names the check, the reason, the expected time in the check's time zone, the last success,
+and the last log excerpt. Delivery is retried with backoff for 1 hour; failures are visible on the
+channel in the dashboard.
+
+## 9. Architecture
+
+```
+server/   Spring Boot 4.1, Java 25, PostgreSQL, Flyway. One process:
+          ping endpoint · management API · detector · notifier · serves web/dist
+web/      Vite + React 19 + TypeScript + TanStack Router/Query + Tailwind + shadcn/ui
+starter/  Java 17 library for user applications (later)
+```
+
+- Pings are written straight to Postgres; a ping is one insert plus one update.
+- `pings` is partitioned by month and pruned by plan (30 days free, 1 year paid).
+- The server serves the built web app as static files, so there is one deployable.
+
+## 10. Plans (planned, not built in v0.1)
+
+| | Free | Team | Self-hosted |
+|---|---|---|---|
+| Checks | 20 | 200 | unlimited |
+| Channels | email, Telegram | + Slack, webhook (Zalo later) | all |
+| History | 30 days | 1 year | configurable |
+
+## 11. Open questions
+
+- Sign-in: magic-link email (Spring Security one-time tokens) or GitHub OAuth first?
+- Billing provider usable from Vietnam.
+- Name and domain, once there are users.

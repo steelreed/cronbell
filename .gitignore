@@ -1,0 +1,15 @@
+# Java
+target/
+*.class
+# Node
+node_modules/
+dist/
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+# Local env
+.env
+.env.*
+!.env.example
