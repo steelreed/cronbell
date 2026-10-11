@@ -11,8 +11,9 @@ import org.springframework.stereotype.Component;
 /**
  * Token bucket per check: up to {@code rate} pings per second, bursts of {@code rate}.
  *
- * <p>In memory, so the limit is per server instance: with N instances behind a load balancer a
- * check can get up to N times the rate.
+ * <p>
+ * In memory, so the limit is per server instance: with N instances behind a load balancer
+ * a check can get up to N times the rate.
  */
 @Component
 public class PingRateLimiter {
@@ -34,7 +35,10 @@ public class PingRateLimiter {
 		return this.buckets.computeIfAbsent(checkId, id -> new Bucket(this.rate, now)).tryTake(this.rate, now);
 	}
 
-	/** Drops buckets unused for a minute (they are full again by then), so memory stays bounded. */
+	/**
+	 * Drops buckets unused for a minute (they are full again by then), so memory stays
+	 * bounded.
+	 */
 	@Scheduled(fixedDelay = 60_000)
 	void evictIdle() {
 		long now = this.clock.millis();

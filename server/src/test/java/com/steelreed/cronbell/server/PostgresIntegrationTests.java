@@ -52,7 +52,8 @@ class PostgresIntegrationTests extends AbstractIntegrationTests {
 		// Another instance holds the row while it processes the check.
 		try (Connection other = this.dataSource.getConnection()) {
 			other.setAutoCommit(false);
-			try (PreparedStatement lock = other.prepareStatement("SELECT id FROM checks WHERE ping_key = ? FOR UPDATE")) {
+			try (PreparedStatement lock = other
+				.prepareStatement("SELECT id FROM checks WHERE ping_key = ? FOR UPDATE")) {
 				lock.setString(1, key);
 				try (ResultSet rs = lock.executeQuery()) {
 					assertThat(rs.next()).isTrue();

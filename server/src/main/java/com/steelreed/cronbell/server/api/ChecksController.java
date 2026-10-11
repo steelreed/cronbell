@@ -39,7 +39,9 @@ class ChecksController {
 		return this.checks.list(project.projectId()).stream().map(CheckResponse::of).toList();
 	}
 
-	/** Creates or updates the check with this slug. 201 when created, 200 when updated. */
+	/**
+	 * Creates or updates the check with this slug. 201 when created, 200 when updated.
+	 */
 	@PutMapping("/{slug}")
 	ResponseEntity<CheckResponse> upsert(@AuthenticationPrincipal ProjectPrincipal project, @PathVariable String slug,
 			@RequestBody CheckRequest request) {
@@ -63,10 +65,10 @@ class ChecksController {
 
 	}
 
-	record CheckResponse(String slug, String name, UUID pingKey, String pingUrl, ScheduleKind scheduleKind,
-			String cron, String timeZone, Long periodSeconds, long graceSeconds, Long maxRuntimeSeconds,
-			CheckStatus status, DownReason downReason, Instant lastPingAt, Instant lastStartAt, Instant lastSuccessAt,
-			Instant nextDueAt, Instant createdAt) {
+	record CheckResponse(String slug, String name, UUID pingKey, String pingUrl, ScheduleKind scheduleKind, String cron,
+			String timeZone, Long periodSeconds, long graceSeconds, Long maxRuntimeSeconds, CheckStatus status,
+			DownReason downReason, Instant lastPingAt, Instant lastStartAt, Instant lastSuccessAt, Instant nextDueAt,
+			Instant createdAt) {
 
 		static CheckResponse of(Check c) {
 			String pingUrl = ServletUriComponentsBuilder.fromCurrentContextPath()

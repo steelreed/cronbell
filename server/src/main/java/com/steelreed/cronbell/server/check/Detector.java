@@ -14,12 +14,13 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Marks UP checks DOWN when a run is missed or runs too long (DESIGN.md §4). Runs every 15 s by
- * default ({@code cronbell.detector.interval}).
+ * Marks UP checks DOWN when a run is missed or runs too long (DESIGN.md §4). Runs every
+ * 15 s by default ({@code cronbell.detector.interval}).
  *
- * <p>Each batch is claimed and updated in one transaction. On PostgreSQL the claim uses
- * {@code FOR UPDATE SKIP LOCKED}, so several instances can run the detector at once without
- * double-processing a check.
+ * <p>
+ * Each batch is claimed and updated in one transaction. On PostgreSQL the claim uses
+ * {@code FOR UPDATE SKIP LOCKED}, so several instances can run the detector at once
+ * without double-processing a check.
  */
 @Component
 public class Detector {

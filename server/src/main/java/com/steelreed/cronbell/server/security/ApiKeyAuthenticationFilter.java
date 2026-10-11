@@ -16,8 +16,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
- * Authenticates {@code Authorization: Bearer <project API key>}. A missing or unknown key leaves
- * the request anonymous; the authorization rules then answer 401.
+ * Authenticates {@code Authorization: Bearer <project API key>}. A missing or unknown key
+ * leaves the request anonymous; the authorization rules then answer 401.
  */
 class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
 

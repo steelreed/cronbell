@@ -15,8 +15,9 @@ import org.springframework.security.web.authentication.www.BasicAuthenticationFi
 import org.springframework.security.web.savedrequest.NullRequestCache;
 
 /**
- * Pings are open (the ping key is the secret). The management API needs a project API key as a
- * bearer token. Session sign-in for the web app comes later; it will need CSRF on /api/v1.
+ * Pings are open (the ping key is the secret). The management API needs a project API key
+ * as a bearer token. Session sign-in for the web app comes later; it will need CSRF on
+ * /api/v1.
  */
 @Configuration(proxyBeanMethods = false)
 class SecurityConfig {

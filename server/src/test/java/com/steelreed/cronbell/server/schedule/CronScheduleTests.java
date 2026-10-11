@@ -77,7 +77,8 @@ class CronScheduleTests {
 
 	@Test
 	void runInASkippedHourIsDueAtTheEndOfTheGap() {
-		// Berlin, 2026-03-29: 02:00 CET jumps to 03:00 CEST (01:00Z). 02:30 does not exist.
+		// Berlin, 2026-03-29: 02:00 CET jumps to 03:00 CEST (01:00Z). 02:30 does not
+		// exist.
 		CronSchedule schedule = CronSchedule.parse("30 2 * * *", BERLIN);
 		Instant gapRun = schedule.next(at("2026-03-28T23:00:00Z"));
 		assertThat(gapRun).isEqualTo(at("2026-03-29T01:00:00Z"));
@@ -102,7 +103,8 @@ class CronScheduleTests {
 
 	@Test
 	void runInARepeatedHourIsDueOnceAtItsFirstOccurrence() {
-		// Berlin, 2026-10-25: 03:00 CEST falls back to 02:00 CET (01:00Z). 02:30 happens twice.
+		// Berlin, 2026-10-25: 03:00 CEST falls back to 02:00 CET (01:00Z). 02:30 happens
+		// twice.
 		CronSchedule schedule = CronSchedule.parse("30 2 * * *", BERLIN);
 		Instant first = schedule.next(at("2026-10-24T22:00:00Z"));
 		assertThat(first).isEqualTo(at("2026-10-25T00:30:00Z"));

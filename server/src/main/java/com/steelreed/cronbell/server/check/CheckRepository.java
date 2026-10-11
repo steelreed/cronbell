@@ -33,7 +33,10 @@ public class CheckRepository {
 		this.database = database;
 	}
 
-	/** Finds a check by ping key and, on PostgreSQL, locks its row until the transaction ends. */
+	/**
+	 * Finds a check by ping key and, on PostgreSQL, locks its row until the transaction
+	 * ends.
+	 */
 	public Optional<Check> findByPingKeyForUpdate(UUID pingKey) {
 		return this.jdbc.sql("SELECT " + COLUMNS + " FROM checks WHERE ping_key = ?" + this.database.forUpdate())
 			.param(pingKey.toString())
@@ -57,9 +60,10 @@ public class CheckRepository {
 	}
 
 	/**
-	 * Claims UP checks that may have gone DOWN at {@code now}: past due plus grace without a ping
-	 * since, or running longer than allowed. Mirrors {@link CheckStateMachine#detect}. On
-	 * PostgreSQL rows are locked and rows locked by other instances are skipped.
+	 * Claims UP checks that may have gone DOWN at {@code now}: past due plus grace
+	 * without a ping since, or running longer than allowed. Mirrors
+	 * {@link CheckStateMachine#detect}. On PostgreSQL rows are locked and rows locked by
+	 * other instances are skipped.
 	 */
 	public List<Check> claimOverdue(Instant now, int limit) {
 		String sql = "SELECT " + COLUMNS + """
@@ -76,8 +80,9 @@ public class CheckRepository {
 
 	public void insert(Check check, Instant now) {
 		CheckState s = check.state();
-		this.jdbc.sql("INSERT INTO checks (" + COLUMNS + ", updated_at) VALUES "
-				+ "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+		this.jdbc
+			.sql("INSERT INTO checks (" + COLUMNS + ", updated_at) VALUES "
+					+ "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 			.params(check.id(), check.pingKey().toString(), check.projectId(), check.slug(), check.name(),
 					check.scheduleKind().name(), check.cronExpression(), check.timeZone().getId(),
 					check.periodSeconds(), check.graceSeconds(), check.maxRuntimeSeconds(), s.status().name(),

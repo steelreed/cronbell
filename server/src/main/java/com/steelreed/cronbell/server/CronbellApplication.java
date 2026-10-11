@@ -22,7 +22,9 @@ public class CronbellApplication {
 		return Clock.systemUTC();
 	}
 
-	/** The detector and housekeeping. Tests turn it off and drive the detector by hand. */
+	/**
+	 * The detector and housekeeping. Tests turn it off and drive the detector by hand.
+	 */
 	@Configuration(proxyBeanMethods = false)
 	@ConditionalOnProperty(name = "cronbell.scheduling.enabled", havingValue = "true", matchIfMissing = true)
 	@EnableScheduling

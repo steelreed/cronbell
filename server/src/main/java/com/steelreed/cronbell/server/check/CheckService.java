@@ -27,7 +27,10 @@ public class CheckService {
 
 	private static final Pattern SLUG = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,127}");
 
-	/** A check definition as sent by the client. Exactly one of {@code cron} and {@code periodSeconds}. */
+	/**
+	 * A check definition as sent by the client. Exactly one of {@code cron} and
+	 * {@code periodSeconds}.
+	 */
 	public record Definition(String name, String cron, String timeZone, Long periodSeconds, Long graceSeconds,
 			Long maxRuntimeSeconds) {
 	}
@@ -49,8 +52,9 @@ public class CheckService {
 	}
 
 	/**
-	 * Creates the check or updates the one with this slug, so registration is idempotent. The ping
-	 * key never changes. A changed schedule recomputes the next due time from now.
+	 * Creates the check or updates the one with this slug, so registration is idempotent.
+	 * The ping key never changes. A changed schedule recomputes the next due time from
+	 * now.
 	 * @throws IllegalArgumentException if the definition is invalid
 	 */
 	@Transactional
@@ -87,11 +91,10 @@ public class CheckService {
 	/** Pauses a check: no alerts until its next ping, which returns it to UP. */
 	@Transactional
 	public Check pause(String projectId, String slug) {
-		Check check = this.checks.findBySlug(projectId, slug)
-			.orElseThrow(() -> new CheckNotFoundException(slug));
+		Check check = this.checks.findBySlug(projectId, slug).orElseThrow(() -> new CheckNotFoundException(slug));
 		CheckState s = check.state();
-		CheckState paused = new CheckState(CheckStatus.PAUSED, null, s.lastPingAt(), s.lastStartAt(),
-				s.lastSuccessAt(), s.nextDueAt(), s.runStartedAt(), s.runRid());
+		CheckState paused = new CheckState(CheckStatus.PAUSED, null, s.lastPingAt(), s.lastStartAt(), s.lastSuccessAt(),
+				s.nextDueAt(), s.runStartedAt(), s.runRid());
 		this.checks.updateState(check.id(), paused, this.clock.instant().truncatedTo(ChronoUnit.MILLIS));
 		return check.withState(paused);
 	}

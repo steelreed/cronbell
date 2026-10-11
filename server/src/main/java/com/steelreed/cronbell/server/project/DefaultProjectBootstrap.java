@@ -13,8 +13,9 @@ import org.springframework.util.StringUtils;
 /**
  * On first start, when there is no project, creates a "Default" project with one API key.
  *
- * <p>The key comes from {@code CRONBELL_API_KEY} when set; otherwise one is generated and printed to
- * the log once. Only its hash is stored, so it cannot be shown again.
+ * <p>
+ * The key comes from {@code CRONBELL_API_KEY} when set; otherwise one is generated and
+ * printed to the log once. Only its hash is stored, so it cannot be shown again.
  */
 @Component
 class DefaultProjectBootstrap implements ApplicationRunner {

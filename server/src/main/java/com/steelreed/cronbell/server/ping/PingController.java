@@ -23,10 +23,11 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * The ping API of DESIGN.md §5, in the Healthchecks.io URL shape. No authentication: the ping
- * key is the secret.
+ * The ping API of DESIGN.md §5, in the Healthchecks.io URL shape. No authentication: the
+ * ping key is the secret.
  *
- * <p>The body is read straight from the request stream and {@code rid} from the raw query
+ * <p>
+ * The body is read straight from the request stream and {@code rid} from the raw query
  * string, so a form-encoded body ({@code curl -d}) is stored as text and not parsed as
  * parameters.
  */
@@ -53,8 +54,8 @@ class PingController {
 	}
 
 	@RequestMapping("/{action}")
-	ResponseEntity<String> action(@PathVariable String pingKey, @PathVariable String action,
-			HttpServletRequest request) throws IOException {
+	ResponseEntity<String> action(@PathVariable String pingKey, @PathVariable String action, HttpServletRequest request)
+			throws IOException {
 		return switch (action) {
 			case "start" -> handle(pingKey, PingKind.START, null, request);
 			case "fail" -> handle(pingKey, PingKind.FAIL, null, request);
@@ -94,7 +95,8 @@ class PingController {
 	private static UUID parseUuid(String value) {
 		try {
 			UUID uuid = UUID.fromString(value);
-			// UUID.fromString accepts short forms such as "1-2-3-4-5": require the canonical one.
+			// UUID.fromString accepts short forms such as "1-2-3-4-5": require the
+			// canonical one.
 			return uuid.toString().equalsIgnoreCase(value) ? uuid : null;
 		}
 		catch (IllegalArgumentException ex) {
@@ -122,7 +124,9 @@ class PingController {
 		return decode(bytes);
 	}
 
-	/** Cuts a UTF-8 sequence that truncation split in two, so it is not stored as garbage. */
+	/**
+	 * Cuts a UTF-8 sequence that truncation split in two, so it is not stored as garbage.
+	 */
 	static byte[] dropIncompleteTail(byte[] bytes) {
 		int i = bytes.length - 1;
 		int continuation = 0;

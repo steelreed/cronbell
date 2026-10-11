@@ -7,7 +7,10 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
 
-/** PostgreSQL for {@link TestCronbellApplication} (run the server locally against Postgres). */
+/**
+ * PostgreSQL for {@link TestCronbellApplication} (run the server locally against
+ * Postgres).
+ */
 @TestConfiguration(proxyBeanMethods = false)
 class TestcontainersConfiguration {
 

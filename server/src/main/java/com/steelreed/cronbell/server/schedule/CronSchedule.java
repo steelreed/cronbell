@@ -14,13 +14,15 @@ import org.springframework.scheduling.support.CronExpression;
 /**
  * A cron expression evaluated on the wall clock of a time zone.
  *
- * <p>Accepts standard 5-field Unix cron ({@code min hour day month weekday}), 6-field cron with
- * a leading seconds field (Spring syntax), and macros such as {@code @daily}. A 5-field
- * expression is run at second 0.
+ * <p>
+ * Accepts standard 5-field Unix cron ({@code min hour day month weekday}), 6-field cron
+ * with a leading seconds field (Spring syntax), and macros such as {@code @daily}. A
+ * 5-field expression is run at second 0.
  *
- * <p>Daylight-saving time: a run that falls in a skipped hour is due at the first valid instant
- * after the gap (the transition itself). A run in a repeated hour is due at its first
- * occurrence.
+ * <p>
+ * Daylight-saving time: a run that falls in a skipped hour is due at the first valid
+ * instant after the gap (the transition itself). A run in a repeated hour is due at its
+ * first occurrence.
  */
 public final class CronSchedule implements Schedule {
 
@@ -77,7 +79,8 @@ public final class CronSchedule implements Schedule {
 	public Instant next(Instant after) {
 		ZoneRules rules = this.zone.getRules();
 		LocalDateTime cursor = LocalDateTime.ofInstant(after, this.zone);
-		// Bounded: a few iterations at most around an overlap; the bound only guards bad input.
+		// Bounded: a few iterations at most around an overlap; the bound only guards bad
+		// input.
 		for (int i = 0; i < 1000; i++) {
 			LocalDateTime local = this.cron.next(cursor);
 			if (local == null) {
@@ -92,7 +95,9 @@ public final class CronSchedule implements Schedule {
 		throw new IllegalStateException("no next run found for " + this.expression);
 	}
 
-	/** Maps a wall-clock time to the first instant after {@code after}, or null if none. */
+	/**
+	 * Maps a wall-clock time to the first instant after {@code after}, or null if none.
+	 */
 	private static Instant resolve(ZoneRules rules, LocalDateTime local, Instant after) {
 		List<ZoneOffset> offsets = rules.getValidOffsets(local);
 		if (offsets.isEmpty()) {

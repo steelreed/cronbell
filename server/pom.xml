@@ -31,6 +31,8 @@
 		<sqlite-jdbc.version>3.53.4.0</sqlite-jdbc.version>
 		<!-- sqlite-jdbc loads a native library. -->
 		<argLine>--enable-native-access=ALL-UNNAMED</argLine>
+		<spring-javaformat.version>0.0.48</spring-javaformat.version>
+		<springdoc.version>3.1.1</springdoc.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -121,6 +123,21 @@
 
 	<build>
 		<plugins>
+			<!-- Spring's own code style; `verify` fails on unformatted code, `make format` fixes it. -->
+			<plugin>
+				<groupId>io.spring.javaformat</groupId>
+				<artifactId>spring-javaformat-maven-plugin</artifactId>
+				<version>${spring-javaformat.version}</version>
+				<executions>
+					<execution>
+						<phase>validate</phase>
+						<inherited>true</inherited>
+						<goals>
+							<goal>validate</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>

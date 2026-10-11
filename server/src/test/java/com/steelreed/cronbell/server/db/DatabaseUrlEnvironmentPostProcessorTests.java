@@ -16,8 +16,8 @@ class DatabaseUrlEnvironmentPostProcessorTests {
 	void convertsAPostgresUrl() {
 		Map<String, Object> properties = DatabaseUrlEnvironmentPostProcessor
 			.toDataSourceProperties("postgres://cron:p%40ss@db.example:6543/cron?sslmode=require");
-		assertThat(properties).containsEntry("spring.datasource.url",
-				"jdbc:postgresql://db.example:6543/cron?sslmode=require")
+		assertThat(properties)
+			.containsEntry("spring.datasource.url", "jdbc:postgresql://db.example:6543/cron?sslmode=require")
 			.containsEntry("spring.datasource.username", "cron")
 			.containsEntry("spring.datasource.password", "p@ss");
 	}

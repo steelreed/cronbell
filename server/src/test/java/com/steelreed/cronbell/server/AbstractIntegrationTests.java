@@ -32,11 +32,12 @@ import org.springframework.web.client.RestClient;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * End-to-end tests over HTTP. Subclasses run them against SQLite and PostgreSQL. The clock is
- * fixed and moved by hand, and the detector is run by hand.
+ * End-to-end tests over HTTP. Subclasses run them against SQLite and PostgreSQL. The
+ * clock is fixed and moved by hand, and the detector is run by hand.
  */
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT,
-		properties = { "cronbell.scheduling.enabled=false", "cronbell.bootstrap.api-key=" + AbstractIntegrationTests.API_KEY })
+		properties = { "cronbell.scheduling.enabled=false",
+				"cronbell.bootstrap.api-key=" + AbstractIntegrationTests.API_KEY })
 @Import(AbstractIntegrationTests.EventCollector.class)
 abstract class AbstractIntegrationTests {
 
@@ -148,7 +149,11 @@ abstract class AbstractIntegrationTests {
 	void bodyIsTruncatedTo10Kilobytes() {
 		String key = createCheck(uniqueSlug(), "{\"cron\":\"0 * * * *\"}");
 		String body = "x".repeat(11 * 1024);
-		this.http.post().uri("/ping/" + key + "/fail").contentType(MediaType.TEXT_PLAIN).body(body).retrieve()
+		this.http.post()
+			.uri("/ping/" + key + "/fail")
+			.contentType(MediaType.TEXT_PLAIN)
+			.body(body)
+			.retrieve()
 			.toEntity(String.class);
 		assertThat((String) pings(key).getFirst().get("body")).hasSize(10 * 1024);
 	}
@@ -276,8 +281,7 @@ abstract class AbstractIntegrationTests {
 		String pausedSlug = uniqueSlug();
 		String pausedKey = createCheck(pausedSlug, "{\"cron\":\"0 * * * *\",\"graceSeconds\":60}");
 		get("/ping/" + pausedKey);
-		assertThat(exchange(HttpMethod.POST, "/api/v1/checks/" + pausedSlug + "/pause", null, API_KEY)
-			.getStatusCode()
+		assertThat(exchange(HttpMethod.POST, "/api/v1/checks/" + pausedSlug + "/pause", null, API_KEY).getStatusCode()
 			.value()).isEqualTo(200);
 		CLOCK.set("2026-01-06T10:00:00Z");
 		this.detector.runOnce();
@@ -334,11 +338,11 @@ abstract class AbstractIntegrationTests {
 	@Test
 	void apiNeedsAValidBearerKey() {
 		assertThat(exchange(HttpMethod.GET, "/api/v1/checks", null, null).getStatusCode().value()).isEqualTo(401);
-		assertThat(exchange(HttpMethod.GET, "/api/v1/checks", null, "cb_wrong_key_wrong_key_wrong")
-			.getStatusCode()
+		assertThat(exchange(HttpMethod.GET, "/api/v1/checks", null, "cb_wrong_key_wrong_key_wrong").getStatusCode()
 			.value()).isEqualTo(401);
-		assertThat(exchange(HttpMethod.PUT, "/api/v1/checks/x", "{\"cron\":\"0 * * * *\"}", null).getStatusCode()
-			.value()).isEqualTo(401);
+		assertThat(
+				exchange(HttpMethod.PUT, "/api/v1/checks/x", "{\"cron\":\"0 * * * *\"}", null).getStatusCode().value())
+			.isEqualTo(401);
 	}
 
 	@Test
@@ -357,8 +361,7 @@ abstract class AbstractIntegrationTests {
 
 	@Test
 	void pausingAnUnknownCheckIs404() {
-		assertThat(exchange(HttpMethod.POST, "/api/v1/checks/" + uniqueSlug() + "/pause", null, API_KEY)
-			.getStatusCode()
+		assertThat(exchange(HttpMethod.POST, "/api/v1/checks/" + uniqueSlug() + "/pause", null, API_KEY).getStatusCode()
 			.value()).isEqualTo(404);
 	}
 

@@ -15,10 +15,13 @@ import org.springframework.util.StringUtils;
 
 /**
  * Turns {@code CRONBELL_DATABASE_URL} into {@code spring.datasource.*}. Accepts
- * {@code postgres://user:password@host:port/db?params} (the usual shape from hosting providers)
- * and plain {@code jdbc:} URLs. Explicit {@code spring.datasource.*} settings still win.
+ * {@code postgres://user:password@host:port/db?params} (the usual shape from hosting
+ * providers) and plain {@code jdbc:} URLs. Explicit {@code spring.datasource.*} settings
+ * still win.
  *
- * <p>Without it the server uses SQLite under {@code CRONBELL_DATA_DIR} (see application.properties).
+ * <p>
+ * Without it the server uses SQLite under {@code CRONBELL_DATA_DIR} (see
+ * application.properties).
  */
 public class DatabaseUrlEnvironmentPostProcessor implements EnvironmentPostProcessor {
 

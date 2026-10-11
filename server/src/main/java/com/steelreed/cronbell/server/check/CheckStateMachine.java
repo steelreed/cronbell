@@ -12,8 +12,8 @@ import com.steelreed.cronbell.server.schedule.Schedule;
 public final class CheckStateMachine {
 
 	/**
-	 * How early a success or failure may arrive and still count as the run due at the next cron
-	 * time (clock skew between the job host and the server).
+	 * How early a success or failure may arrive and still count as the run due at the
+	 * next cron time (clock skew between the job host and the server).
 	 */
 	public static final Duration EARLY_TOLERANCE = Duration.ofSeconds(60);
 
@@ -36,8 +36,8 @@ public final class CheckStateMachine {
 	}
 
 	/**
-	 * Applies a ping received at {@code at}. Log pings and pings older than the last recorded one
-	 * leave the state unchanged.
+	 * Applies a ping received at {@code at}. Log pings and pings older than the last
+	 * recorded one leave the state unchanged.
 	 */
 	public static Outcome onPing(CheckState s, Schedule schedule, PingKind kind, String rid, Instant at) {
 		if (kind == PingKind.LOG || (s.lastPingAt() != null && at.isBefore(s.lastPingAt()))) {
@@ -68,7 +68,8 @@ public final class CheckStateMachine {
 
 	private static CheckState finishRun(CheckState s, Schedule schedule, String rid, Instant at, Instant currentDue,
 			CheckStatus status, DownReason reason, Instant lastSuccessAt) {
-		// A finish with a different rid belongs to an older overlapping run: the newer one stays open.
+		// A finish with a different rid belongs to an older overlapping run: the newer
+		// one stays open.
 		boolean closesRun = s.runRid() == null || rid == null || rid.equals(s.runRid());
 		Instant runStartedAt = closesRun ? null : s.runStartedAt();
 		String runRid = closesRun ? null : s.runRid();
@@ -77,9 +78,10 @@ public final class CheckStateMachine {
 	}
 
 	/**
-	 * Next due time after a run completed at {@code at}. For cron schedules, a run that completes
-	 * up to {@link #EARLY_TOLERANCE} before {@code currentDue} counts as that run. For periods the
-	 * next run is always one period after this one, so an early run moves the due time forward.
+	 * Next due time after a run completed at {@code at}. For cron schedules, a run that
+	 * completes up to {@link #EARLY_TOLERANCE} before {@code currentDue} counts as that
+	 * run. For periods the next run is always one period after this one, so an early run
+	 * moves the due time forward.
 	 */
 	static Instant nextDueAfterRun(Schedule schedule, Instant at, Instant currentDue) {
 		if (schedule instanceof CronSchedule && currentDue != null && at.isBefore(currentDue)
@@ -90,8 +92,8 @@ public final class CheckStateMachine {
 	}
 
 	/**
-	 * Evaluates a check at {@code now} for the detector: MISSED or RUNNING_TOO_LONG. Only UP checks
-	 * can go DOWN here; NEW and PAUSED never alert, DOWN stays DOWN.
+	 * Evaluates a check at {@code now} for the detector: MISSED or RUNNING_TOO_LONG. Only
+	 * UP checks can go DOWN here; NEW and PAUSED never alert, DOWN stays DOWN.
 	 */
 	public static Outcome detect(CheckState s, Duration grace, Duration maxRuntime, Instant now) {
 		if (s.status() != CheckStatus.UP) {

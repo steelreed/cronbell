@@ -74,7 +74,8 @@ class CheckStateMachineTests {
 
 		@Test
 		void finishWithAnotherRidLeavesTheNewerRunOpen() {
-			CheckState first = CheckStateMachine.onPing(CheckState.initial(), HOURLY, PingKind.START, "a", at("10:00:00"))
+			CheckState first = CheckStateMachine
+				.onPing(CheckState.initial(), HOURLY, PingKind.START, "a", at("10:00:00"))
 				.state();
 			CheckState second = CheckStateMachine.onPing(first, HOURLY, PingKind.START, "b", at("10:30:00")).state();
 			CheckState firstDone = CheckStateMachine.onPing(second, HOURLY, PingKind.SUCCESS, "a", at("10:40:00"))
@@ -181,8 +182,9 @@ class CheckStateMachineTests {
 
 		@Test
 		void earlyPeriodRunMovesDueForward() {
-			CheckState up = CheckStateMachine.onPing(CheckState.initial(), PERIOD, PingKind.SUCCESS, null,
-					at("10:00:00")).state();
+			CheckState up = CheckStateMachine
+				.onPing(CheckState.initial(), PERIOD, PingKind.SUCCESS, null, at("10:00:00"))
+				.state();
 			assertThat(up.nextDueAt()).isEqualTo(at("11:00:00"));
 			CheckState early = CheckStateMachine.onPing(up, PERIOD, PingKind.SUCCESS, null, at("10:20:00")).state();
 			assertThat(early.nextDueAt()).isEqualTo(at("11:20:00"));

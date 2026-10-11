@@ -11,9 +11,9 @@ import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.stereotype.Component;
 
 /**
- * Settings SQLite needs, whatever the configured URL: the data directory must exist, there is
- * exactly one connection (SQLite has one writer, so a pool only adds lock contention), WAL
- * journal, foreign keys on, and a busy timeout.
+ * Settings SQLite needs, whatever the configured URL: the data directory must exist,
+ * there is exactly one connection (SQLite has one writer, so a pool only adds lock
+ * contention), WAL journal, foreign keys on, and a busy timeout.
  */
 @Component
 class SqliteDataSourcePostProcessor implements BeanPostProcessor {
