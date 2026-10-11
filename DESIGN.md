@@ -202,8 +202,9 @@ A channel is `{"type", "name", "config"}`; `name` defaults to the type. Config p
 Secrets are stored as given (the database already holds the ping keys, which are secrets too) and
 are never logged. The API returns them masked: tokens and secrets as `ab…yz` (`****` when short),
 URLs as `https://host/…`. On `PUT`, a secret field that is omitted, `null`, or equal to its masked
-value keeps the stored value, so a client can round-trip what it read. Unknown config fields are
-`400`. Each channel in a response also has `lastAttemptAt`, `lastDeliveryAt` (last success),
+value keeps the stored value, so a client can round-trip what it read; an empty optional secret
+removes it. Other fields are replaced (an omitted `name` returns to the default). Unknown config
+fields are `400`. Each channel in a response also has `lastAttemptAt`, `lastDeliveryAt` (last success),
 `lastError` (of the latest attempt, `null` if it succeeded) and `pendingDeliveries`.
 
 ### Messages
@@ -243,7 +244,9 @@ last 1,000 characters.
    "log": "…"}
   ```
 
-  `event` is `check.down`, `check.up` or `test`; absent values are `null`. Headers:
+  `event` is `check.down`, `check.up` or `test` (`check` is `null` for a test). `expectedAt` is
+  the missed due time for `MISSED`, the next due time for `check.up`, else `null`; absent values
+  are `null`. Headers:
   `Cronbell-Delivery: <id>` (the same on retries, so receivers can drop duplicates),
   `Cronbell-Timestamp: <unix seconds>`, and, when the channel has a secret,
   `Cronbell-Signature: sha256=<hex HMAC-SHA256 of "<timestamp>.<body>" with the secret>`.
