@@ -3,6 +3,7 @@ package com.steelreed.cronbell.server;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.util.UUID;
 
 import javax.sql.DataSource;
 
@@ -66,6 +67,31 @@ class PostgresIntegrationTests extends AbstractIntegrationTests {
 		this.detector.runOnce();
 		assertThat(field(slug, "status")).isEqualTo("DOWN");
 		assertThat(this.events.forSlug(slug)).hasSize(1);
+	}
+
+	@Test
+	void notifierSkipsDeliveriesLockedByAnotherInstance() throws Exception {
+		Project project = newProject();
+		String hook = "/hook/" + UUID.randomUUID();
+		String channel = createChannel(project,
+				"{\"type\":\"webhook\",\"config\":{\"url\":\"" + RECEIVER.url(hook) + "\"}}");
+		goDown(project);
+		// Another instance has claimed the delivery and is sending it.
+		try (Connection other = this.dataSource.getConnection()) {
+			other.setAutoCommit(false);
+			try (PreparedStatement lock = other
+				.prepareStatement("SELECT id FROM deliveries WHERE channel_id = ? FOR UPDATE")) {
+				lock.setString(1, channel);
+				try (ResultSet rs = lock.executeQuery()) {
+					assertThat(rs.next()).isTrue();
+				}
+			}
+			this.dispatcher.runOnce();
+			assertThat(RECEIVER.requests(hook)).isEmpty();
+			other.rollback();
+		}
+		this.dispatcher.runOnce();
+		assertThat(RECEIVER.requests(hook)).hasSize(1);
 	}
 
 }
