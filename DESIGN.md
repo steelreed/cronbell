@@ -107,7 +107,8 @@ Rules:
 - Pings older than the last recorded ping (clock skew, retries) are stored but do not change state.
 - Detection runs every 15 seconds (`cronbell.detector.interval`). Alerts are therefore up to 15 s
   late; this is documented. On UP → DOWN and DOWN → UP the server publishes an internal
-  `CheckEvent` after the transaction commits; the notifier (§8) listens to it.
+  `CheckEvent`; the notifier (§8) queues its deliveries before the transaction commits and sends
+  them after.
 - Detection must be safe to run on several server instances: it claims due checks with
   `SELECT … FOR UPDATE SKIP LOCKED`.
 
@@ -148,9 +149,15 @@ returns its ping key, so registration at startup is idempotent.
 v0.1 endpoints so far (bearer key only; session sign-in and OpenAPI come with the web app):
 
 ```
-GET  /api/v1/checks                 checks of the key's project
-PUT  /api/v1/checks/{slug}          create (201) or update (200); the ping key never changes
-POST /api/v1/checks/{slug}/pause    PAUSED until the next ping
+GET    /api/v1/checks                 checks of the key's project
+PUT    /api/v1/checks/{slug}          create (201) or update (200); the ping key never changes
+POST   /api/v1/checks/{slug}/pause    PAUSED until the next ping
+GET    /api/v1/channels               alert channels of the key's project (§8)
+POST   /api/v1/channels               create (201, Location header)
+GET    /api/v1/channels/{id}
+PUT    /api/v1/channels/{id}          update name and config; the type never changes
+DELETE /api/v1/channels/{id}          204; pending deliveries to it are dropped
+POST   /api/v1/channels/{id}/test     sends a test message now (200, or 502 with the error)
 ```
 
 `PUT` body: `name` (default: the slug), exactly one of `cron` or `periodSeconds`, `timeZone`
@@ -179,10 +186,91 @@ so existing applications can use it. License Apache-2.0 so it never affects the 
 ## 8. Alerts
 
 Channels in v0.1: email, Telegram bot, Slack incoming webhook, generic webhook (JSON POST).
+Every alert goes to **every channel of the check's project** (no per-check routing in v0.1).
 
-An alert names the check, the reason, the expected time in the check's time zone, the last success,
-and the last log excerpt. Delivery is retried with backoff for 1 hour; failures are visible on the
-channel in the dashboard.
+### Channels
+
+A channel is `{"type", "name", "config"}`; `name` defaults to the type. Config per type:
+
+| Type | Config | Secret fields | Rules |
+|---|---|---|---|
+| `email` | `address` | — | one address; needs server SMTP settings (`CRONBELL_SMTP_*`), else `400` |
+| `telegram` | `botToken`, `chatId` | `botToken` | token `<digits>:<35+ chars>`; chat id is an integer (groups are negative) or `@channelname` |
+| `slack` | `webhookUrl` | `webhookUrl` | `https://` only (Slack-compatible receivers such as Mattermost work too) |
+| `webhook` | `url`, `secret` (optional) | `url`, `secret` | `https://` or `http://`: self-hosted installs post to services on their own network. The cloud will restrict this to public `https://`. |
+
+Secrets are stored as given (the database already holds the ping keys, which are secrets too) and
+are never logged. The API returns them masked: tokens and secrets as `ab…yz` (`****` when short),
+URLs as `https://host/…`. On `PUT`, a secret field that is omitted, `null`, or equal to its masked
+value keeps the stored value, so a client can round-trip what it read. Unknown config fields are
+`400`. Each channel in a response also has `lastAttemptAt`, `lastDeliveryAt` (last success),
+`lastError` (of the latest attempt, `null` if it succeeded) and `pendingDeliveries`.
+
+### Messages
+
+An alert names the check, its status and reason, the relevant time in the check's time zone, the
+last success, the last log excerpt, and a link to the check (`<CRONBELL_BASE_URL>/checks/<slug>`)
+when `CRONBELL_BASE_URL` is set. English, plain and short. Example:
+
+```
+[Cronbell] nightly-backup is DOWN: missed run
+Check: Nightly backup (nightly-backup)
+Expected at: 2026-01-05 03:00 Asia/Ho_Chi_Minh (grace 30m)
+Last success: 2026-01-04 03:01 Asia/Ho_Chi_Minh
+Log (2026-01-04 03:01):
+<last 1,000 characters of the latest ping body>
+https://cronbell.example.com/checks/nightly-backup
+```
+
+The second line depends on the reason: `MISSED` gives the expected time and grace, `FAILED` the
+failure time (and exit code), `RUNNING_TOO_LONG` the run's start and maximum runtime, and a
+recovery `[Cronbell] <slug> is UP again` gives the next expected time. The log excerpt is the body
+of the latest ping that has one (DOWN alerts only); pings store up to 10 KB, the alert shows the
+last 1,000 characters.
+
+- **Email**: subject is the first line, body the rest, plain text.
+- **Telegram**: Bot API `sendMessage`, `parse_mode=HTML`, `&`, `<`, `>` escaped, log in `<pre>`.
+- **Slack**: `{"text": …}` with mrkdwn (`&`, `<`, `>` escaped), log in a code block.
+- **Webhook**: `POST`, `Content-Type: application/json`, body:
+
+  ```json
+  {"version": 1, "id": "<delivery id>", "event": "check.down",
+   "at": "2026-01-05T04:00:00Z", "text": "<the plain-text message>",
+   "check": {"slug": "nightly-backup", "name": "Nightly backup", "status": "DOWN",
+             "downReason": "MISSED", "timeZone": "Asia/Ho_Chi_Minh",
+             "expectedAt": "2026-01-04T20:00:00Z", "lastSuccessAt": "2026-01-03T20:01:00Z",
+             "url": "https://cronbell.example.com/checks/nightly-backup"},
+   "log": "…"}
+  ```
+
+  `event` is `check.down`, `check.up` or `test`; absent values are `null`. Headers:
+  `Cronbell-Delivery: <id>` (the same on retries, so receivers can drop duplicates),
+  `Cronbell-Timestamp: <unix seconds>`, and, when the channel has a secret,
+  `Cronbell-Signature: sha256=<hex HMAC-SHA256 of "<timestamp>.<body>" with the secret>`.
+  Receivers should reject timestamps more than 5 minutes old.
+
+Any 2xx answer is a success. Redirects are not followed.
+
+### Delivery
+
+- **Outbox.** On UP → DOWN and DOWN → UP, one delivery row per channel of the project is written
+  in the same transaction as the state change, with the rendered alert. Nothing is lost on a
+  restart; a crash during a send repeats it (at least once; webhooks carry `Cronbell-Delivery`).
+- **Sender.** Every 5 s (`cronbell.notifier.interval`), and right after a commit that queued
+  deliveries, the sender claims due rows in a short transaction (PostgreSQL:
+  `FOR UPDATE SKIP LOCKED`, so several instances never send the same row; SQLite: one instance)
+  and leases them for 2 minutes, then sends outside any transaction, in parallel. A lease that
+  expires (the instance died) makes the row due again.
+- **Timeouts.** Connect 5 s, read 10 s for HTTP; the same for SMTP. A stuck channel delays only
+  its own deliveries.
+- **Retry.** Network errors, timeouts, `408`, `429` and `5xx` are retried after 30 s, then
+  doubling (1, 2, 4, 8 min…, at most 15 min), honouring `Retry-After` on `429`. Other `4xx`
+  (bad token, removed webhook) fail at once. A delivery not sent within **1 hour** of the alert
+  is given up. The latest error is kept on the row (status code and a short reason, never the
+  URL or a secret) and shown on the channel.
+- **Rate limits.** Alerts are only sent on transitions, so there is no per-channel limit in
+  v0.1. `POST /channels/{id}/test` is limited to one call per 10 s per channel (`429`).
+- Finished deliveries are kept for history and pruned with the pings (§10).
 
 ## 9. Architecture
 
@@ -230,3 +318,6 @@ Billing is not built in v0.1.
 - Sign-in on the cloud: magic-link email (Spring Security one-time tokens) or GitHub OAuth first?
   Self-hosted uses email and password.
 - Billing provider usable from Vietnam.
+- Alert routing: per-check channel selection and reminders while DOWN (v0.2?).
+- Channel secrets at rest: encrypt with a server key (`CRONBELL_SECRET_KEY`) before the cloud
+  launch? The cloud also needs webhook targets limited to public addresses (SSRF).
