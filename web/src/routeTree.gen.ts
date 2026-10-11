@@ -15,6 +15,7 @@ import { Route as SigninRouteImport } from './routes/signin'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppChannelsRouteImport } from './routes/_app/channels'
 import { Route as AppKeysRouteImport } from './routes/_app/keys'
+import { Route as AppChecksIndexRouteImport } from './routes/_app/checks/index'
 import { Route as AppChecksNewRouteImport } from './routes/_app/checks/new'
 import { Route as AppChecksSlugIndexRouteImport } from './routes/_app/checks/$slug/index'
 import { Route as AppChecksSlugEditRouteImport } from './routes/_app/checks/$slug/edit'
@@ -48,6 +49,11 @@ const AppKeysRoute = AppKeysRouteImport.update({
   path: '/keys',
   getParentRoute: () => AppRoute,
 } as any)
+const AppChecksIndexRoute = AppChecksIndexRouteImport.update({
+  id: '/checks/',
+  path: '/checks/',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppChecksNewRoute = AppChecksNewRouteImport.update({
   id: '/checks/new',
   path: '/checks/new',
@@ -71,6 +77,7 @@ export interface FileRoutesByFullPath {
   '/channels': typeof AppChannelsRoute
   '/keys': typeof AppKeysRoute
   '/checks/new': typeof AppChecksNewRoute
+  '/checks/': typeof AppChecksIndexRoute
   '/checks/$slug/edit': typeof AppChecksSlugEditRoute
   '/checks/$slug/': typeof AppChecksSlugIndexRoute
 }
@@ -81,6 +88,7 @@ export interface FileRoutesByTo {
   '/keys': typeof AppKeysRoute
   '/': typeof AppIndexRoute
   '/checks/new': typeof AppChecksNewRoute
+  '/checks': typeof AppChecksIndexRoute
   '/checks/$slug/edit': typeof AppChecksSlugEditRoute
   '/checks/$slug': typeof AppChecksSlugIndexRoute
 }
@@ -93,6 +101,7 @@ export interface FileRoutesById {
   '/_app/keys': typeof AppKeysRoute
   '/_app/': typeof AppIndexRoute
   '/_app/checks/new': typeof AppChecksNewRoute
+  '/_app/checks/': typeof AppChecksIndexRoute
   '/_app/checks/$slug/edit': typeof AppChecksSlugEditRoute
   '/_app/checks/$slug/': typeof AppChecksSlugIndexRoute
 }
@@ -105,6 +114,7 @@ export interface FileRouteTypes {
     | '/channels'
     | '/keys'
     | '/checks/new'
+    | '/checks/'
     | '/checks/$slug/edit'
     | '/checks/$slug/'
   fileRoutesByTo: FileRoutesByTo
@@ -115,6 +125,7 @@ export interface FileRouteTypes {
     | '/keys'
     | '/'
     | '/checks/new'
+    | '/checks'
     | '/checks/$slug/edit'
     | '/checks/$slug'
   id:
@@ -126,6 +137,7 @@ export interface FileRouteTypes {
     | '/_app/keys'
     | '/_app/'
     | '/_app/checks/new'
+    | '/_app/checks/'
     | '/_app/checks/$slug/edit'
     | '/_app/checks/$slug/'
   fileRoutesById: FileRoutesById
@@ -180,6 +192,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppKeysRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/checks/': {
+      id: '/_app/checks/'
+      path: '/checks'
+      fullPath: '/checks/'
+      preLoaderRoute: typeof AppChecksIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/checks/new': {
       id: '/_app/checks/new'
       path: '/checks/new'
@@ -209,6 +228,7 @@ interface AppRouteChildren {
   AppKeysRoute: typeof AppKeysRoute
   AppIndexRoute: typeof AppIndexRoute
   AppChecksNewRoute: typeof AppChecksNewRoute
+  AppChecksIndexRoute: typeof AppChecksIndexRoute
   AppChecksSlugEditRoute: typeof AppChecksSlugEditRoute
   AppChecksSlugIndexRoute: typeof AppChecksSlugIndexRoute
 }
@@ -218,6 +238,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppKeysRoute: AppKeysRoute,
   AppIndexRoute: AppIndexRoute,
   AppChecksNewRoute: AppChecksNewRoute,
+  AppChecksIndexRoute: AppChecksIndexRoute,
   AppChecksSlugEditRoute: AppChecksSlugEditRoute,
   AppChecksSlugIndexRoute: AppChecksSlugIndexRoute,
 }
