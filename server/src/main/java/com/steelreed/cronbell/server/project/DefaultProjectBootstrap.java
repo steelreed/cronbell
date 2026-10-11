@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -15,9 +16,11 @@ import org.springframework.util.StringUtils;
  *
  * <p>
  * The key comes from {@code CRONBELL_API_KEY} when set; otherwise one is generated and
- * printed to the log once. Only its hash is stored, so it cannot be shown again.
+ * printed to the log once. Only its hash is stored, so it cannot be shown again. Runs
+ * before the admin account is created, which owns this project.
  */
 @Component
+@Order(0)
 class DefaultProjectBootstrap implements ApplicationRunner {
 
 	private static final Logger logger = LoggerFactory.getLogger(DefaultProjectBootstrap.class);

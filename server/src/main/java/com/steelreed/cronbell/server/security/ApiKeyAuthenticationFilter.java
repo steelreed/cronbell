@@ -11,13 +11,13 @@ import jakarta.servlet.http.HttpServletResponse;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
- * Authenticates {@code Authorization: Bearer <project API key>}. A missing or unknown key
- * leaves the request anonymous; the authorization rules then answer 401.
+ * Authenticates {@code Authorization: Bearer <project API key>}. A request with a bearer
+ * header never uses the session: a missing or unknown key leaves it anonymous, even next
+ * to a session cookie, and the authorization rules then answer 401.
  */
 class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
 
@@ -29,21 +29,24 @@ class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
 		this.projects = projects;
 	}
 
+	/** Whether the request carries a bearer token, so is stateless and CSRF-free. */
+	static boolean hasBearer(HttpServletRequest request) {
+		String header = request.getHeader(HttpHeaders.AUTHORIZATION);
+		return header != null && header.regionMatches(true, 0, BEARER, 0, BEARER.length());
+	}
+
 	@Override
 	protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
 			throws ServletException, IOException {
-		String header = request.getHeader(HttpHeaders.AUTHORIZATION);
-		if (header != null && header.regionMatches(true, 0, BEARER, 0, BEARER.length())) {
-			String key = header.substring(BEARER.length()).trim();
+		if (hasBearer(request)) {
+			String key = request.getHeader(HttpHeaders.AUTHORIZATION).substring(BEARER.length()).trim();
+			var context = SecurityContextHolder.createEmptyContext();
 			if (!key.isEmpty()) {
-				this.projects.findProjectIdByApiKey(key).ifPresent(projectId -> {
-					var authentication = UsernamePasswordAuthenticationToken.authenticated(
-							new ProjectPrincipal(projectId), null, List.of(new SimpleGrantedAuthority("ROLE_PROJECT")));
-					var context = SecurityContextHolder.createEmptyContext();
-					context.setAuthentication(authentication);
-					SecurityContextHolder.setContext(context);
-				});
+				this.projects.findProjectIdByApiKey(key)
+					.ifPresent((projectId) -> context.setAuthentication(UsernamePasswordAuthenticationToken
+						.authenticated(ProjectPrincipal.apiKey(projectId), null, List.of(SecurityConfig.PROJECT))));
 			}
+			SecurityContextHolder.setContext(context);
 		}
 		chain.doFilter(request, response);
 	}
