@@ -7,8 +7,6 @@ import {
   validateCheckForm,
 } from "./validation";
 
-const ZONES = ["UTC", "Asia/Ho_Chi_Minh"];
-
 const valid: CheckFormValues = {
   slug: "nightly-backup",
   name: "",
@@ -25,31 +23,33 @@ const valid: CheckFormValues = {
 
 describe("validateCheckForm", () => {
   it("accepts a valid cron check", () => {
-    expect(validateCheckForm(valid, ZONES)).toEqual({});
+    expect(validateCheckForm(valid)).toEqual({});
   });
 
   it("reports each invalid field", () => {
-    const errors = validateCheckForm(
-      {
-        ...valid,
-        slug: "bad slug!",
-        cron: "0 3 * *",
-        timeZone: "Mars/Base",
-        grace: "-1",
-        maxRuntime: "0",
-      },
-      ZONES,
-    );
+    const errors = validateCheckForm({
+      ...valid,
+      slug: "bad slug!",
+      cron: "0 3 * *",
+      timeZone: "Mars/Base",
+      grace: "-1",
+      maxRuntime: "0",
+    });
     expect(Object.keys(errors).sort()).toEqual(["cron", "grace", "maxRuntime", "slug", "timeZone"]);
   });
 
   it("needs a period of at least a minute", () => {
     expect(
-      validateCheckForm({ ...valid, kind: "PERIOD", period: "30", periodUnit: "s" }, ZONES),
+      validateCheckForm({ ...valid, kind: "PERIOD", period: "30", periodUnit: "s" }),
     ).toHaveProperty("period");
-    expect(
-      validateCheckForm({ ...valid, kind: "PERIOD", period: "1", periodUnit: "m" }, ZONES),
-    ).toEqual({});
+    expect(validateCheckForm({ ...valid, kind: "PERIOD", period: "1", periodUnit: "m" })).toEqual(
+      {},
+    );
+  });
+
+  it("accepts any zone the browser knows, also aliases", () => {
+    expect(validateCheckForm({ ...valid, timeZone: "Asia/Saigon" })).toEqual({});
+    expect(validateCheckForm({ ...valid, timeZone: "UTC" })).toEqual({});
   });
 
   it("knows cron macros and 6-field expressions", () => {

@@ -47,7 +47,7 @@ function toSeconds(value: string, unit: Unit): number | null {
 /** Client-side checks that mirror the server (DESIGN.md §4, §6). The server has the final say. */
 export function validateCheckForm(
   values: CheckFormValues,
-  timeZones: readonly string[],
+  isZone: (zone: string) => boolean = isValidTimeZone,
 ): CheckFormErrors {
   const errors: CheckFormErrors = {};
   if (!SLUG.test(values.slug)) errors.slug = t.form.errors.slug;
@@ -59,7 +59,7 @@ export function validateCheckForm(
     if (period === null || Number.isNaN(period) || period < 60)
       errors.period = t.form.errors.period;
   }
-  if (!timeZones.includes(values.timeZone)) errors.timeZone = t.form.errors.timeZone;
+  if (!isZone(values.timeZone)) errors.timeZone = t.form.errors.timeZone;
   const grace = toSeconds(values.grace, values.graceUnit);
   if (grace === null || Number.isNaN(grace) || grace < 0) errors.grace = t.form.errors.grace;
   const maxRuntime = toSeconds(values.maxRuntime, values.maxRuntimeUnit);
@@ -71,7 +71,7 @@ export function validateCheckForm(
 
 export function toDefinition(values: CheckFormValues): CheckDefinition {
   const definition: CheckDefinition = {
-    timeZone: values.timeZone,
+    timeZone: values.timeZone.trim(),
     graceSeconds: toSeconds(values.grace, values.graceUnit) ?? undefined,
   };
   if (values.name.trim()) definition.name = values.name.trim();
@@ -91,6 +91,20 @@ export function splitSeconds(seconds: number | null): { value: string; unit: Uni
     }
   }
   return { value: String(seconds), unit: "s" };
+}
+
+/**
+ * Any IANA zone the browser knows, including links such as Asia/Ho_Chi_Minh that its
+ * own list may show under another name (Asia/Saigon).
+ */
+export function isValidTimeZone(zone: string): boolean {
+  if (!zone.trim()) return false;
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: zone.trim() });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function supportedTimeZones(): string[] {

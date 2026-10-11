@@ -74,7 +74,7 @@ export function CheckForm({
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    const found = validateCheckForm(values, zones);
+    const found = validateCheckForm(values);
     setErrors(found);
     if (Object.keys(found).length === 0) onSubmit(values.slug, toDefinition(values));
   };
