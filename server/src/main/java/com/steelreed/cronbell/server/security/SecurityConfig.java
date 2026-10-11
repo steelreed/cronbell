@@ -24,7 +24,8 @@ class SecurityConfig {
 
 	@Bean
 	SecurityFilterChain securityFilterChain(HttpSecurity http, ProjectService projects) throws Exception {
-		http.authorizeHttpRequests((requests) -> requests.requestMatchers("/ping/**", "/error", "/actuator/health/**")
+		http.authorizeHttpRequests((requests) -> requests
+			.requestMatchers("/ping/**", "/error", "/actuator/health/**", "/api/v1/openapi.json")
 			.permitAll()
 			.requestMatchers("/api/**")
 			.authenticated()
