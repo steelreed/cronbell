@@ -9,50 +9,225 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppRouteImport } from './routes/_app'
+import { Route as SetupRouteImport } from './routes/setup'
+import { Route as SigninRouteImport } from './routes/signin'
+import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppChannelsRouteImport } from './routes/_app/channels'
+import { Route as AppKeysRouteImport } from './routes/_app/keys'
+import { Route as AppChecksNewRouteImport } from './routes/_app/checks/new'
+import { Route as AppChecksSlugIndexRouteImport } from './routes/_app/checks/$slug/index'
+import { Route as AppChecksSlugEditRouteImport } from './routes/_app/checks/$slug/edit'
 
-const IndexRoute = IndexRouteImport.update({
+const AppRoute = AppRouteImport.update({
+  id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SetupRoute = SetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SigninRoute = SigninRouteImport.update({
+  id: '/signin',
+  path: '/signin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AppRoute,
+} as any)
+const AppChannelsRoute = AppChannelsRouteImport.update({
+  id: '/channels',
+  path: '/channels',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppKeysRoute = AppKeysRouteImport.update({
+  id: '/keys',
+  path: '/keys',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppChecksNewRoute = AppChecksNewRouteImport.update({
+  id: '/checks/new',
+  path: '/checks/new',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppChecksSlugIndexRoute = AppChecksSlugIndexRouteImport.update({
+  id: '/checks/$slug/',
+  path: '/checks/$slug/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppChecksSlugEditRoute = AppChecksSlugEditRouteImport.update({
+  id: '/checks/$slug/edit',
+  path: '/checks/$slug/edit',
+  getParentRoute: () => AppRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
+  '/': typeof AppIndexRoute
+  '/setup': typeof SetupRoute
+  '/signin': typeof SigninRoute
+  '/channels': typeof AppChannelsRoute
+  '/keys': typeof AppKeysRoute
+  '/checks/new': typeof AppChecksNewRoute
+  '/checks/$slug/edit': typeof AppChecksSlugEditRoute
+  '/checks/$slug/': typeof AppChecksSlugIndexRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
+  '/setup': typeof SetupRoute
+  '/signin': typeof SigninRoute
+  '/channels': typeof AppChannelsRoute
+  '/keys': typeof AppKeysRoute
+  '/': typeof AppIndexRoute
+  '/checks/new': typeof AppChecksNewRoute
+  '/checks/$slug/edit': typeof AppChecksSlugEditRoute
+  '/checks/$slug': typeof AppChecksSlugIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
+  '/_app': typeof AppRouteWithChildren
+  '/setup': typeof SetupRoute
+  '/signin': typeof SigninRoute
+  '/_app/channels': typeof AppChannelsRoute
+  '/_app/keys': typeof AppKeysRoute
+  '/_app/': typeof AppIndexRoute
+  '/_app/checks/new': typeof AppChecksNewRoute
+  '/_app/checks/$slug/edit': typeof AppChecksSlugEditRoute
+  '/_app/checks/$slug/': typeof AppChecksSlugIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/setup'
+    | '/signin'
+    | '/channels'
+    | '/keys'
+    | '/checks/new'
+    | '/checks/$slug/edit'
+    | '/checks/$slug/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/setup'
+    | '/signin'
+    | '/channels'
+    | '/keys'
+    | '/'
+    | '/checks/new'
+    | '/checks/$slug/edit'
+    | '/checks/$slug'
+  id:
+    | '__root__'
+    | '/_app'
+    | '/setup'
+    | '/signin'
+    | '/_app/channels'
+    | '/_app/keys'
+    | '/_app/'
+    | '/_app/checks/new'
+    | '/_app/checks/$slug/edit'
+    | '/_app/checks/$slug/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
+  AppRoute: typeof AppRouteWithChildren
+  SetupRoute: typeof SetupRoute
+  SigninRoute: typeof SigninRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
+    '/_app': {
+      id: '/_app'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/setup': {
+      id: '/setup'
+      path: '/setup'
+      fullPath: '/setup'
+      preLoaderRoute: typeof SetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signin': {
+      id: '/signin'
+      path: '/signin'
+      fullPath: '/signin'
+      preLoaderRoute: typeof SigninRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_app/': {
+      id: '/_app/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/channels': {
+      id: '/_app/channels'
+      path: '/channels'
+      fullPath: '/channels'
+      preLoaderRoute: typeof AppChannelsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/keys': {
+      id: '/_app/keys'
+      path: '/keys'
+      fullPath: '/keys'
+      preLoaderRoute: typeof AppKeysRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/checks/new': {
+      id: '/_app/checks/new'
+      path: '/checks/new'
+      fullPath: '/checks/new'
+      preLoaderRoute: typeof AppChecksNewRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/checks/$slug/': {
+      id: '/_app/checks/$slug/'
+      path: '/checks/$slug'
+      fullPath: '/checks/$slug/'
+      preLoaderRoute: typeof AppChecksSlugIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/checks/$slug/edit': {
+      id: '/_app/checks/$slug/edit'
+      path: '/checks/$slug/edit'
+      fullPath: '/checks/$slug/edit'
+      preLoaderRoute: typeof AppChecksSlugEditRouteImport
+      parentRoute: typeof AppRoute
     }
   }
 }
 
+interface AppRouteChildren {
+  AppChannelsRoute: typeof AppChannelsRoute
+  AppKeysRoute: typeof AppKeysRoute
+  AppIndexRoute: typeof AppIndexRoute
+  AppChecksNewRoute: typeof AppChecksNewRoute
+  AppChecksSlugEditRoute: typeof AppChecksSlugEditRoute
+  AppChecksSlugIndexRoute: typeof AppChecksSlugIndexRoute
+}
+
+const AppRouteChildren: AppRouteChildren = {
+  AppChannelsRoute: AppChannelsRoute,
+  AppKeysRoute: AppKeysRoute,
+  AppIndexRoute: AppIndexRoute,
+  AppChecksNewRoute: AppChecksNewRoute,
+  AppChecksSlugEditRoute: AppChecksSlugEditRoute,
+  AppChecksSlugIndexRoute: AppChecksSlugIndexRoute,
+}
+
+const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
+  AppRoute: AppRouteWithChildren,
+  SetupRoute: SetupRoute,
+  SigninRoute: SigninRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
