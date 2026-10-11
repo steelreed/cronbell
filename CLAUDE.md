@@ -8,17 +8,20 @@ specification, and behaviour changes start there.
 | Directory | What | Toolchain |
 |---|---|---|
 | `server/` | Spring Boot 4.1 service: ping endpoint, management API, detector, notifier | Java 25 (`.java-version` pins Temurin 25 via jenv), Maven wrapper |
-| `web/` | Dashboard SPA, built into `web/dist` and served by the server | Node 26, Vite 8, React 19, TypeScript 7, TanStack Router/Query, Tailwind 4, shadcn/ui, Biome |
+| `web/` | Dashboard SPA; the Docker build copies `web/dist` into the server's `static/`, `WebAppController` serves client routes | Node 26, Vite 8, React 19, TypeScript 7, TanStack Router/Query, Tailwind 4, shadcn/ui, Biome |
 | `starter/` | (later) `cronbell-spring-boot-starter`, Java 17 baseline, Spring Boot 3 and 4 | Maven |
 
 ## Commands
 
 ```bash
-cd server && ./mvnw verify          # tests, needs Docker for Testcontainers
-cd web && npm run lint && npm run build && npm test
+make test       # server verify (tests + format check, needs Docker) and web lint, typecheck, tests
+make format     # Spring Java Format for server/, Biome for web/
+make docker     # image ghcr.io/steelreed/cronbell:dev (web bundled into the server)
 ```
 
-Both must pass before every commit.
+`make test` must pass before every commit. CI (`.github/workflows/ci.yml`) runs the same plus an
+image build and a DCO check; commit with `git commit -s`. `release.yml` publishes the image when
+the maintainer pushes a `v*` tag: never create tags yourself.
 
 ## Conventions
 

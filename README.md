@@ -1,5 +1,8 @@
 # Cronbell
 
+[![CI](https://github.com/steelreed/cronbell/actions/workflows/ci.yml/badge.svg)](https://github.com/steelreed/cronbell/actions/workflows/ci.yml)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
+
 **Know when a cron job stops running.** Cronbell is open-source monitoring for cron jobs,
 scheduled tasks and background workers, in any language. Each job reports its runs; Cronbell knows
 when the next run is due and alerts you when a run is missed, late, failing or unusually slow.
