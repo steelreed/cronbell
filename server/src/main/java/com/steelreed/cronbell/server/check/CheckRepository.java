@@ -112,6 +112,13 @@ public class CheckRepository {
 			.update();
 	}
 
+	/** Deletes a check; its pings and deliveries go with it. */
+	public boolean delete(String projectId, String slug) {
+		return this.jdbc.sql("DELETE FROM checks WHERE project_id = ? AND slug = ?")
+			.params(projectId, slug)
+			.update() > 0;
+	}
+
 	/** Updates only the state of a check. */
 	public void updateState(String checkId, CheckState s, Instant now) {
 		this.jdbc.sql("""
