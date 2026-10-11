@@ -1,0 +1,2 @@
+org.springframework.boot.EnvironmentPostProcessor=\
+com.steelreed.cronbell.server.db.DatabaseUrlEnvironmentPostProcessor

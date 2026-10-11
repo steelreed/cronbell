@@ -1,0 +1,72 @@
+package com.steelreed.cronbell.server;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+import com.steelreed.cronbell.server.db.Database;
+import org.junit.jupiter.api.Test;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/** The default setup: SQLite in a fresh data directory. */
+class SqliteIntegrationTests extends AbstractIntegrationTests {
+
+	private static final Path DATA_DIR = createDataDir();
+
+	@Autowired
+	Database database;
+
+	@DynamicPropertySource
+	static void dataDir(DynamicPropertyRegistry registry) {
+		registry.add("cronbell.data-dir", () -> DATA_DIR.resolve("nested").toString());
+	}
+
+	@Test
+	void runsOnSqliteInTheDataDirectory() {
+		assertThat(this.database.kind()).isEqualTo(Database.Kind.SQLITE);
+		assertThat(DATA_DIR.resolve("nested/cronbell.db")).exists();
+		assertThat(this.jdbc.sql("PRAGMA journal_mode").query(String.class).single()).isEqualToIgnoringCase("wal");
+		assertThat(this.jdbc.sql("PRAGMA foreign_keys").query(Integer.class).single()).isEqualTo(1);
+	}
+
+	@Test
+	void openApiDescriptionIsPublic() {
+		ResponseEntity<String> response = this.http.get().uri("/api/v1/openapi.json").retrieve().toEntity(String.class);
+		assertThat(response.getStatusCode().value()).isEqualTo(200);
+		assertThat(response.getBody()).contains("\"openapi\"").contains("/api/v1/checks/{slug}");
+	}
+
+	@Test
+	void dashboardRoutesLoadTheWebApp() {
+		for (String path : new String[] { "/", "/checks", "/checks/nightly-backup" }) {
+			ResponseEntity<String> response = this.http.get().uri(path).retrieve().toEntity(String.class);
+			assertThat(response.getStatusCode().value()).as(path).isEqualTo(200);
+			assertThat(response.getBody()).as(path).contains("Cronbell test dashboard");
+		}
+	}
+
+	@Test
+	void apiAndPingPathsAreNotTheWebApp() {
+		assertThat(this.http.get().uri("/api/v1/checks").retrieve().toEntity(String.class).getStatusCode().value())
+			.isEqualTo(401);
+		assertThat(this.http.get().uri("/ping").retrieve().toEntity(String.class).getBody())
+			.doesNotContain("Cronbell test dashboard");
+	}
+
+	private static Path createDataDir() {
+		try {
+			return Files.createTempDirectory("cron-sqlite-test");
+		}
+		catch (IOException ex) {
+			throw new UncheckedIOException(ex);
+		}
+	}
+
+}

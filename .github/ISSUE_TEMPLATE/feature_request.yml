@@ -1,0 +1,19 @@
+name: Feature request
+description: Suggest an improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What job or situation is hard to monitor today?
+    validations: { required: true }
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you would like
+  - type: input
+    id: stack
+    attributes:
+      label: Where your jobs run
+      placeholder: Linux cron, Kubernetes CronJob, Spring @Scheduled, Celery, ...
