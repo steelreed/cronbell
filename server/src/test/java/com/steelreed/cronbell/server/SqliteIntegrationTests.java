@@ -53,6 +53,16 @@ class SqliteIntegrationTests extends AbstractIntegrationTests {
 	}
 
 	@Test
+	void bundledAssetsAreServedAsFiles() {
+		ResponseEntity<String> response = this.http.get().uri("/assets/app-test.js").retrieve().toEntity(String.class);
+		assertThat(response.getStatusCode().value()).isEqualTo(200);
+		assertThat(response.getHeaders().getContentType().toString()).contains("javascript");
+		assertThat(response.getBody()).doesNotContain("Cronbell test dashboard");
+		assertThat(this.http.get().uri("/assets/missing.js").retrieve().toEntity(String.class).getStatusCode().value())
+			.isEqualTo(404);
+	}
+
+	@Test
 	void apiAndPingPathsAreNotTheWebApp() {
 		assertThat(this.http.get().uri("/api/v1/checks").retrieve().toEntity(String.class).getStatusCode().value())
 			.isEqualTo(401);

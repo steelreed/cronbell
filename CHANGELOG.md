@@ -18,5 +18,19 @@ All notable changes to Cronbell are listed here. The format follows
 - Configuration: `CRONBELL_BASE_URL` for links in alerts, `CRONBELL_SMTP_*` for email.
 - SQLite by default, PostgreSQL optional, one Flyway schema for both.
 - OpenAPI description at `/api/v1/openapi.json`.
+- Web dashboard: checks list with status filter and 15 s refresh, check detail with ping URL,
+  crontab/shell/Kubernetes snippets and recent pings with run durations, create/edit/pause/
+  resume/delete checks, alert channels with test messages, API keys. Dark by default, light
+  mode, usable on phones.
+- Accounts: one admin per instance, from `CRONBELL_ADMIN_EMAIL` / `CRONBELL_ADMIN_PASSWORD` or a
+  one-time setup page. Cookie sessions with CSRF protection for the browser, sign-in backoff
+  against password guessing; bearer API keys stay stateless.
+- API: `GET`/`DELETE /api/v1/checks/{slug}`, `GET /api/v1/checks/{slug}/pings`,
+  `POST /api/v1/checks/{slug}/resume`, `/api/v1/keys`, `/api/v1/session`, `/api/v1/setup`.
 - The server serves the web dashboard.
+
+### Fixed
+
+- Pings without an exit code were reported with exit code 0.
+- The bundled `/assets` files were answered with the dashboard's `index.html`.
 - Container image built from one Dockerfile.

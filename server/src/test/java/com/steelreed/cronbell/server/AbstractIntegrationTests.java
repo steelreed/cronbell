@@ -12,12 +12,15 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.net.http.HttpResponse;
 
 import com.icegreen.greenmail.util.GreenMail;
 import com.icegreen.greenmail.util.ServerSetupTest;
 import com.jayway.jsonpath.JsonPath;
 import jakarta.mail.Message;
 import jakarta.mail.internet.MimeMessage;
+import com.steelreed.cronbell.server.account.AccountService;
+import com.steelreed.cronbell.server.account.AdminBootstrap;
 import com.steelreed.cronbell.server.check.CheckEvent;
 import com.steelreed.cronbell.server.check.Detector;
 import com.steelreed.cronbell.server.notify.Channel;
@@ -54,7 +57,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT,
 		properties = { "cronbell.scheduling.enabled=false",
 				"cronbell.bootstrap.api-key=" + AbstractIntegrationTests.API_KEY,
-				"cronbell.base-url=https://cronbell.example.com/", "cronbell.notifier.read-timeout=PT1S" })
+				"cronbell.base-url=https://cronbell.example.com/", "cronbell.notifier.read-timeout=PT1S",
+				"server.forward-headers-strategy=native" })
 @Import(AbstractIntegrationTests.EventCollector.class)
 abstract class AbstractIntegrationTests {
 
@@ -104,11 +108,19 @@ abstract class AbstractIntegrationTests {
 	@Autowired
 	ChannelRepository channelRepository;
 
+	@Autowired
+	AccountService accounts;
+
 	RestClient http;
 
 	@BeforeEach
 	void setUp() {
 		CLOCK.set("2026-01-05T10:00:00Z");
+		// The clock is shared by both test classes, so it may have been ahead when the
+		// Default project was made; keep it the oldest, as on a real first start.
+		this.jdbc.sql("UPDATE projects SET created_at = 0 WHERE id = ?")
+			.param(this.projects.findProjectIdByApiKey(API_KEY).orElseThrow())
+			.update();
 		this.events.clear();
 		this.http = RestClient.builder()
 			.baseUrl("http://localhost:" + this.port)
@@ -712,6 +724,350 @@ abstract class AbstractIntegrationTests {
 		assertThat(failed.getStatusCode().value()).isEqualTo(502);
 		assertThat((String) JsonPath.read(failed.getBody(), "$.detail")).isEqualTo("HTTP 401: Unauthorized");
 		assertThat(failed.getBody()).doesNotContain(badToken);
+	}
+
+	// --- Accounts and sessions ---
+
+	static final String ADMIN_EMAIL = "admin@example.com";
+
+	static final String ADMIN_PASSWORD = "correct horse battery";
+
+	@Test
+	void setupRunsOnceEvenWhenRacing() throws Exception {
+		removeAccounts();
+		Browser first = new Browser(this.port);
+		assertThat(json(first.get("/api/v1/setup"), "$.required", Boolean.class)).isTrue();
+		assertThat(first.cookie(Browser.CSRF_COOKIE)).isNotNull();
+		// Without the CSRF header the cookie request is refused.
+		assertThat(
+				first.send("POST", "/api/v1/setup", credentials("a@example.com", ADMIN_PASSWORD), false).statusCode())
+			.isEqualTo(403);
+		assertThat(first.call("POST", "/api/v1/setup", credentials("not-an-email", ADMIN_PASSWORD)).statusCode())
+			.isEqualTo(400);
+		assertThat(first.call("POST", "/api/v1/setup", credentials("a@example.com", "short")).statusCode())
+			.isEqualTo(400);
+
+		List<Browser> browsers = new ArrayList<>();
+		for (int i = 0; i < 4; i++) {
+			Browser browser = new Browser(this.port);
+			browser.get("/api/v1/setup");
+			browsers.add(browser);
+		}
+		List<Integer> statuses = new ArrayList<>();
+		try (ExecutorService executor = Executors.newFixedThreadPool(4)) {
+			List<Future<Integer>> calls = new ArrayList<>();
+			for (int i = 0; i < 4; i++) {
+				Browser browser = browsers.get(i);
+				String email = "admin" + i + "@example.com";
+				calls.add(executor.submit(
+						() -> browser.call("POST", "/api/v1/setup", credentials(email, ADMIN_PASSWORD)).statusCode()));
+			}
+			for (Future<Integer> call : calls) {
+				statuses.add(call.get());
+			}
+		}
+		assertThat(statuses).containsOnly(201, 409).filteredOn((status) -> status == 201).hasSize(1);
+		Browser winner = browsers.get(statuses.indexOf(201));
+		HttpResponse<String> session = winner.get("/api/v1/session");
+		assertThat(session.statusCode()).isEqualTo(200);
+		assertThat(json(session, "$.account.email", String.class))
+			.isEqualTo("admin" + statuses.indexOf(201) + "@example.com");
+		assertThat(json(session, "$.project.name", String.class)).isEqualTo("Default");
+		assertThat(json(session, "$.pingBaseUrl", String.class)).isEqualTo("http://localhost:" + this.port + "/ping/");
+		assertThat(this.jdbc.sql("SELECT COUNT(*) FROM accounts").query(Long.class).single()).isEqualTo(1);
+		assertThat(json(first.get("/api/v1/setup"), "$.required", Boolean.class)).isFalse();
+		HttpResponse<String> again = first.call("POST", "/api/v1/setup",
+				credentials("late@example.com", ADMIN_PASSWORD));
+		assertThat(again.statusCode()).isEqualTo(409);
+		assertThat(json(again, "$.detail", String.class)).contains("already done");
+	}
+
+	@Test
+	void adminAccountFromTheEnvironmentOnFirstStart() {
+		removeAccounts();
+		new AdminBootstrap(this.accounts, "", "").run(null);
+		assertThat(this.accounts.anyAccountExists()).isFalse();
+		org.assertj.core.api.Assertions.assertThatIllegalStateException()
+			.isThrownBy(() -> new AdminBootstrap(this.accounts, "ops@example.com", "").run(null));
+		org.assertj.core.api.Assertions.assertThatIllegalStateException()
+			.isThrownBy(() -> new AdminBootstrap(this.accounts, "ops@example.com", "short").run(null));
+		new AdminBootstrap(this.accounts, "Ops@Example.com", ADMIN_PASSWORD).run(null);
+		new AdminBootstrap(this.accounts, "other@example.com", ADMIN_PASSWORD).run(null);
+		assertThat(this.jdbc.sql("SELECT email FROM accounts").query(String.class).list())
+			.containsExactly("ops@example.com");
+		assertThat(signIn("ops@example.com", ADMIN_PASSWORD).statusCode()).isEqualTo(200);
+	}
+
+	@Test
+	void signInSetsASecureHttpOnlySessionCookieAndRotatesTheCsrfToken() {
+		ensureAdmin();
+		Browser browser = new Browser(this.port).header("X-Forwarded-Proto", "https");
+		HttpResponse<String> anonymous = browser.get("/api/v1/session");
+		assertThat(anonymous.statusCode()).isEqualTo(401);
+		String csrfCookie = Browser.setCookie(anonymous, Browser.CSRF_COOKIE);
+		assertThat(csrfCookie).contains("SameSite=Lax").contains("Secure").doesNotContain("HttpOnly");
+		String tokenBefore = browser.cookie(Browser.CSRF_COOKIE);
+
+		HttpResponse<String> signedIn = browser.call("POST", "/api/v1/session",
+				credentials(ADMIN_EMAIL.toUpperCase(), ADMIN_PASSWORD));
+		assertThat(signedIn.statusCode()).as(signedIn.body()).isEqualTo(200);
+		assertThat(json(signedIn, "$.account.email", String.class)).isEqualTo(ADMIN_EMAIL);
+		String sessionCookie = Browser.setCookie(signedIn, "cronbell_session");
+		assertThat(sessionCookie).contains("HttpOnly").contains("SameSite=Lax").contains("Secure").contains("Path=/");
+		assertThat(browser.cookie(Browser.CSRF_COOKIE)).isNotNull().isNotEqualTo(tokenBefore);
+
+		// Plain HTTP: no Secure flag.
+		HttpResponse<String> plain = signIn(ADMIN_EMAIL, ADMIN_PASSWORD);
+		assertThat(Browser.setCookie(plain, "cronbell_session")).contains("HttpOnly").doesNotContain("Secure");
+	}
+
+	@Test
+	void theSessionActsOnTheAdminsProject() {
+		Browser browser = signedIn();
+		String slug = uniqueSlug();
+		createCheck(slug, "{\"cron\":\"0 * * * *\"}");
+		HttpResponse<String> checks = browser.get("/api/v1/checks");
+		assertThat(checks.statusCode()).isEqualTo(200);
+		assertThat((List<String>) JsonPath.read(checks.body(), "$[*].slug")).contains(slug);
+		HttpResponse<String> created = browser.call("PUT", "/api/v1/checks/" + uniqueSlug(),
+				"{\"periodSeconds\":3600}");
+		assertThat(created.statusCode()).isEqualTo(201);
+	}
+
+	@Test
+	void sessionChangesNeedTheCsrfTokenButBearerKeysDoNot() {
+		Browser browser = signedIn();
+		String slug = uniqueSlug();
+		String body = "{\"cron\":\"0 * * * *\"}";
+		assertThat(browser.send("PUT", "/api/v1/checks/" + slug, body, false).statusCode()).isEqualTo(403);
+		browser.header(Browser.CSRF_HEADER, "forged");
+		assertThat(browser.send("PUT", "/api/v1/checks/" + slug, body, false).statusCode()).isEqualTo(403);
+		Browser honest = signedIn();
+		assertThat(honest.call("PUT", "/api/v1/checks/" + slug, body).statusCode()).isEqualTo(201);
+		assertThat(honest.send("POST", "/api/v1/checks/" + slug + "/pause", null, false).statusCode()).isEqualTo(403);
+		assertThat(honest.send("DELETE", "/api/v1/checks/" + slug, null, false).statusCode()).isEqualTo(403);
+		assertThat(honest.send("DELETE", "/api/v1/session", null, false).statusCode()).isEqualTo(403);
+		assertThat(honest.call("POST", "/api/v1/checks/" + slug + "/pause", null).statusCode()).isEqualTo(200);
+		// Bearer requests are stateless: no CSRF, no session, no cookies.
+		ResponseEntity<String> bearer = exchange(HttpMethod.PUT, "/api/v1/checks/" + uniqueSlug(), body, API_KEY);
+		assertThat(bearer.getStatusCode().value()).isEqualTo(201);
+		assertThat(bearer.getHeaders().get(HttpHeaders.SET_COOKIE)).isNull();
+		// A bad bearer key is not rescued by a valid session cookie.
+		Browser mixed = signedIn().header(HttpHeaders.AUTHORIZATION, "Bearer cb_wrong_key_wrong_key_wrong");
+		assertThat(mixed.get("/api/v1/checks").statusCode()).isEqualTo(401);
+		// Pings never need CSRF.
+		String key = createCheck(uniqueSlug(), body);
+		assertThat(signedIn().send("POST", "/ping/" + key, "done", false).statusCode()).isEqualTo(200);
+	}
+
+	@Test
+	void wrongPasswordsAreRefusedAndThenRateLimited() {
+		ensureAdmin();
+		Browser browser = new Browser(this.port);
+		browser.get("/api/v1/session");
+		HttpResponse<String> unknown = browser.call("POST", "/api/v1/session",
+				credentials("nobody@example.com", ADMIN_PASSWORD));
+		assertThat(unknown.statusCode()).isEqualTo(401);
+		String detail = json(unknown, "$.detail", String.class);
+		for (int i = 0; i < 5; i++) {
+			HttpResponse<String> wrong = browser.call("POST", "/api/v1/session",
+					credentials(ADMIN_EMAIL, "wrong password"));
+			assertThat(wrong.statusCode()).isEqualTo(401);
+			assertThat(json(wrong, "$.detail", String.class)).isEqualTo(detail);
+		}
+		HttpResponse<String> blocked = browser.call("POST", "/api/v1/session",
+				credentials(ADMIN_EMAIL, ADMIN_PASSWORD));
+		assertThat(blocked.statusCode()).isEqualTo(429);
+		assertThat(blocked.headers().firstValue("Retry-After")).hasValue("30");
+		assertThat(browser.get("/api/v1/session").statusCode()).isEqualTo(401);
+		CLOCK.advance(Duration.ofSeconds(29));
+		assertThat(browser.call("POST", "/api/v1/session", credentials(ADMIN_EMAIL, ADMIN_PASSWORD)).statusCode())
+			.isEqualTo(429);
+		CLOCK.advance(Duration.ofSeconds(1));
+		// One more failure doubles the wait.
+		assertThat(browser.call("POST", "/api/v1/session", credentials(ADMIN_EMAIL, "wrong again")).statusCode())
+			.isEqualTo(401);
+		HttpResponse<String> longer = browser.call("POST", "/api/v1/session", credentials(ADMIN_EMAIL, ADMIN_PASSWORD));
+		assertThat(longer.headers().firstValue("Retry-After")).hasValue("60");
+		CLOCK.advance(Duration.ofSeconds(60));
+		assertThat(browser.call("POST", "/api/v1/session", credentials(ADMIN_EMAIL, ADMIN_PASSWORD)).statusCode())
+			.isEqualTo(200);
+		// Success clears the count.
+		assertThat(browser.call("POST", "/api/v1/session", credentials(ADMIN_EMAIL, "wrong")).statusCode())
+			.isEqualTo(401);
+		assertThat(signIn(ADMIN_EMAIL, ADMIN_PASSWORD).statusCode()).isEqualTo(200);
+	}
+
+	@Test
+	void signOutEndsTheSession() {
+		Browser browser = signedIn();
+		String oldSession = browser.cookie("cronbell_session");
+		assertThat(browser.get("/api/v1/checks").statusCode()).isEqualTo(200);
+		HttpResponse<String> out = browser.call("DELETE", "/api/v1/session", null);
+		assertThat(out.statusCode()).isEqualTo(204);
+		assertThat(browser.cookie("cronbell_session")).isNull();
+		assertThat(browser.get("/api/v1/checks").statusCode()).isEqualTo(401);
+		assertThat(browser.get("/api/v1/session").statusCode()).isEqualTo(401);
+		Browser replay = new Browser(this.port);
+		replay.setCookie("cronbell_session", oldSession);
+		assertThat(replay.get("/api/v1/checks").statusCode()).isEqualTo(401);
+		// Signing out twice is fine.
+		assertThat(browser.call("DELETE", "/api/v1/session", null).statusCode()).isEqualTo(204);
+	}
+
+	@Test
+	void apiKeysAreCreatedShownOnceAndRevoked() {
+		Browser browser = signedIn();
+		HttpResponse<String> created = browser.call("POST", "/api/v1/keys", "{\"name\":\"CI deploys\"}");
+		assertThat(created.statusCode()).as(created.body()).isEqualTo(201);
+		String key = json(created, "$.key", String.class);
+		String id = json(created, "$.id", String.class);
+		assertThat(key).startsWith("cb_").hasSize(46);
+		assertThat(json(created, "$.prefix", String.class)).isEqualTo(key.substring(0, 8));
+		assertThat(exchange(HttpMethod.GET, "/api/v1/checks", null, key).getStatusCode().value()).isEqualTo(200);
+
+		HttpResponse<String> list = browser.get("/api/v1/keys");
+		assertThat(list.body()).doesNotContain(key);
+		assertThat((List<String>) JsonPath.read(list.body(), "$[*].name")).contains("bootstrap", "CI deploys");
+		// Keys cannot manage keys.
+		assertThat(exchange(HttpMethod.GET, "/api/v1/keys", null, key).getStatusCode().value()).isEqualTo(403);
+		assertThat(exchange(HttpMethod.POST, "/api/v1/keys", "{}", key).getStatusCode().value()).isEqualTo(403);
+		assertThat(exchange(HttpMethod.DELETE, "/api/v1/keys/" + id, null, key).getStatusCode().value()).isEqualTo(403);
+		assertThat(new Browser(this.port).get("/api/v1/keys").statusCode()).isEqualTo(401);
+
+		assertThat(browser.call("DELETE", "/api/v1/keys/" + id, null).statusCode()).isEqualTo(204);
+		assertThat(exchange(HttpMethod.GET, "/api/v1/checks", null, key).getStatusCode().value()).isEqualTo(401);
+		assertThat(browser.call("DELETE", "/api/v1/keys/" + id, null).statusCode()).isEqualTo(404);
+		HttpResponse<String> unnamed = browser.call("POST", "/api/v1/keys", null);
+		assertThat(json(unnamed, "$.name", String.class)).isEqualTo("API key");
+	}
+
+	@Test
+	void checkDetailAndPingsWithRunDurations() {
+		String slug = uniqueSlug();
+		String key = createCheck(slug, "{\"name\":\"Backup\",\"cron\":\"0 * * * *\"}");
+		ResponseEntity<String> detail = exchange(HttpMethod.GET, "/api/v1/checks/" + slug, null, API_KEY);
+		assertThat(detail.getStatusCode().value()).isEqualTo(200);
+		assertThat((String) JsonPath.read(detail.getBody(), "$.name")).isEqualTo("Backup");
+		assertThat(exchange(HttpMethod.GET, "/api/v1/checks/" + uniqueSlug(), null, API_KEY).getStatusCode().value())
+			.isEqualTo(404);
+
+		get("/ping/" + key + "/start?rid=a");
+		CLOCK.advance(Duration.ofSeconds(2));
+		get("/ping/" + key + "/start?rid=b");
+		CLOCK.advance(Duration.ofSeconds(3));
+		get("/ping/" + key + "/log");
+		CLOCK.advance(Duration.ofSeconds(5));
+		postBody("/ping/" + key + "/0?rid=a", "done a");
+		CLOCK.advance(Duration.ofSeconds(1));
+		get("/ping/" + key + "/7");
+		String pings = exchange(HttpMethod.GET, "/api/v1/checks/" + slug + "/pings", null, API_KEY).getBody();
+		assertThat((List<String>) JsonPath.read(pings, "$[*].kind")).containsExactly("FAIL", "SUCCESS", "LOG", "START",
+				"START");
+		assertThat((List<Object>) JsonPath.read(pings, "$[*].durationMs")).containsExactly(9000, 10000, null, null,
+				null);
+		assertThat((List<Object>) JsonPath.read(pings, "$[*].exitCode")).containsExactly(7, 0, null, null, null);
+		assertThat((String) JsonPath.read(pings, "$[1].body")).isEqualTo("done a");
+		String limited = exchange(HttpMethod.GET, "/api/v1/checks/" + slug + "/pings?limit=2", null, API_KEY).getBody();
+		assertThat((List<Object>) JsonPath.read(limited, "$")).hasSize(2);
+		assertThat(exchange(HttpMethod.GET, "/api/v1/checks/" + slug + "/pings?limit=0", null, API_KEY).getStatusCode()
+			.value()).isEqualTo(400);
+		assertThat(exchange(HttpMethod.GET, "/api/v1/checks/" + uniqueSlug() + "/pings", null, API_KEY).getStatusCode()
+			.value()).isEqualTo(404);
+	}
+
+	@Test
+	void resumeEndsAPauseWithoutAPing() {
+		String slug = uniqueSlug();
+		String key = createCheck(slug, "{\"cron\":\"0 * * * *\",\"graceSeconds\":60}");
+		exchange(HttpMethod.POST, "/api/v1/checks/" + slug + "/pause", null, API_KEY);
+		ResponseEntity<String> fresh = exchange(HttpMethod.POST, "/api/v1/checks/" + slug + "/resume", null, API_KEY);
+		assertThat((String) JsonPath.read(fresh.getBody(), "$.status")).isEqualTo("NEW");
+
+		get("/ping/" + key + "/start");
+		exchange(HttpMethod.POST, "/api/v1/checks/" + slug + "/pause", null, API_KEY);
+		CLOCK.set("2026-01-07T08:30:00Z");
+		ResponseEntity<String> resumed = exchange(HttpMethod.POST, "/api/v1/checks/" + slug + "/resume", null, API_KEY);
+		assertThat(resumed.getStatusCode().value()).isEqualTo(200);
+		assertThat((String) JsonPath.read(resumed.getBody(), "$.status")).isEqualTo("UP");
+		assertThat((String) JsonPath.read(resumed.getBody(), "$.nextDueAt")).isEqualTo("2026-01-07T09:00:00Z");
+		this.detector.runOnce();
+		assertThat(field(slug, "status")).isEqualTo("UP");
+		// Not paused: nothing changes.
+		assertThat((String) JsonPath.read(
+				exchange(HttpMethod.POST, "/api/v1/checks/" + slug + "/resume", null, API_KEY).getBody(),
+				"$.nextDueAt"))
+			.isEqualTo("2026-01-07T09:00:00Z");
+		assertThat(
+				exchange(HttpMethod.POST, "/api/v1/checks/" + uniqueSlug() + "/resume", null, API_KEY).getStatusCode()
+					.value())
+			.isEqualTo(404);
+	}
+
+	@Test
+	void deletingACheckRemovesItsPingsAndAlerts() {
+		Project project = newProject();
+		createChannel(project, "{\"type\":\"webhook\",\"config\":{\"url\":\"" + RECEIVER.url("/hook/deleted") + "\"}}");
+		String slug = uniqueSlug();
+		String key = createCheck(project, slug, "{\"cron\":\"0 * * * *\"}");
+		get("/ping/" + key);
+		CLOCK.advance(Duration.ofMinutes(1));
+		post("/ping/" + key + "/fail");
+		assertThat(exchange(HttpMethod.DELETE, "/api/v1/checks/" + slug, null, API_KEY).getStatusCode().value())
+			.as("other project")
+			.isEqualTo(404);
+		assertThat(exchange(HttpMethod.DELETE, "/api/v1/checks/" + slug, null, project.key()).getStatusCode().value())
+			.isEqualTo(204);
+		assertThat(exchange(HttpMethod.GET, "/api/v1/checks/" + slug, null, project.key()).getStatusCode().value())
+			.isEqualTo(404);
+		assertThat(pings(key)).isEmpty();
+		assertThat(this.jdbc
+			.sql("SELECT COUNT(*) FROM deliveries d JOIN channels c ON c.id = d.channel_id" + " WHERE c.project_id = ?")
+			.param(project.id())
+			.query(Long.class)
+			.single()).isZero();
+		assertThat(get("/ping/" + key).getStatusCode().value()).isEqualTo(404);
+	}
+
+	void removeAccounts() {
+		this.jdbc.sql("DELETE FROM accounts").update();
+	}
+
+	/** Makes sure the admin account exists with the known password. */
+	void ensureAdmin() {
+		Long admins = this.jdbc.sql("SELECT COUNT(*) FROM accounts WHERE email = ?")
+			.param(ADMIN_EMAIL)
+			.query(Long.class)
+			.single();
+		if (admins == 0) {
+			removeAccounts();
+			this.accounts.createFirstAccount(ADMIN_EMAIL, ADMIN_PASSWORD);
+		}
+	}
+
+	HttpResponse<String> signIn(String email, String password) {
+		Browser browser = new Browser(this.port);
+		browser.get("/api/v1/session");
+		return browser.call("POST", "/api/v1/session", credentials(email, password));
+	}
+
+	/** A browser signed in as the admin. */
+	Browser signedIn() {
+		ensureAdmin();
+		Browser browser = new Browser(this.port);
+		browser.get("/api/v1/session");
+		HttpResponse<String> response = browser.call("POST", "/api/v1/session",
+				credentials(ADMIN_EMAIL, ADMIN_PASSWORD));
+		assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+		return browser;
+	}
+
+	static String credentials(String email, String password) {
+		return "{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}";
+	}
+
+	static <T> T json(HttpResponse<String> response, String path, Class<T> type) {
+		return JsonPath.parse(response.body()).read(path, type);
 	}
 
 	// --- Helpers ---

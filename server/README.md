@@ -28,6 +28,29 @@ Created the Default project. Its API key is shown only this once, store it now:
 Only a hash of the key is stored. To choose the key yourself (Docker, automation), set
 `CRONBELL_API_KEY` before the first start.
 
+## Admin account and sign-in
+
+The dashboard needs an account. On first start, with no account yet, either set
+`CRONBELL_ADMIN_EMAIL` and `CRONBELL_ADMIN_PASSWORD` (8 to 128 characters) and the server creates
+it, or open the dashboard and fill in the one-time setup page. Setup is accepted only while no
+account exists; afterwards `POST /api/v1/setup` answers `409`. The admin owns the `Default` project.
+
+The browser signs in with a session cookie (`cronbell_session`: `HttpOnly`, `SameSite=Lax`,
+`Secure` over HTTPS). Changes made with the cookie need the `X-XSRF-TOKEN` header carrying the
+`XSRF-TOKEN` cookie value; the dashboard does this. Bearer API keys need neither cookies nor CSRF.
+After 5 wrong passwords from one address for one email, sign-in is refused for 30 s, doubling up
+to 15 minutes. Sessions and the sign-in counts live in memory: a restart signs everyone out.
+
+Behind a reverse proxy that terminates TLS, set `SERVER_FORWARD_HEADERS_STRATEGY=native` so the
+cookies get the `Secure` flag and pings and sign-in limits see the client address. Only do this when
+the proxy is the only way in, since the server then trusts `X-Forwarded-*` from private addresses.
+
+API keys are managed on the dashboard's API keys page (or `/api/v1/keys` with a session); a new key
+is shown once. Keys cannot manage keys.
+
+There is no password reset yet: stop the server, delete the row from `accounts`, and run setup
+again.
+
 To run locally against PostgreSQL in a container, start `TestCronbellApplication` from
 `src/test/java`.
 
@@ -38,6 +61,9 @@ To run locally against PostgreSQL in a container, start `TestCronbellApplication
 | `CRONBELL_DATA_DIR` | `./data` | Directory of the SQLite database (`cronbell.db`). Created if missing. |
 | `CRONBELL_DATABASE_URL` | unset | Use PostgreSQL instead of SQLite: `postgres://user:password@host:5432/db?sslmode=require`, or a `jdbc:postgresql:` URL. |
 | `CRONBELL_API_KEY` | unset | API key of the `Default` project created on first start (at least 20 characters). Ignored once a project exists. |
+| `CRONBELL_ADMIN_EMAIL` | unset | Admin account created on first start when no account exists. Set with the password, or use the setup page. |
+| `CRONBELL_ADMIN_PASSWORD` | unset | Its password, 8 to 128 characters. Only its hash is stored. |
+| `CRONBELL_SESSION_TIMEOUT` | `7d` | Idle time after which a dashboard session ends. |
 | `CRONBELL_BASE_URL` | unset | Public address of the server, e.g. `https://cronbell.example.com`. Alerts link to `<base>/checks/<slug>`; unset, they carry no link. |
 | `CRONBELL_SMTP_HOST` | unset | SMTP server for email channels. Without it (and a sender address) email channels cannot be created. |
 | `CRONBELL_SMTP_PORT` | `587` | SMTP port. `465` uses implicit TLS (SMTPS). |
@@ -60,8 +86,7 @@ Any Spring Boot property works too, for example `SPRING_DATASOURCE_URL`, which w
 | `cronbell.notifier.read-timeout` | `PT10S` | Read timeout for the same. |
 | `cronbell.notifier.telegram-api-url` | `https://api.telegram.org` | Telegram Bot API base URL (tests point it at a local stub). |
 
-Behind a reverse proxy, set `SERVER_FORWARD_HEADERS_STRATEGY=native` so pings record the client
-address instead of the proxy's.
+Behind a reverse proxy, set `SERVER_FORWARD_HEADERS_STRATEGY=native` (see above).
 
 ## Databases
 
@@ -112,6 +137,8 @@ tokens, webhook URLs and secrets) are returned masked. Webhook receivers can che
 | `ping` | Ping endpoint, rate limiter |
 | `api` | Management API (`/api/v1`) |
 | `notify` | Alert channels, message rendering, the delivery outbox and its sender |
-| `project` | Projects, API keys, first-start bootstrap |
-| `security` | Bearer API key authentication |
+| `project` | Projects, memberships, API keys, first-start bootstrap |
+| `account` | Accounts, passwords, first-run setup and `CRONBELL_ADMIN_*` |
+| `security` | Bearer API keys, browser sessions, CSRF, sign-in backoff |
+| `web` | Serves the dashboard and its client-side routes |
 | `db` | Database detection, SQLite settings, `CRONBELL_DATABASE_URL` |

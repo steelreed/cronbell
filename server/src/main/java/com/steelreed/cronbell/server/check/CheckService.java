@@ -88,6 +88,39 @@ public class CheckService {
 		return new Saved(updated, false);
 	}
 
+	public Check get(String projectId, String slug) {
+		return this.checks.findBySlug(projectId, slug).orElseThrow(() -> new CheckNotFoundException(slug));
+	}
+
+	/** Deletes a check with its pings and pending alerts. */
+	@Transactional
+	public void delete(String projectId, String slug) {
+		if (!this.checks.delete(projectId, slug)) {
+			throw new CheckNotFoundException(slug);
+		}
+	}
+
+	/**
+	 * Ends a pause without a ping (DESIGN.md §3): back to NEW if never pinged, else UP
+	 * with no open run and the next due time computed from now. A check that is not
+	 * paused is left alone.
+	 */
+	@Transactional
+	public Check resume(String projectId, String slug) {
+		Check check = get(projectId, slug);
+		CheckState s = check.state();
+		if (s.status() != CheckStatus.PAUSED) {
+			return check;
+		}
+		Instant now = this.clock.instant().truncatedTo(ChronoUnit.MILLIS);
+		CheckState resumed = (s.lastPingAt() == null)
+				? new CheckState(CheckStatus.NEW, null, null, s.lastStartAt(), s.lastSuccessAt(), null, null, null)
+				: new CheckState(CheckStatus.UP, null, s.lastPingAt(), s.lastStartAt(), s.lastSuccessAt(),
+						check.schedule().next(now), null, null);
+		this.checks.updateState(check.id(), resumed, now);
+		return check.withState(resumed);
+	}
+
 	/** Pauses a check: no alerts until its next ping, which returns it to UP. */
 	@Transactional
 	public Check pause(String projectId, String slug) {

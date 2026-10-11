@@ -36,8 +36,8 @@ templates), on-call rotations, SSO.
 
 | Term | Meaning |
 |---|---|
-| **Account** | A person who signs in. |
-| **Project** | A group of checks, owned by one account in v0.1. Has API keys and alert channels. |
+| **Account** | A person who signs in with email and password. v0.1 has one admin account per instance. |
+| **Project** | A group of checks with its API keys and alert channels. Accounts reach projects through memberships (`project_members`, role `OWNER` or `MEMBER`); in v0.1 the admin owns the `Default` project. |
 | **Check** | One job being watched. Identified publicly by a random UUID (`ping key`) and inside a project by a `slug`. |
 | **Schedule** | Either a cron expression with a time zone, or a fixed period. |
 | **Grace** | How long after the due time a run may still arrive before it counts as missed. |
@@ -54,6 +54,11 @@ templates), on-call rotations, SSO.
                              └──────────── successful run ──────────────┘
    PAUSED: set by the user; no alerts; the next ping returns it to UP.
 ```
+
+- **Resume** (`POST /checks/{slug}/resume`) ends a pause without a ping: a check that was never
+  pinged goes back to NEW; otherwise it is UP, any open run is dropped, and `due` is recomputed
+  from now, so a long pause does not turn into an immediate MISSED. Resuming a check that is not
+  paused changes nothing.
 
 - **NEW**: created, never pinged. Never alerts. A check that stays NEW for 24 hours is flagged in
   the dashboard, not alerted.
@@ -146,19 +151,67 @@ JSON over `/api/v1`, documented by OpenAPI at `/api/v1/openapi.json`.
 Key endpoint for the starter: `PUT /api/v1/checks/{slug}` creates or updates a check by slug and
 returns its ping key, so registration at startup is idempotent.
 
-v0.1 endpoints so far (bearer key only; session sign-in and OpenAPI come with the web app):
+v0.1 endpoints. Every one accepts either a bearer key or a signed-in session, except where noted:
 
 ```
-GET    /api/v1/checks                 checks of the key's project
+GET    /api/v1/setup                  {"required": true} while no account exists (public)
+POST   /api/v1/setup                  creates the first account and signs it in (public, once)
+GET    /api/v1/session                the signed-in account, its project and the ping base URL; 401 if none
+POST   /api/v1/session                sign in: {"email", "password"} (public)
+DELETE /api/v1/session                sign out (204, also when not signed in)
+GET    /api/v1/checks                 checks of the project
+GET    /api/v1/checks/{slug}          one check
 PUT    /api/v1/checks/{slug}          create (201) or update (200); the ping key never changes
+DELETE /api/v1/checks/{slug}          204; its pings and pending alerts go with it
+GET    /api/v1/checks/{slug}/pings    latest pings, newest first (?limit=, default 50, at most 200)
 POST   /api/v1/checks/{slug}/pause    PAUSED until the next ping
-GET    /api/v1/channels               alert channels of the key's project (§8)
+POST   /api/v1/checks/{slug}/resume   ends a pause (§3)
+GET    /api/v1/channels               alert channels of the project (§8)
 POST   /api/v1/channels               create (201, Location header)
 GET    /api/v1/channels/{id}
 PUT    /api/v1/channels/{id}          update name and config; the type never changes
 DELETE /api/v1/channels/{id}          204; pending deliveries to it are dropped
 POST   /api/v1/channels/{id}/test     sends a test message now (200, or 502 with the error)
+GET    /api/v1/keys                   API keys of the project: id, name, prefix, createdAt (session only)
+POST   /api/v1/keys                   {"name"} -> 201 with the key, shown this once (session only)
+DELETE /api/v1/keys/{id}              204, the key stops working at once (session only)
 ```
+
+A ping in the list has `kind`, `exitCode`, `rid`, `body`, `receivedAt`, `remoteAddr`, `userAgent`,
+and for a `success`/`fail` that closes a `start` seen in the same list, `durationMs` (matched by
+`rid`, else the latest open `start`).
+
+API keys can read and change checks and channels but cannot manage keys: a leaked key cannot mint
+new ones or revoke the owner's. Key management needs a signed-in session.
+
+### Accounts and sessions
+
+- **Accounts.** Email (stored lower-case, unique) and a password hash made by Spring Security's
+  `DelegatingPasswordEncoder` (`{bcrypt}…`, so the algorithm can change later). Passwords are 8 to
+  128 characters.
+- **First start.** When no account exists and both `CRONBELL_ADMIN_EMAIL` and
+  `CRONBELL_ADMIN_PASSWORD` are set, the server creates that account at start-up. Otherwise the
+  dashboard shows a one-time setup page that posts to `POST /api/v1/setup`, which is accepted only
+  while no account exists. The first account takes a unique "setup slot" in its row, so two
+  concurrent setups cannot both succeed: the loser gets `409`, as does any setup once an account
+  exists. The setup account owns the oldest project (the `Default` project made at first start).
+- **Sessions.** The browser signs in with `POST /api/v1/session` and gets a server-side session
+  cookie `cronbell_session`: `HttpOnly`, `SameSite=Lax`, `Secure` when the request came over HTTPS
+  (directly or through a proxy whose `X-Forwarded-Proto` the server trusts). Sign-in changes the
+  session id (fixation). Sessions live in memory: a restart signs everyone out. Idle timeout 7 days.
+- **CSRF.** Cookie-authenticated `POST`, `PUT`, `PATCH` and `DELETE` requests (sign-in and setup
+  included) need the `X-XSRF-TOKEN` header with the value of the `XSRF-TOKEN` cookie (Spring
+  Security's single-page-app pattern; the cookie is readable by the page, `SameSite=Lax`). Any
+  `/api` response sets it when missing, and sign-in rotates it. Requests with an
+  `Authorization: Bearer` header are stateless and CSRF-free; for them the session cookie is
+  ignored, so a bad key is `401` even next to a valid session.
+- **Brute force.** Failed sign-ins are counted per client address and email, in memory (per
+  instance). After 5 failures in a row each further attempt is refused with `429` and
+  `Retry-After` for 30 s, doubling per failure up to 15 minutes, even with the right password. A
+  success clears the count; counts are forgotten after an hour without failures. Wrong email and
+  wrong password give the same `401`.
+- The cloud (§11) will add magic links or OAuth; the model already allows several accounts and
+  projects.
 
 `PUT` body: `name` (default: the slug), exactly one of `cron` or `periodSeconds`, `timeZone`
 (IANA id, default `UTC`), `graceSeconds`, `maxRuntimeSeconds`. Slugs are 1-128 characters of
@@ -299,7 +352,29 @@ starter/  Java 17 library for user applications (later)
 - Image: `ghcr.io/steelreed/cronbell`, multi-arch (amd64, arm64). Target: under 300 MB of RAM at
   1,000 checks.
 - First start creates an admin account from `CRONBELL_ADMIN_EMAIL` / `CRONBELL_ADMIN_PASSWORD`, or shows a
-  one-time setup page.
+  one-time setup page (§6, Accounts and sessions).
+
+### Dashboard
+
+The web app is served at `/` by the same server, same origin, so it uses the session cookie and
+CSRF header and never sees an API key except when one is created. Look: the Steelreed design
+system (black and white, dark by default with a light mode, colour only for state: UP green, DOWN
+red, warnings and PAUSED amber; system fonts; status is coloured text with a small dot, no
+badges). Dense and calm, data first. English in v0.1; strings live in one module so Vietnamese
+can follow.
+
+| Screen | Path | Content |
+|---|---|---|
+| Setup | `/setup` | first run only: admin email and password |
+| Sign in | `/signin` | email and password; shows the rate-limit wait |
+| Checks | `/` | name, schedule and time zone, status with reason, last ping (relative, exact on hover), next due; filter by status; refreshed every 15 s; empty state with a ready `curl` to create and ping the first check |
+| Check | `/checks/{slug}` | status, schedule, grace, max runtime, ping URL with copy, snippets (crontab line, shell wrapper, Kubernetes CronJob); latest pings with duration and exit code; pause/resume, edit, delete (confirmed in the page) |
+| New / edit check | `/checks/new`, `/checks/{slug}/edit` | slug, name, cron or period, time zone (from the browser's list), grace, max runtime |
+| Channels | `/channels` | channels with last delivery and last error; add and edit per type (secrets shown masked, kept unless replaced); send test |
+| API keys | `/keys` | keys by name and prefix; a new key is shown once; revoke |
+
+Any page needs a session: the app asks `GET /api/v1/setup` and `GET /api/v1/session` first and
+sends the visitor to `/setup` or `/signin` (then back).
 
 ## 10. Plans
 
@@ -320,6 +395,10 @@ Billing is not built in v0.1.
 
 - Sign-in on the cloud: magic-link email (Spring Security one-time tokens) or GitHub OAuth first?
   Self-hosted uses email and password.
+- Sessions in the database (Spring Session JDBC) so restarts and several instances keep sign-ins?
+  Needed before the cloud; v0.1 keeps them in memory.
+- Password reset for self-hosted: today only by deleting the account row and running setup again,
+  or by a future `cronbell admin reset-password` command.
 - Billing provider usable from Vietnam.
 - Alert routing: per-check channel selection and reminders while DOWN (v0.2?).
 - Channel secrets at rest: encrypt with a server key (`CRONBELL_SECRET_KEY`) before the cloud
