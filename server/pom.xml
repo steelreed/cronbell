@@ -33,7 +33,7 @@
 		<argLine>--enable-native-access=ALL-UNNAMED</argLine>
 		<spring-javaformat.version>0.0.48</spring-javaformat.version>
 		<springdoc.version>3.1.1</springdoc.version>
-		<greenmail.version>2.1.5</greenmail.version>
+		<greenmail.version>2.1.14</greenmail.version>
 	</properties>
 	<dependencies>
 		<dependency>
