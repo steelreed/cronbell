@@ -34,9 +34,10 @@ public class PingRepository {
 			.param(checkId)
 			.param(limit)
 			.query((rs, row) -> {
-				int exitCode = rs.getInt("exit_code");
+				int code = rs.getInt("exit_code");
+				Integer exitCode = rs.wasNull() ? null : code;
 				return new Ping(rs.getString("id"), rs.getString("check_id"), PingKind.valueOf(rs.getString("kind")),
-						rs.wasNull() ? null : exitCode, rs.getString("rid"), rs.getString("body"),
+						exitCode, rs.getString("rid"), rs.getString("body"),
 						Instant.ofEpochMilli(rs.getLong("received_at")), rs.getString("remote_addr"),
 						rs.getString("user_agent"));
 			})
