@@ -6,7 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-/** Logs status changes once committed. The notifier will be another listener. */
+/** Logs status changes once committed. The notifier listens too (notify.AlertOutbox). */
 @Component
 class CheckEventLogger {
 

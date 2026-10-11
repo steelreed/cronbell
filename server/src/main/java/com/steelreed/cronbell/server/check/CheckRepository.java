@@ -44,6 +44,10 @@ public class CheckRepository {
 			.optional();
 	}
 
+	public Optional<Check> findById(String id) {
+		return this.jdbc.sql("SELECT " + COLUMNS + " FROM checks WHERE id = ?").param(id).query(MAPPER).optional();
+	}
+
 	public Optional<Check> findBySlug(String projectId, String slug) {
 		return this.jdbc.sql("SELECT " + COLUMNS + " FROM checks WHERE project_id = ? AND slug = ?")
 			.param(projectId)
