@@ -30,7 +30,7 @@ export function CopyButton({ value, label = t.common.copy }: { value: string; la
 export function CodeBlock({ code, label }: { code: string; label?: string }) {
   return (
     <div className="relative rounded-md border bg-surface">
-      <pre className="overflow-x-auto p-3 pr-24 text-[13px] leading-relaxed">
+      <pre className="whitespace-pre-wrap break-all p-3 pr-24 text-[13px] leading-relaxed">
         <code>{code}</code>
       </pre>
       <div className="absolute top-2 right-2">

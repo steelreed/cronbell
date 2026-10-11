@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { LogOutIcon, MoonIcon, SunIcon, UserIcon } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -15,12 +15,17 @@ import { api } from "@/lib/api";
 import { t } from "@/lib/strings";
 import { applyTheme, currentTheme, type Theme } from "@/lib/theme";
 import type { Session } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { CronbellMark } from "./logo";
 
 const NAV = [
-  { to: "/", label: t.nav.checks, exact: false },
-  { to: "/channels", label: t.nav.channels, exact: true },
-  { to: "/keys", label: t.nav.keys, exact: true },
+  {
+    to: "/",
+    label: t.nav.checks,
+    match: (path: string) => path === "/" || path.startsWith("/checks"),
+  },
+  { to: "/channels", label: t.nav.channels, match: (path: string) => path.startsWith("/channels") },
+  { to: "/keys", label: t.nav.keys, match: (path: string) => path.startsWith("/keys") },
 ] as const;
 
 export function ThemeToggle() {
@@ -61,11 +66,7 @@ export function AppShell({ session, children }: { session: Session; children: Re
             {t.product}
           </Link>
           <nav className="hidden h-full items-stretch gap-5 md:flex" aria-label="Main">
-            {NAV.map((item) => (
-              <NavLink key={item.to} to={item.to} exact={item.exact}>
-                {item.label}
-              </NavLink>
-            ))}
+            <NavItems />
           </nav>
           <div className="ml-auto flex items-center gap-1">
             <ThemeToggle />
@@ -92,11 +93,7 @@ export function AppShell({ session, children }: { session: Session; children: Re
           className="flex h-10 items-stretch gap-5 overflow-x-auto border-t px-4 md:hidden"
           aria-label="Main"
         >
-          {NAV.map((item) => (
-            <NavLink key={item.to} to={item.to} exact={item.exact}>
-              {item.label}
-            </NavLink>
-          ))}
+          <NavItems />
         </nav>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">{children}</main>
@@ -105,14 +102,22 @@ export function AppShell({ session, children }: { session: Session; children: Re
 }
 
 /** Active item: foreground text and an amber rule, the product accent. */
-function NavLink({ to, exact, children }: { to: string; exact: boolean; children: ReactNode }) {
-  return (
-    <Link
-      to={to}
-      activeOptions={{ exact }}
-      className="flex items-center whitespace-nowrap border-transparent border-b-2 text-muted-foreground text-sm transition-colors hover:text-foreground data-[status=active]:border-cron data-[status=active]:text-foreground"
-    >
-      {children}
-    </Link>
-  );
+function NavItems() {
+  const path = useRouterState({ select: (state) => state.location.pathname });
+  return NAV.map((item) => {
+    const active = item.match(path);
+    return (
+      <Link
+        key={item.to}
+        to={item.to}
+        aria-current={active ? "page" : undefined}
+        className={cn(
+          "flex items-center whitespace-nowrap border-transparent border-b-2 text-muted-foreground text-sm transition-colors hover:text-foreground",
+          active && "border-cron text-foreground",
+        )}
+      >
+        {item.label}
+      </Link>
+    );
+  });
 }

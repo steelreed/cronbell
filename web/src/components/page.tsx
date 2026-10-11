@@ -89,7 +89,13 @@ export function ConfirmBar({
         <Button variant="ghost" size="sm" onClick={onCancel}>
           {t.common.cancel}
         </Button>
-        <Button variant="destructive" size="sm" onClick={onConfirm} disabled={pending}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onConfirm}
+          disabled={pending}
+          className="border-problem/60 text-problem hover:border-problem hover:bg-transparent hover:text-problem dark:border-problem/60 dark:bg-transparent dark:hover:bg-transparent"
+        >
           {confirmLabel}
         </Button>
       </div>
