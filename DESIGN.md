@@ -390,12 +390,38 @@ starter/  Java 17 library for user applications (later)
 - With SQLite there is exactly one server instance and the detector claims nothing. With
   PostgreSQL several instances may run, and the detector claims due checks with
   `SELECT … FOR UPDATE SKIP LOCKED`.
-- A ping is one insert plus one update. Old pings are pruned daily (§10).
+- A ping is one insert plus one update. Old pings are pruned daily (History, below).
 - The server serves the built web app as static files: one container, one port.
 - Image: `ghcr.io/steelreed/cronbell`, multi-arch (amd64, arm64). Target: under 300 MB of RAM at
   1,000 checks.
 - First start creates an admin account from `CRONBELL_ADMIN_EMAIL` / `CRONBELL_ADMIN_PASSWORD`, or shows a
   one-time setup page (§6, Accounts and sessions).
+
+### History
+
+Pings and finished deliveries are kept for `cronbell.history.retention`
+(`CRONBELL_HISTORY_RETENTION`, a duration such as `90d` or `P90D`, default 90 days; §10). Zero or
+negative is rejected at startup.
+
+- **What is pruned.** Pings received before `now - retention`, and deliveries that are `DELIVERED`
+  or `FAILED` and were created before it. `PENDING` deliveries are never deleted.
+- **What is kept anyway.** Per check: its latest ping, its latest ping with a body (the log
+  excerpt of a DOWN alert, §8), and every ping of the open run (received at or after
+  `run_started_at`). The state itself (`status`, `last_ping_at`, `last_success_at`, `next_due_at`,
+  the open run) lives on the check row, so pruning never changes a check's state.
+- **When.** Once a day, and once a minute after the server starts.
+- **Batches.** Rows are deleted at most 5,000 per statement (`cronbell.history.batch-size`), each
+  statement its own short transaction, so pings and the detector are never blocked for long on
+  either database.
+- **Several instances.** A run first takes a lease on a row of `job_locks` with a conditional
+  update (`locked_until <= now`), renewed after each batch and released at the end. An instance
+  that cannot take it skips the run. Two runs at once would only waste work: deletes are
+  idempotent.
+- One INFO log line per run gives the cutoff and the number of pings and deliveries deleted.
+- **SQLite space.** The database runs without `auto_vacuum`, so deleted pages are reused for new
+  rows and the file stops growing once the retention window is full, but it does not shrink. To
+  return the space, stop the server and run `VACUUM` (not done automatically: it rewrites the
+  whole file and blocks every writer).
 
 ### Dashboard
 
