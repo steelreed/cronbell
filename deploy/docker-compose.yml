@@ -9,7 +9,7 @@ name: cronbell
 
 services:
   cronbell:
-    image: ghcr.io/steelreed/cronbell:${CRONBELL_VERSION:-latest}
+    image: ghcr.io/steelreed/cronbell:${CRONBELL_VERSION:?set CRONBELL_VERSION in .env}
     restart: unless-stopped
     env_file: .env
     environment:
