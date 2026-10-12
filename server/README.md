@@ -156,16 +156,15 @@ tokens, webhook URLs and secrets) are returned masked. Webhook receivers can che
 
 ## Layout
 
-| Package | What |
+A modular monolith: each package under `com.steelreed.cronbell.server` is an application module
+with a small public API, an `internal` package and a `web` package for its controllers. See
+[`../ARCHITECTURE.md`](../ARCHITECTURE.md) for the module map, flows and rules.
+
+| Module | What |
 |---|---|
-| `schedule` | Cron (5- or 6-field, time zones, DST) and period schedules |
-| `check` | Checks, the state machine, the detector, status-change events |
-| `ping` | Ping endpoint, rate limiter |
-| `api` | Management API (`/api/v1`) |
-| `notify` | Alert channels, message rendering, the delivery outbox and its sender |
-| `project` | Projects, memberships, API keys, first-start bootstrap |
-| `account` | Accounts, passwords, first-run setup and `CRONBELL_ADMIN_*` |
-| `security` | Bearer API keys, browser sessions, CSRF, sign-in backoff |
-| `web` | Serves the dashboard and its client-side routes |
+| `checks` | Checks, cron (5- or 6-field, time zones, DST) and period schedules, the state machine, the detector, status-change events, `/api/v1/checks` |
+| `pings` | Ping endpoint, rate limiter, ping storage, `/api/v1/checks/{slug}/pings` |
+| `alerts` | Alert channels, message rendering, the delivery outbox and its sender, `/api/v1/channels` |
+| `accounts` | Accounts, first-run setup and `CRONBELL_ADMIN_*`, projects, API keys, bearer keys, browser sessions, CSRF, sign-in backoff, `/api/v1/keys`, `/session`, `/setup` |
 | `history` | Daily pruning of old pings and deliveries |
-| `db` | Database detection, SQLite settings, `CRONBELL_DATABASE_URL`, job leases |
+| `shared` | Database detection, SQLite settings, `CRONBELL_DATABASE_URL`, job leases, API error handling, serving the dashboard |

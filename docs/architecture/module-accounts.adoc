@@ -1,0 +1,35 @@
+[%autowidth.stretch, cols="h,a"]
+|===
+|Description
+|Accounts: accounts and first-run setup, projects and their memberships, API keys, and the security of the HTTP API (bearer keys, browser sessions, CSRF, sign-in backoff). 
++
+API: `c.s.c.s.a.ProjectPrincipal`, the caller every controller acts for.
+|Base package
+|`com.steelreed.cronbell.server.accounts`
+|Spring components
+|_Controllers_
+
+* `c.s.c.s.a.web.KeysController` -- API keys of the signed-in account's project (DESIGN.md §6). Session only: an API key cannot manage keys. A new key is returned once; only its hash is stored.
+* `c.s.c.s.a.web.SessionController` -- Browser sign-in and sign-out (DESIGN.md §6, Accounts and sessions).
+* `c.s.c.s.a.web.SetupController` -- One-time setup (DESIGN.md §6): while no account exists, anyone who reaches the server can create the admin account. Afterwards it answers 409.
+
+_Services_
+
+* `c.s.c.s.a.internal.AccountService` -- Accounts and their passwords (DESIGN.md §6). v0.1 has one admin account, created by the first-run setup, which owns the oldest project.
+* `c.s.c.s.a.internal.ProjectService` -- Projects and their API keys. Only a SHA-256 hash of each key is stored.
+
+_Others_
+
+* `c.s.c.s.a.internal.AdminBootstrap` -- Creates the admin account from `CRONBELL_ADMIN_EMAIL` and `CRONBELL_ADMIN_PASSWORD` on start, when no account exists yet. Without them the dashboard shows the one-time setup page. Runs after the Default project is made.
+* `c.s.c.s.a.internal.DefaultProjectBootstrap` -- On first start, when there is no project, creates a "Default" project with one API key.  
++
+The key comes from `CRONBELL_API_KEY` when set; otherwise one is generated and printed to the log once. Only its hash is stored, so it cannot be shown again. Runs before the admin account is created, which owns this project.
+* `c.s.c.s.a.internal.security.LoginRateLimiter` -- Slows down password guessing (DESIGN.md §6): failures are counted per client address and email. After {@value #FREE_FAILURES} failures in a row, attempts are refused for 30 s, doubling with each further failure up to 15 minutes. Kept in memory, so per server instance.
+* `c.s.c.s.a.internal.security.SecurityConfig` -- Two ways in (DESIGN.md §6). Scripts and the starter send a project API key as a bearer token: stateless, no CSRF. The dashboard signs in and uses a session cookie, so its unsafe requests to /api need the CSRF header (single-page-app pattern: the token is in the readable `XSRF-TOKEN` cookie and comes back as `X-XSRF-TOKEN`). Both resolve to a `c.s.c.s.a.ProjectPrincipal`. Pings are open: the ping key is the secret.
+* `c.s.c.s.a.internal.security.SessionSignIn` -- Starts and ends browser sessions (DESIGN.md §6). Sign-in changes the session id and rotates the CSRF token; sign-out invalidates the session and clears both cookies.
+* `c.s.c.s.a.web.AccountsExceptionHandler` -- Sign-in and setup errors of the management API, as RFC 9457 problem details.
+* `o.s.s.c.u.UserDetailsService`
+* `o.s.s.w.SecurityFilterChain`
+* `o.s.s.w.c.SecurityContextRepository`
+* `o.s.s.w.c.CsrfTokenRepository`
+|===

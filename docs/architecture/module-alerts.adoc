@@ -1,0 +1,52 @@
+[%autowidth.stretch, cols="h,a"]
+|===
+|Description
+|Alerts: channels (email, Telegram, Slack, webhooks), the delivery outbox filled from `c.s.c.s.c.CheckEvent` in the transaction that changed the check, the dispatcher that sends and retries deliveries, and message rendering per channel type. 
++
+API: `c.s.c.s.a.DeliveryHistory`.
+|Base package
+|`com.steelreed.cronbell.server.alerts`
+|Spring components
+|_Controllers_
+
+* `c.s.c.s.a.web.ChannelsController` -- Management API for alert channels (DESIGN.md §6, §8). Scoped to the project of the API key. Secrets in the config are returned masked.
+
+_Services_
+
+* `c.s.c.s.a.internal.ChannelService` -- Alert channels of a project (DESIGN.md §8).
+
+_Repositories_
+
+* `c.s.c.s.a.internal.ChannelRepository`
+* `c.s.c.s.a.internal.DeliveryRepository` -- The delivery outbox: one row per (alert, channel).
+
+_Event listeners_
+
+* `c.s.c.s.a.internal.AlertOutbox` -- Queues one delivery per channel of the project when a check changes status (DESIGN.md §8). Runs before the commit, in the transaction that changed the check, so the alert is stored if and only if the change is.
+* `c.s.c.s.a.internal.DeliveryScheduler` -- Runs the `c.s.c.s.a.internal.DeliveryDispatcher` every `cronbell.notifier.interval`, and right after a status change is committed so alerts leave at once. Runs never overlap on one instance. Off when `cronbell.scheduling.enabled=false` (tests run it by hand).
+
+_Configuration properties_
+
+* `c.s.c.s.a.internal.NotifierProperties` -- Settings of the alert sender (`cronbell.notifier.*`).
+* `c.s.c.s.a.internal.SmtpProperties` -- Server-wide SMTP settings for email channels (`CRONBELL_SMTP_*`). Port 465 uses implicit TLS; other ports use STARTTLS unless `starttls` is false.
+
+_Others_
+
+* `c.s.c.s.a.DeliveryHistory` -- The stored alert deliveries, as history pruning deletes them.
+* `c.s.c.s.a.internal.AlertFactory` -- Builds the `c.s.c.s.a.internal.Alert` for a status change from the check and its latest pings (DESIGN.md §8). Runs inside the transaction that changed the check.
+* `c.s.c.s.a.internal.DeliveryDispatcher` -- Sends queued deliveries (DESIGN.md §8). Due rows are claimed and leased in a short transaction, then sent outside any transaction, in parallel on virtual threads. Failed sends are retried with exponential backoff for `RETRY_WINDOW` after the alert.
+* `c.s.c.s.a.internal.ChannelSender` (via `c.s.c.s.a.internal.EmailSender` -- Plain-text email through the server's SMTP settings (`CRONBELL_SMTP_*`).)
+* `c.s.c.s.a.internal.HttpPoster` -- POSTs JSON for the HTTP channels with short timeouts, so a stuck receiver cannot hold up alerts. Redirects are not followed. Error messages never contain the URL.
+* `c.s.c.s.a.internal.Senders` -- Picks the sender of a channel's type, and makes sure no error message carries a secret of the channel.
+* `c.s.c.s.a.internal.ChannelSender` (via `c.s.c.s.a.internal.SlackSender` -- Slack incoming webhook: `{"text": …`} in mrkdwn.)
+* `c.s.c.s.a.internal.ChannelSender` (via `c.s.c.s.a.internal.TelegramSender` -- Telegram Bot API `sendMessage` with `parse_mode=HTML`.)
+* `c.s.c.s.a.internal.ChannelSender` (via `c.s.c.s.a.internal.WebhookSender` -- Generic webhook: the version 1 JSON body, a delivery id, a timestamp, and an HMAC signature when the channel has a secret.)
+* `c.s.c.s.a.web.ChannelsExceptionHandler` -- Errors of channel tests, as RFC 9457 problem details.
+|Bean references
+|* `c.s.c.s.c.CheckService` (in Checks) -- The checks module's API: creates, updates and pauses checks of a project, and applies the pings recorded by the pings module to the state of their check.
+* `c.s.c.s.p.PingHistory` (in Pings) -- The stored pings, as other modules read and prune them.
+* `c.s.c.s.s.database.Database` (in Shared) -- Which database we run on, and the SQL that differs between them.
+|Events listened to
+|* `c.s.c.s.c.CheckEvent` 
+* `c.s.c.s.c.CheckEvent` 
+|===

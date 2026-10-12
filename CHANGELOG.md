@@ -37,6 +37,11 @@ All notable changes to Cronbell are listed here. The format follows
   (default 90 days) are pruned daily in batches; each check keeps its latest ping, its latest log
   and the pings of a run in progress. Several PostgreSQL instances take turns through a lease.
 
+### Changed
+
+- Server restructured into a modular monolith (checks, pings, alerts, accounts, history, shared)
+  verified by Spring Modulith and ArchUnit, see `ARCHITECTURE.md`. No behaviour change.
+
 ### Fixed
 
 - Pings without an exit code were reported with exit code 0.

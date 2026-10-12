@@ -5,7 +5,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import com.steelreed.cronbell.server.db.Database;
+import com.steelreed.cronbell.server.shared.database.Database;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;

@@ -8,10 +8,17 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.modulith.Modulithic;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
+/**
+ * Cronbell server, a modular monolith: each package below this one is an application
+ * module (checks, pings, alerts, accounts, history, shared), verified by
+ * {@code ModularityTests}. See ARCHITECTURE.md.
+ */
 @SpringBootApplication
 @ConfigurationPropertiesScan
+@Modulithic(systemName = "Cronbell", sharedModules = "shared")
 public class CronbellApplication {
 
 	public static void main(String[] args) {
