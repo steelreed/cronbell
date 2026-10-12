@@ -224,17 +224,53 @@ otherwise a generated key printed once to the log.
 
 ## 7. Spring Boot starter
 
-Artifact `com.steelreed:cronbell-spring-boot-starter`. Baseline **Java 17, Spring Boot 3.x and 4.x**,
-so existing applications can use it. License Apache-2.0 so it never affects the user's licence.
+Artifact `com.steelreed:cronbell-spring-boot-starter`, package `com.steelreed.cronbell.spring`, own
+repo `steelreed/cronbell-spring-boot-starter`. Java 17 bytecode, Spring Boot 3.3+ and 4.x (Spring
+Framework 6.1+ and 7). Apache-2.0 so it never affects the user's licence. Dependencies: Spring Boot
+only; Quartz, ShedLock and Actuator support switch on when they are on the classpath.
 
-- Disabled unless `cronbell.key` is set.
-- Discovers jobs from `ScheduledTaskHolder` (`@Scheduled`), Quartz `Scheduler` triggers, and wraps
-  ShedLock-locked methods.
-- Slug: `<bean>.<method>` for `@Scheduled`, `<group>.<name>` for Quartz. Overridable with
-  `@CronCheck("slug")` for users who want stable names.
-- Reports `start`, then `success` or `fail` with the exception class and message as the log.
-- All reporting is asynchronous with a bounded queue; when the server is unreachable it drops
-  pings and logs a warning once per minute. **A monitoring outage must never slow or break a job.**
+**Properties** (prefix `cronbell`):
+
+| Property | Default | Meaning |
+|---|---|---|
+| `url`, `api-key` | unset | Server base URL and project API key. Off unless both are set (one INFO line says why). |
+| `enabled` | `true` | Master switch. |
+| `environment` | unset | Slug prefix (`prod.` …) so staging and production do not share checks. |
+| `include`, `exclude` | all, none | Glob patterns (`*`, `?`) on slugs without the prefix; exclude wins. |
+| `grace` | server default | Grace time sent with every check. |
+| `register` | `true` | Upsert the checks at start-up. When `false`, the checks must exist already. |
+| `timeout.connect`, `timeout.read` | `5s`, `10s` | HTTP timeouts. |
+| `queue-capacity` | `1000` | Pings waiting to be sent; beyond it pings are dropped. |
+
+**Discovery.**
+
+- `@Scheduled`: cron (with `zone`, else the JVM zone), `fixedRate` and `fixedDelay` become
+  `periodSeconds` (at least 60, the server minimum); `initialDelay` is ignored. A `fixedDelay` job
+  drifts by its own run time, so a long job may come in late; raise `grace` for those. Tasks with
+  several schedules, one-time tasks and custom `Trigger`s are not monitored.
+- Slug `<bean>.<method>` in kebab case (`reportJob.sendDaily` → `report-job.send-daily`), or the
+  value of `@CronbellCheck("slug")`, which also takes `name`, `grace`, `maxRuntime` and
+  `enabled = false`.
+- Quartz: `CronTrigger`s and endlessly repeating `SimpleTrigger`s; slug `<group>.<name>` of the
+  trigger. Runs are reported by a `JobListener`.
+- ShedLock: a run skipped because another node holds the lock reports nothing (that node reports).
+  `lockAtMostFor` becomes `maxRuntimeSeconds` unless `@CronbellCheck(maxRuntime)` is set.
+
+**Registration.** On start-up, `PUT /api/v1/checks/{slug}` per check with the bearer key; the
+returned `pingUrl` is used for pings. Failures never fail start-up: they are retried in the
+background (5 s doubling to 5 min). A `400` for one check is logged once and that check is left
+out; a `401` stops registration.
+
+**Reporting.** `start?rid=<uuid>` before each run, then `success` (body: duration) or `fail`
+(body: exception class, message, top stack frames and causes, at most 4 KB). For `@Scheduled` the
+starter listens to the Micrometer observation Spring records around every `@Scheduled` method
+(`ScheduledTaskObservationContext`), so it works with any `TaskScheduler`, virtual threads and
+`SimpleAsyncTaskScheduler`, without proxying beans. The job's exception propagates as before.
+
+**A monitoring outage must never slow or break a job.** Pings go to a bounded queue served by one
+background thread (JDK `HttpClient`). When the queue is full or the server is unreachable, pings are
+dropped and one WARN is logged per minute at most. Reporting adds well under a millisecond to a run.
+With Actuator, `/actuator/info` shows the registered checks, dropped pings and the last error.
 
 ## 8. Alerts
 
