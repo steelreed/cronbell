@@ -6,7 +6,7 @@ All notable changes to Cronbell are listed here. The format follows
 
 ## [Unreleased]
 
-## [0.1.0-beta.1] - TBD
+## [0.1.0-beta.1] - 2026-10-12
 
 ### Added
 

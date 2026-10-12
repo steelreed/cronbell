@@ -50,7 +50,7 @@ You are welcome to use AI assistants. You remain the author:
 ## License
 
 By contributing, you agree that your contribution to `server/` and `web/` is licensed under the
-AGPL-3.0, and to client libraries and the starter under the Apache-2.0.
+AGPL-3.0-only, and to client libraries and the starter under the Apache-2.0.
 
 ## Security and conduct
 
