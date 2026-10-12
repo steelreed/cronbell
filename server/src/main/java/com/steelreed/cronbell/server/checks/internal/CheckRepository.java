@@ -78,6 +78,13 @@ public class CheckRepository {
 				 ORDER BY slug""".formatted(COLUMNS)).param(projectId).query(MAPPER).list();
 	}
 
+	public long countByProject(String projectId) {
+		return this.jdbc.sql("SELECT COUNT(*) FROM checks WHERE project_id = ?")
+			.param(projectId)
+			.query(Long.class)
+			.single();
+	}
+
 	/**
 	 * Claims UP checks that may have gone DOWN at {@code now}: past due plus grace
 	 * without a ping since, or running longer than allowed. Mirrors
