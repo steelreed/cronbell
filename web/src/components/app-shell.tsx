@@ -4,7 +4,7 @@ import { ChevronRightIcon, SearchIcon } from "lucide-react";
 import { type ReactNode, useCallback, useState } from "react";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { headerFor } from "@/lib/nav";
+import { headerFor, navFor } from "@/lib/nav";
 import { checksQuery } from "@/lib/queries";
 import { countByHealth } from "@/lib/status";
 import { t } from "@/lib/strings";
@@ -29,7 +29,7 @@ export function AppShell({ session, children }: { session: Session; children: Re
         <AppHeader onSearch={openSearch} />
         <main className="mx-auto w-full min-w-0 max-w-[1600px] flex-1 p-4 sm:p-6">{children}</main>
       </SidebarInset>
-      <CommandMenu open={searching} onOpenChange={setSearching} />
+      <CommandMenu open={searching} onOpenChange={setSearching} pages={navFor(session)} />
     </SidebarProvider>
   );
 }

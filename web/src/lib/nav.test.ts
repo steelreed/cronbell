@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { headerFor } from "./nav";
+import { headerFor, navFor } from "./nav";
 
 describe("headerFor", () => {
   it("titles top-level pages and gives deeper pages their parents", () => {
@@ -16,5 +16,23 @@ describe("headerFor", () => {
       ],
     });
     expect(headerFor("/checks/new")).toEqual({ crumbs: [{ label: "Checks", href: "/checks" }] });
+  });
+
+  it("titles the settings pages", () => {
+    expect(headerFor("/members")).toEqual({ title: "Members" });
+    expect(headerFor("/account")).toEqual({ title: "Account" });
+  });
+});
+
+describe("navFor", () => {
+  it("offers project invites to the instance admin only", () => {
+    const admin = navFor({ account: { id: "a1", email: "a@example.com", instanceAdmin: true } });
+    const other = navFor({ account: { id: "a2", email: "b@example.com", instanceAdmin: false } });
+    expect(admin.map((item) => item.to)).toContain("/invites");
+    expect(other.map((item) => item.to)).not.toContain("/invites");
+    expect(other.filter((item) => item.group === "settings").map((item) => item.to)).toEqual([
+      "/members",
+      "/account",
+    ]);
   });
 });

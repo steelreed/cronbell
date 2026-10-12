@@ -1,10 +1,13 @@
-import { queryOptions } from "@tanstack/react-query";
+import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api } from "./api";
 import type {
   ApiKey,
   Channel,
   Check,
   DayStat,
+  Invite,
+  InviteOffer,
+  Member,
   NextRuns,
   Ping,
   RecentRuns,
@@ -94,3 +97,55 @@ export const keysQuery = queryOptions({
   queryKey: ["keys"],
   queryFn: () => api<ApiKey[]>("/keys"),
 });
+
+export const membersQuery = queryOptions({
+  queryKey: ["members"],
+  queryFn: () => api<Member[]>("/members"),
+});
+
+/** Member invites of the current project (owners only). */
+export const invitesQuery = queryOptions({
+  queryKey: ["invites"],
+  queryFn: () => api<Invite[]>("/invites"),
+});
+
+/** Project invites of the instance (instance admin only). */
+export const adminInvitesQuery = queryOptions({
+  queryKey: ["admin", "invites"],
+  queryFn: () => api<Invite[]>("/admin/invites"),
+});
+
+export const inviteOfferQuery = (token: string) =>
+  queryOptions({
+    queryKey: ["invite-offer", token],
+    queryFn: () => api<InviteOffer>(`/invites/${encodeURIComponent(token)}`),
+    retry: false,
+    staleTime: 60_000,
+  });
+
+/** The signed-in session as cached; dashboard pages always have it (the _app guard loads it). */
+export function useSession(): Session | null {
+  return useQuery(sessionQuery).data ?? null;
+}
+
+/** Whether the signed-in account owns the current project. */
+export function useIsOwner(): boolean {
+  return useSession()?.project?.role === "OWNER";
+}
+
+/** Queries that do not depend on the current project; everything else is dropped on a switch. */
+const ACCOUNT_QUERIES = new Set(["setup", "session", "invite-offer"]);
+
+/**
+ * After the session moved to another project (switch, accepted invite): keep the new session
+ * and forget every project's data, so nothing of the previous project shows.
+ */
+export function useSessionChanged() {
+  const queryClient = useQueryClient();
+  return (session: Session) => {
+    queryClient.removeQueries({
+      predicate: (query) => !ACCOUNT_QUERIES.has(String(query.queryKey[0])),
+    });
+    queryClient.setQueryData(sessionQuery.queryKey, session);
+  };
+}

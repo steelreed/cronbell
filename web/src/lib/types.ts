@@ -73,10 +73,59 @@ export interface NewApiKey extends ApiKey {
   key: string;
 }
 
+export type Role = "OWNER" | "MEMBER";
+
+/** A project of the signed-in account, with its role there. */
+export interface ProjectRef {
+  id: string;
+  name: string;
+  role: Role;
+}
+
 export interface Session {
-  account: { id: string; email: string };
-  project: { id: string; name: string | null };
+  account: { id: string; email: string; instanceAdmin: boolean };
+  /** The current project; null when the account is in no project. */
+  project: ProjectRef | null;
+  /** Every project of the account, oldest membership first. */
+  projects: ProjectRef[];
   pingBaseUrl: string;
+}
+
+export interface Member {
+  accountId: string;
+  email: string;
+  role: Role;
+  joinedAt: string;
+  /** Whether this is the signed-in account. */
+  you: boolean;
+}
+
+export type InviteKind = "PROJECT" | "MEMBER";
+export type InviteStatus = "PENDING" | "ACCEPTED" | "EXPIRED";
+
+export interface Invite {
+  id: string;
+  kind: InviteKind;
+  status: InviteStatus;
+  note: string | null;
+  /** The project joined, or the project made when a project invite was accepted. */
+  projectName: string | null;
+  createdBy: string;
+  createdAt: string;
+  expiresAt: string;
+  acceptedBy: string | null;
+  acceptedAt: string | null;
+  /** The link, only in the answer to its creation. */
+  url: string | null;
+}
+
+/** What an invite link offers (GET /invites/{token}). */
+export interface InviteOffer {
+  kind: InviteKind;
+  /** The project a member invite joins; null for a project invite. */
+  projectName: string | null;
+  invitedBy: string;
+  expiresAt: string;
 }
 
 export interface SetupStatus {
