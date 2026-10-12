@@ -1,5 +1,6 @@
-package com.steelreed.cronbell.server.check;
+package com.steelreed.cronbell.server.checks.internal;
 
+import com.steelreed.cronbell.server.checks.CheckEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

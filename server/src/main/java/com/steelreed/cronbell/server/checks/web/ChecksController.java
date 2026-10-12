@@ -1,4 +1,4 @@
-package com.steelreed.cronbell.server.api;
+package com.steelreed.cronbell.server.checks.web;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -8,12 +8,13 @@ import java.util.List;
 import java.util.UUID;
 
 import com.steelreed.cronbell.server.accounts.ProjectPrincipal;
-import com.steelreed.cronbell.server.check.Check;
-import com.steelreed.cronbell.server.check.CheckService;
-import com.steelreed.cronbell.server.check.CheckStatus;
-import com.steelreed.cronbell.server.check.DownReason;
-import com.steelreed.cronbell.server.check.PingKind;
-import com.steelreed.cronbell.server.check.ScheduleKind;
+import com.steelreed.cronbell.server.checks.Check;
+import com.steelreed.cronbell.server.checks.CheckService;
+import com.steelreed.cronbell.server.checks.CheckStatus;
+import com.steelreed.cronbell.server.checks.DownReason;
+import com.steelreed.cronbell.server.checks.PingKind;
+import com.steelreed.cronbell.server.checks.ScheduleKind;
+import com.steelreed.cronbell.server.checks.internal.domain.Schedule;
 import com.steelreed.cronbell.server.ping.Ping;
 import com.steelreed.cronbell.server.ping.PingRepository;
 import com.steelreed.cronbell.server.shared.web.ManagementApi;
@@ -147,7 +148,7 @@ class ChecksController {
 			if (!due.isBefore(now)) {
 				return due;
 			}
-			return (c.scheduleKind() == ScheduleKind.CRON) ? c.schedule().next(now) : null;
+			return (c.scheduleKind() == ScheduleKind.CRON) ? Schedule.of(c).next(now) : null;
 		}
 
 	}

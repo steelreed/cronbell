@@ -2,13 +2,13 @@ package com.steelreed.cronbell.server.notify;
 
 import java.util.List;
 
-import com.steelreed.cronbell.server.check.Check;
-import com.steelreed.cronbell.server.check.CheckEvent;
-import com.steelreed.cronbell.server.check.CheckRepository;
-import com.steelreed.cronbell.server.check.CheckState;
-import com.steelreed.cronbell.server.check.CheckStatus;
-import com.steelreed.cronbell.server.check.DownReason;
-import com.steelreed.cronbell.server.check.PingKind;
+import com.steelreed.cronbell.server.checks.Check;
+import com.steelreed.cronbell.server.checks.CheckEvent;
+import com.steelreed.cronbell.server.checks.CheckState;
+import com.steelreed.cronbell.server.checks.CheckStatus;
+import com.steelreed.cronbell.server.checks.DownReason;
+import com.steelreed.cronbell.server.checks.PingKind;
+import com.steelreed.cronbell.server.checks.internal.CheckRepository;
 import com.steelreed.cronbell.server.ping.Ping;
 import com.steelreed.cronbell.server.ping.PingRepository;
 

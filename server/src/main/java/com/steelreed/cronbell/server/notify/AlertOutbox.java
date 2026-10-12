@@ -5,7 +5,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 
-import com.steelreed.cronbell.server.check.CheckEvent;
+import com.steelreed.cronbell.server.checks.CheckEvent;
 import com.steelreed.cronbell.server.shared.database.Ids;
 
 import org.springframework.stereotype.Component;

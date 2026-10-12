@@ -1,4 +1,4 @@
-package com.steelreed.cronbell.server.check;
+package com.steelreed.cronbell.server.checks;
 
 import java.time.Instant;
 
@@ -23,14 +23,6 @@ public sealed interface CheckEvent {
 
 	/** A successful run brought the check back UP. */
 	record Recovered(String checkId, String projectId, String slug, Instant at) implements CheckEvent {
-	}
-
-	static CheckEvent of(Check check, CheckStateMachine.Change change, CheckState next, Instant at) {
-		return switch (change) {
-			case WENT_DOWN -> new WentDown(check.id(), check.projectId(), check.slug(), next.downReason(), at);
-			case RECOVERED -> new Recovered(check.id(), check.projectId(), check.slug(), at);
-			case NONE -> throw new IllegalArgumentException("no event for NONE");
-		};
 	}
 
 }

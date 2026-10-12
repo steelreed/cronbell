@@ -1,4 +1,4 @@
-package com.steelreed.cronbell.server.schedule;
+package com.steelreed.cronbell.server.checks.internal.domain;
 
 import java.time.Instant;
 import java.time.ZoneId;

@@ -1,4 +1,4 @@
-package com.steelreed.cronbell.server.check;
+package com.steelreed.cronbell.server.checks;
 
 import java.time.Clock;
 import java.time.DateTimeException;
@@ -7,16 +7,25 @@ import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
-import com.steelreed.cronbell.server.schedule.CronSchedule;
+import com.steelreed.cronbell.server.checks.internal.CheckRepository;
+import com.steelreed.cronbell.server.checks.internal.domain.CheckStateMachine;
+import com.steelreed.cronbell.server.checks.internal.domain.CronSchedule;
+import com.steelreed.cronbell.server.checks.internal.domain.Schedule;
 import com.steelreed.cronbell.server.shared.database.Ids;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Creates, updates and pauses checks of a project. */
+/**
+ * The checks module's API: creates, updates and pauses checks of a project, and applies
+ * the pings recorded by the pings module to the state of their check.
+ */
 @Service
 public class CheckService {
 
@@ -40,15 +49,47 @@ public class CheckService {
 
 	private final CheckRepository checks;
 
+	private final ApplicationEventPublisher events;
+
 	private final Clock clock;
 
-	public CheckService(CheckRepository checks, Clock clock) {
+	public CheckService(CheckRepository checks, ApplicationEventPublisher events, Clock clock) {
 		this.checks = checks;
+		this.events = events;
 		this.clock = clock;
 	}
 
 	public List<Check> list(String projectId) {
 		return this.checks.findAllByProject(projectId);
+	}
+
+	public Optional<Check> findById(String id) {
+		return this.checks.findById(id);
+	}
+
+	/**
+	 * Finds the check of a ping key and, on PostgreSQL, locks its row until the caller's
+	 * transaction ends, so pings of one check are applied one after the other.
+	 */
+	@Transactional(propagation = Propagation.MANDATORY)
+	public Optional<Check> lockByPingKey(UUID pingKey) {
+		return this.checks.findByPingKeyForUpdate(pingKey);
+	}
+
+	/**
+	 * Applies a ping received at {@code at} to a check found with {@link #lockByPingKey}:
+	 * stores the new state if it changed and publishes a {@link CheckEvent} when the
+	 * check went DOWN or came back UP.
+	 */
+	@Transactional(propagation = Propagation.MANDATORY)
+	public void applyPing(Check check, PingKind kind, String rid, Instant at) {
+		CheckStateMachine.Outcome outcome = CheckStateMachine.onPing(check.state(), Schedule.of(check), kind, rid, at);
+		if (!outcome.state().equals(check.state())) {
+			this.checks.updateState(check.id(), outcome.state(), at);
+		}
+		if (outcome.change() != CheckStateMachine.Change.NONE) {
+			this.events.publishEvent(outcome.toEvent(check, at));
+		}
 	}
 
 	/**
@@ -77,7 +118,7 @@ public class CheckService {
 				|| !defined.timeZone().equals(current.timeZone())
 				|| !Objects.equals(defined.periodSeconds(), current.periodSeconds());
 		if (scheduleChanged && state.nextDueAt() != null) {
-			Instant due = defined.schedule().next(now);
+			Instant due = Schedule.of(defined).next(now);
 			state = new CheckState(state.status(), state.downReason(), state.lastPingAt(), state.lastStartAt(),
 					state.lastSuccessAt(), due, state.runStartedAt(), state.runRid());
 		}
@@ -116,7 +157,7 @@ public class CheckService {
 		CheckState resumed = (s.lastPingAt() == null)
 				? new CheckState(CheckStatus.NEW, null, null, s.lastStartAt(), s.lastSuccessAt(), null, null, null)
 				: new CheckState(CheckStatus.UP, null, s.lastPingAt(), s.lastStartAt(), s.lastSuccessAt(),
-						check.schedule().next(now), null, null);
+						Schedule.of(check).next(now), null, null);
 		this.checks.updateState(check.id(), resumed, now);
 		return check.withState(resumed);
 	}

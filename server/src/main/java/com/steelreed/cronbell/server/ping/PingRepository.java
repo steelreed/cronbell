@@ -3,7 +3,7 @@ package com.steelreed.cronbell.server.ping;
 import java.time.Instant;
 import java.util.List;
 
-import com.steelreed.cronbell.server.check.PingKind;
+import com.steelreed.cronbell.server.checks.PingKind;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;

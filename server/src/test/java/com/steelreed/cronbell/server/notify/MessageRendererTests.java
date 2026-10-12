@@ -3,8 +3,8 @@ package com.steelreed.cronbell.server.notify;
 import java.time.Instant;
 import java.util.Map;
 
-import com.steelreed.cronbell.server.check.CheckStatus;
-import com.steelreed.cronbell.server.check.DownReason;
+import com.steelreed.cronbell.server.checks.CheckStatus;
+import com.steelreed.cronbell.server.checks.DownReason;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;

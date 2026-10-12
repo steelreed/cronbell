@@ -4,7 +4,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import com.steelreed.cronbell.server.check.CheckEvent;
+import com.steelreed.cronbell.server.checks.CheckEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

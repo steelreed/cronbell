@@ -1,10 +1,12 @@
-package com.steelreed.cronbell.server.check;
+package com.steelreed.cronbell.server.checks.internal;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 
+import com.steelreed.cronbell.server.checks.Check;
+import com.steelreed.cronbell.server.checks.internal.domain.CheckStateMachine;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,7 +81,7 @@ public class Detector {
 				continue;
 			}
 			this.checks.updateState(check.id(), outcome.state(), now);
-			this.events.publishEvent(CheckEvent.of(check, outcome.change(), outcome.state(), now));
+			this.events.publishEvent(outcome.toEvent(check, now));
 			changed++;
 		}
 		return changed;

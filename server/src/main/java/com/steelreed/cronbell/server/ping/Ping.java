@@ -2,7 +2,7 @@ package com.steelreed.cronbell.server.ping;
 
 import java.time.Instant;
 
-import com.steelreed.cronbell.server.check.PingKind;
+import com.steelreed.cronbell.server.checks.PingKind;
 
 /**
  * One stored ping. {@code body} is at most {@link PingService#MAX_BODY_BYTES} bytes of

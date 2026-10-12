@@ -2,8 +2,8 @@ package com.steelreed.cronbell.server.notify;
 
 import java.time.Instant;
 
-import com.steelreed.cronbell.server.check.CheckStatus;
-import com.steelreed.cronbell.server.check.DownReason;
+import com.steelreed.cronbell.server.checks.CheckStatus;
+import com.steelreed.cronbell.server.checks.DownReason;
 
 /**
  * What an alert says, captured when the check changed status so retries send the same

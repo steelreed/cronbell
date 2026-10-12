@@ -6,14 +6,11 @@ import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.UUID;
 
-import com.steelreed.cronbell.server.check.Check;
-import com.steelreed.cronbell.server.check.CheckEvent;
-import com.steelreed.cronbell.server.check.CheckRepository;
-import com.steelreed.cronbell.server.check.CheckStateMachine;
-import com.steelreed.cronbell.server.check.PingKind;
+import com.steelreed.cronbell.server.checks.Check;
+import com.steelreed.cronbell.server.checks.CheckService;
+import com.steelreed.cronbell.server.checks.PingKind;
 import com.steelreed.cronbell.server.shared.database.Ids;
 
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,28 +32,24 @@ public class PingService {
 			String userAgent) {
 	}
 
-	private final CheckRepository checks;
+	private final CheckService checks;
 
 	private final PingRepository pings;
 
 	private final PingRateLimiter rateLimiter;
 
-	private final ApplicationEventPublisher events;
-
 	private final Clock clock;
 
-	public PingService(CheckRepository checks, PingRepository pings, PingRateLimiter rateLimiter,
-			ApplicationEventPublisher events, Clock clock) {
+	public PingService(CheckService checks, PingRepository pings, PingRateLimiter rateLimiter, Clock clock) {
 		this.checks = checks;
 		this.pings = pings;
 		this.rateLimiter = rateLimiter;
-		this.events = events;
 		this.clock = clock;
 	}
 
 	@Transactional
 	public Result ping(Request request) {
-		Optional<Check> found = this.checks.findByPingKeyForUpdate(request.pingKey());
+		Optional<Check> found = this.checks.lockByPingKey(request.pingKey());
 		if (found.isEmpty()) {
 			return Result.NOT_FOUND;
 		}
@@ -67,14 +60,7 @@ public class PingService {
 		Instant now = this.clock.instant().truncatedTo(ChronoUnit.MILLIS);
 		this.pings.insert(new Ping(Ids.newId(), check.id(), request.kind(), request.exitCode(), request.rid(),
 				request.body(), now, request.remoteAddr(), request.userAgent()));
-		CheckStateMachine.Outcome outcome = CheckStateMachine.onPing(check.state(), check.schedule(), request.kind(),
-				request.rid(), now);
-		if (!outcome.state().equals(check.state())) {
-			this.checks.updateState(check.id(), outcome.state(), now);
-		}
-		if (outcome.change() != CheckStateMachine.Change.NONE) {
-			this.events.publishEvent(CheckEvent.of(check, outcome.change(), outcome.state(), now));
-		}
+		this.checks.applyPing(check, request.kind(), request.rid(), now);
 		return Result.OK;
 	}
 

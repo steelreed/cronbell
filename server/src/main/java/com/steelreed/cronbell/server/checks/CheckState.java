@@ -1,4 +1,4 @@
-package com.steelreed.cronbell.server.check;
+package com.steelreed.cronbell.server.checks;
 
 import java.time.Instant;
 
@@ -15,7 +15,7 @@ public record CheckState(CheckStatus status, DownReason downReason, Instant last
 		return new CheckState(CheckStatus.NEW, null, null, null, null, null, null, null);
 	}
 
-	CheckState withStatus(CheckStatus status, DownReason reason) {
+	public CheckState withStatus(CheckStatus status, DownReason reason) {
 		return new CheckState(status, reason, this.lastPingAt, this.lastStartAt, this.lastSuccessAt, this.nextDueAt,
 				this.runStartedAt, this.runRid);
 	}

@@ -1,4 +1,4 @@
-package com.steelreed.cronbell.server.check;
+package com.steelreed.cronbell.server.checks;
 
 import com.steelreed.cronbell.server.shared.web.NotFoundException;
 

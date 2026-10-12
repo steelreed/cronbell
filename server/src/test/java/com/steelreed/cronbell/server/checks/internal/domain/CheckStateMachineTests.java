@@ -1,14 +1,15 @@
-package com.steelreed.cronbell.server.check;
+package com.steelreed.cronbell.server.checks.internal.domain;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 
-import com.steelreed.cronbell.server.check.CheckStateMachine.Change;
-import com.steelreed.cronbell.server.check.CheckStateMachine.Outcome;
-import com.steelreed.cronbell.server.schedule.CronSchedule;
-import com.steelreed.cronbell.server.schedule.PeriodSchedule;
-import com.steelreed.cronbell.server.schedule.Schedule;
+import com.steelreed.cronbell.server.checks.CheckState;
+import com.steelreed.cronbell.server.checks.CheckStatus;
+import com.steelreed.cronbell.server.checks.DownReason;
+import com.steelreed.cronbell.server.checks.PingKind;
+import com.steelreed.cronbell.server.checks.internal.domain.CheckStateMachine.Change;
+import com.steelreed.cronbell.server.checks.internal.domain.CheckStateMachine.Outcome;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 

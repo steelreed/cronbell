@@ -1,4 +1,4 @@
-package com.steelreed.cronbell.server.check;
+package com.steelreed.cronbell.server.checks;
 
 /** See DESIGN.md §3. */
 public enum CheckStatus {

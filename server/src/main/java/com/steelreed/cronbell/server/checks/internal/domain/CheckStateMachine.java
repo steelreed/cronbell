@@ -1,10 +1,14 @@
-package com.steelreed.cronbell.server.check;
+package com.steelreed.cronbell.server.checks.internal.domain;
 
 import java.time.Duration;
 import java.time.Instant;
 
-import com.steelreed.cronbell.server.schedule.CronSchedule;
-import com.steelreed.cronbell.server.schedule.Schedule;
+import com.steelreed.cronbell.server.checks.Check;
+import com.steelreed.cronbell.server.checks.CheckEvent;
+import com.steelreed.cronbell.server.checks.CheckState;
+import com.steelreed.cronbell.server.checks.CheckStatus;
+import com.steelreed.cronbell.server.checks.DownReason;
+import com.steelreed.cronbell.server.checks.PingKind;
 
 /**
  * State transitions of DESIGN.md §3 and §4. Pure: no clock, no database.
@@ -31,6 +35,19 @@ public final class CheckStateMachine {
 
 		static Outcome unchanged(CheckState state) {
 			return new Outcome(state, Change.NONE);
+		}
+
+		/**
+		 * The event this outcome publishes for {@code check} at {@code at}.
+		 * @throws IllegalArgumentException if nothing changed for alerting
+		 */
+		public CheckEvent toEvent(Check check, Instant at) {
+			return switch (this.change) {
+				case WENT_DOWN ->
+					new CheckEvent.WentDown(check.id(), check.projectId(), check.slug(), this.state.downReason(), at);
+				case RECOVERED -> new CheckEvent.Recovered(check.id(), check.projectId(), check.slug(), at);
+				case NONE -> throw new IllegalArgumentException("no event for NONE");
+			};
 		}
 
 	}

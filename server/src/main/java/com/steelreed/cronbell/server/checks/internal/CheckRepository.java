@@ -1,4 +1,4 @@
-package com.steelreed.cronbell.server.check;
+package com.steelreed.cronbell.server.checks.internal;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -8,6 +8,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.steelreed.cronbell.server.checks.Check;
+import com.steelreed.cronbell.server.checks.CheckState;
+import com.steelreed.cronbell.server.checks.CheckStatus;
+import com.steelreed.cronbell.server.checks.DownReason;
+import com.steelreed.cronbell.server.checks.ScheduleKind;
 import com.steelreed.cronbell.server.shared.database.Database;
 
 import org.springframework.jdbc.core.RowMapper;
@@ -66,7 +71,7 @@ public class CheckRepository {
 	/**
 	 * Claims UP checks that may have gone DOWN at {@code now}: past due plus grace
 	 * without a ping since, or running longer than allowed. Mirrors
-	 * {@link CheckStateMachine#detect}. On PostgreSQL rows are locked and rows locked by
+	 * {@code CheckStateMachine.detect}. On PostgreSQL rows are locked and rows locked by
 	 * other instances are skipped.
 	 */
 	public List<Check> claimOverdue(Instant now, int limit) {
