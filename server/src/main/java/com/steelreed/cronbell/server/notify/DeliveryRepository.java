@@ -7,7 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.steelreed.cronbell.server.db.Database;
+import com.steelreed.cronbell.server.shared.database.Database;
 import tools.jackson.databind.json.JsonMapper;
 
 import org.springframework.jdbc.core.simple.JdbcClient;

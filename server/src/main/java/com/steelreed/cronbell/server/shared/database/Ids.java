@@ -1,4 +1,4 @@
-package com.steelreed.cronbell.server.db;
+package com.steelreed.cronbell.server.shared.database;
 
 import java.security.SecureRandom;
 import java.util.UUID;

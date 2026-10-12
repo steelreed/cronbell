@@ -7,7 +7,7 @@ import java.util.UUID;
 
 import javax.sql.DataSource;
 
-import com.steelreed.cronbell.server.db.Database;
+import com.steelreed.cronbell.server.shared.database.Database;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;

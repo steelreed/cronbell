@@ -11,6 +11,7 @@ import com.steelreed.cronbell.server.notify.ChannelService;
 import com.steelreed.cronbell.server.notify.DeliveryException;
 import com.steelreed.cronbell.server.notify.DeliveryRepository;
 import com.steelreed.cronbell.server.security.ProjectPrincipal;
+import com.steelreed.cronbell.server.shared.web.ManagementApi;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -29,6 +30,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
  * key. Secrets in the config are returned masked.
  */
 @RestController
+@ManagementApi
 @RequestMapping("/api/v1/channels")
 class ChannelsController {
 

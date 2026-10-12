@@ -11,7 +11,7 @@ import com.steelreed.cronbell.server.check.CheckEvent;
 import com.steelreed.cronbell.server.check.CheckRepository;
 import com.steelreed.cronbell.server.check.CheckStateMachine;
 import com.steelreed.cronbell.server.check.PingKind;
-import com.steelreed.cronbell.server.db.Ids;
+import com.steelreed.cronbell.server.shared.database.Ids;
 
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;

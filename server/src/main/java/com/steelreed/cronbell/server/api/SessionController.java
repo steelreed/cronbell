@@ -6,6 +6,7 @@ import com.steelreed.cronbell.server.project.ProjectService;
 import com.steelreed.cronbell.server.security.LoginRateLimiter;
 import com.steelreed.cronbell.server.security.ProjectPrincipal;
 import com.steelreed.cronbell.server.security.SessionSignIn;
+import com.steelreed.cronbell.server.shared.web.ManagementApi;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
@@ -21,6 +22,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 /** Browser sign-in and sign-out (DESIGN.md §6, Accounts and sessions). */
 @RestController
+@ManagementApi
 @RequestMapping("/api/v1/session")
 class SessionController {
 

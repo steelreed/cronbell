@@ -6,8 +6,8 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.function.IntSupplier;
 
-import com.steelreed.cronbell.server.db.Ids;
-import com.steelreed.cronbell.server.db.JobLocks;
+import com.steelreed.cronbell.server.shared.database.Ids;
+import com.steelreed.cronbell.server.shared.database.JobLocks;
 import com.steelreed.cronbell.server.notify.DeliveryRepository;
 import com.steelreed.cronbell.server.ping.PingRepository;
 import org.slf4j.Logger;

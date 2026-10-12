@@ -1,4 +1,4 @@
-package com.steelreed.cronbell.server.db;
+package com.steelreed.cronbell.server.shared.internal;
 
 import java.net.URI;
 import java.net.URLDecoder;

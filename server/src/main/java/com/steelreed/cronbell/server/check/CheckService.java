@@ -10,7 +10,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
-import com.steelreed.cronbell.server.db.Ids;
+import com.steelreed.cronbell.server.shared.database.Ids;
 import com.steelreed.cronbell.server.schedule.CronSchedule;
 
 import org.springframework.stereotype.Service;

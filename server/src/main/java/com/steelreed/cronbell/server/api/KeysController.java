@@ -5,6 +5,8 @@ import java.util.List;
 
 import com.steelreed.cronbell.server.project.ProjectService;
 import com.steelreed.cronbell.server.security.ProjectPrincipal;
+import com.steelreed.cronbell.server.shared.web.ManagementApi;
+import com.steelreed.cronbell.server.shared.web.NotFoundException;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
  * cannot manage keys. A new key is returned once; only its hash is stored.
  */
 @RestController
+@ManagementApi
 @RequestMapping("/api/v1/keys")
 class KeysController {
 
@@ -67,7 +70,7 @@ class KeysController {
 	record NewKeyResponse(String id, String name, String prefix, Instant createdAt, String key) {
 	}
 
-	static class KeyNotFoundException extends RuntimeException {
+	static class KeyNotFoundException extends NotFoundException {
 
 		KeyNotFoundException(String id) {
 			super("no API key " + id);

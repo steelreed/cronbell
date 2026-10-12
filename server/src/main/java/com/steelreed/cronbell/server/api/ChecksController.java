@@ -16,6 +16,7 @@ import com.steelreed.cronbell.server.check.ScheduleKind;
 import com.steelreed.cronbell.server.ping.Ping;
 import com.steelreed.cronbell.server.ping.PingRepository;
 import com.steelreed.cronbell.server.security.ProjectPrincipal;
+import com.steelreed.cronbell.server.shared.web.ManagementApi;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -33,6 +34,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 /** Management API for checks (DESIGN.md §6). Scoped to the project of the API key. */
 @RestController
+@ManagementApi
 @RequestMapping("/api/v1/checks")
 class ChecksController {
 

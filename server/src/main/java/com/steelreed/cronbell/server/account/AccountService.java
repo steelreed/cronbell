@@ -6,7 +6,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
-import com.steelreed.cronbell.server.db.Ids;
+import com.steelreed.cronbell.server.shared.database.Ids;
 import com.steelreed.cronbell.server.project.ProjectService;
 
 import org.springframework.dao.DataIntegrityViolationException;

@@ -1,4 +1,4 @@
-package com.steelreed.cronbell.server.web;
+package com.steelreed.cronbell.server.shared.web;
 
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;

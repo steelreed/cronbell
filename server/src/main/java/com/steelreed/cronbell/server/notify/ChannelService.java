@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.steelreed.cronbell.server.db.Ids;
+import com.steelreed.cronbell.server.shared.database.Ids;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

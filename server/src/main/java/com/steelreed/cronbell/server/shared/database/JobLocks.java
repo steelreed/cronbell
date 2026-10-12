@@ -1,4 +1,4 @@
-package com.steelreed.cronbell.server.db;
+package com.steelreed.cronbell.server.shared.database;
 
 import java.time.Instant;
 

@@ -11,7 +11,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 
-import com.steelreed.cronbell.server.db.Ids;
+import com.steelreed.cronbell.server.shared.database.Ids;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
