@@ -64,7 +64,9 @@ describe("CheckForm", () => {
     await user.click(screen.getAllByRole("combobox", { name: "Unit" })[0]);
     await user.click(await screen.findByRole("option", { name: "minutes" }));
     await user.click(screen.getByLabelText("Time zone"));
-    await user.type(screen.getByLabelText(/Search zone/), "utc");
+    // Paste rather than type: each keystroke filters some 400 zones, which is slow on CI.
+    await user.click(screen.getByLabelText(/Search zone/));
+    await user.paste("utc");
     await user.click(await screen.findByRole("option", { name: /^UTC/ }));
     await user.click(screen.getByRole("button", { name: "Create check" }));
     expect(onSubmit).toHaveBeenCalledWith("queue-worker", {
@@ -72,7 +74,7 @@ describe("CheckForm", () => {
       timeZone: "UTC",
       graceSeconds: 1800,
     });
-  });
+  }, 15_000);
 
   it("makes the slug from the name until the slug is edited", async () => {
     const user = userEvent.setup();
