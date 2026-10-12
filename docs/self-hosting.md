@@ -88,7 +88,11 @@ Set at least:
 - `CRONBELL_ADMIN_EMAIL` and `CRONBELL_ADMIN_PASSWORD`: the admin account, created on first start.
   Leave them out to create the account on a setup page instead, but then open the dashboard right
   away: until an account exists, anyone who reaches the page can create it.
-- `CRONBELL_VERSION`: `latest`, or a release such as `0.1.0` to upgrade only when you decide.
+- `CRONBELL_VERSION`: the image tag. Pin a release such as `0.1.0-beta.1`, so the server only
+  changes version when you change it. Image tags are the version (`0.1.0-beta.1`, `0.1.0`), `0.1`
+  for the newest patch of a minor version, `latest` for the newest stable release and `beta` for
+  the newest pre-release. Until 0.1.0 is out there are only pre-releases, so `latest` does not
+  exist yet.
 
 Email alerts need the `CRONBELL_SMTP_*` settings; Telegram, Slack and webhook channels need nothing
 here. Leave settings you don't use commented out: an empty value is not the same as unset.
@@ -203,8 +207,13 @@ docker compose up -d
 docker image prune -f      # remove the old image
 ```
 
-Database migrations run on start. With `CRONBELL_VERSION` pinned, change it in `.env` first.
-Read the [changelog](../CHANGELOG.md) before a new minor version.
+Set `CRONBELL_VERSION` in `.env` to the new version before pulling. Database migrations run on
+start. Read the [changelog](../CHANGELOG.md) before a new minor version; releases and their notes
+are also on the [GitHub releases page](https://github.com/steelreed/cronbell/releases).
+
+To go back, set `CRONBELL_VERSION` to the previous version and run `docker compose up -d`. A newer
+version may have migrated the database, so restore the backup made before the upgrade if the
+older version does not start (see [Restore a backup](#restore-a-backup)).
 
 ## Logs and status
 
@@ -256,5 +265,5 @@ with `POSTGRES_PASSWORD` in `.env` and
 
 With `CRONBELL_DOMAIN=localhost`, Caddy uses a certificate from its own local authority instead of
 Let's Encrypt; `curl -k https://localhost` or accept the browser warning. Without HTTPS at all,
-`docker run -p 8080:8080 -v cronbell-data:/data ghcr.io/steelreed/cronbell` is enough; see
+`docker run -p 8080:8080 -v cronbell-data:/data ghcr.io/steelreed/cronbell:0.1.0-beta.1` is enough; see
 [`server/README.md`](../server/README.md) for every setting.

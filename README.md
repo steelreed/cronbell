@@ -39,7 +39,7 @@ and ShedLock job and reports each run without code changes (planned).
 One container, SQLite by default, PostgreSQL optional:
 
 ```bash
-docker run -d -p 8080:8080 -v cronbell-data:/data ghcr.io/steelreed/cronbell
+docker run -d -p 8080:8080 -v cronbell-data:/data ghcr.io/steelreed/cronbell:0.1.0-beta.1
 ```
 
 (The image is published with the first release. Until then, build it from this repository:

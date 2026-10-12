@@ -1,0 +1,143 @@
+name: Deploy
+
+# Optional: upgrades one Cronbell server that runs the deploy kit (deploy/) to a released version.
+# On the server it sets CRONBELL_VERSION in .env, pulls the image, recreates the containers and
+# waits for the health endpoint. See RELEASING.md for the setup.
+#
+# - Run it by hand (Actions, Deploy, Run workflow) with a version such as 0.1.0-beta.1; running
+#   it with an older version is the rollback.
+# - After a successful Release run, it deploys that tag only when the repository variable
+#   DEPLOY_ON_RELEASE is "true".
+# - Without the DEPLOY_* secrets it does nothing and says so.
+#
+# The job runs in the "beta" environment: add required reviewers there to approve each deploy.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to deploy, without the leading v (for example 0.1.0-beta.1)
+        required: true
+        type: string
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+
+permissions: {}
+
+concurrency:
+  group: deploy-beta
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to beta
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && vars.DEPLOY_ON_RELEASE == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: beta
+    steps:
+      - id: config
+        name: Check settings
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          RELEASE_TAG: ${{ github.event.workflow_run.head_branch }}
+          HAS_HOST: ${{ secrets.DEPLOY_HOST != '' }}
+          HAS_USER: ${{ secrets.DEPLOY_USER != '' }}
+          HAS_KEY: ${{ secrets.DEPLOY_SSH_KEY != '' }}
+          HAS_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS != '' }}
+        run: |
+          missing=()
+          [[ "$HAS_HOST" == true ]] || missing+=(DEPLOY_HOST)
+          [[ "$HAS_USER" == true ]] || missing+=(DEPLOY_USER)
+          [[ "$HAS_KEY" == true ]] || missing+=(DEPLOY_SSH_KEY)
+          [[ "$HAS_KNOWN_HOSTS" == true ]] || missing+=(DEPLOY_KNOWN_HOSTS)
+          if (( ${#missing[@]} > 0 )); then
+            echo "::notice title=Deploy skipped::Secrets not set: ${missing[*]}. See RELEASING.md."
+            echo "Deploy skipped: secrets not set (${missing[*]}). See RELEASING.md." >> "$GITHUB_STEP_SUMMARY"
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          version="${INPUT_VERSION:-${RELEASE_TAG#v}}"
+          version="${version#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$ ]]; then
+            echo "::error::'$version' is not a release version such as 0.1.0 or 0.1.0-beta.1"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+
+      - name: Set up SSH
+        if: steps.config.outputs.enabled == 'true'
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Upgrade and wait for health
+        if: steps.config.outputs.enabled == 'true'
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          PORT: ${{ secrets.DEPLOY_PORT || '22' }}
+          USER_NAME: ${{ secrets.DEPLOY_USER }}
+          VERSION: ${{ steps.config.outputs.version }}
+          # Directory of docker-compose.yml and .env on the server, relative to the user's home.
+          DEPLOY_DIR: ${{ vars.DEPLOY_DIR || 'cronbell' }}
+          # Cronbell's health endpoint as seen from the server itself.
+          HEALTH_URL: ${{ vars.DEPLOY_HEALTH_URL || 'http://127.0.0.1:8095/actuator/health' }}
+        run: |
+          # The remote script gets its values as quoted arguments, never spliced into its text.
+          ssh -i ~/.ssh/deploy_key -p "$PORT" \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=15 \
+            "$USER_NAME@$HOST" \
+            "bash -s -- $(printf '%q ' "$VERSION" "$DEPLOY_DIR" "$HEALTH_URL")" <<'REMOTE'
+          set -euo pipefail
+          version="$1" dir="$2" health_url="$3"
+          cd "$HOME/$dir"
+          [[ -f .env ]] || { echo "No .env in $PWD" >&2; exit 1; }
+
+          previous="$(sed -n 's/^CRONBELL_VERSION=//p' .env)"
+          echo "Upgrading Cronbell from ${previous:-<unset>} to $version in $PWD"
+          if grep -q '^CRONBELL_VERSION=' .env; then
+            sed -i "s/^CRONBELL_VERSION=.*/CRONBELL_VERSION=$version/" .env
+          else
+            echo "CRONBELL_VERSION=$version" >> .env
+          fi
+
+          docker compose pull
+          docker compose up -d
+
+          for attempt in $(seq 1 30); do
+            if curl -fsS -m 5 "$health_url"; then
+              echo
+              echo "Healthy after $attempt attempt(s): Cronbell $version is running."
+              docker compose ps
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "Cronbell did not report healthy at $health_url within 150 s." >&2
+          echo "Roll back by deploying ${previous:-the previous version}." >&2
+          docker compose ps >&2
+          docker compose logs --tail 100 cronbell >&2
+          exit 1
+          REMOTE
+
+      - name: Summary
+        if: steps.config.outputs.enabled == 'true'
+        env:
+          VERSION: ${{ steps.config.outputs.version }}
+        run: echo "Deployed Cronbell $VERSION to beta." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove the SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
