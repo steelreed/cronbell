@@ -1,9 +1,10 @@
-package com.steelreed.cronbell.server.ping;
+package com.steelreed.cronbell.server.pings.internal;
 
 import java.time.Instant;
 import java.util.List;
 
 import com.steelreed.cronbell.server.checks.PingKind;
+import com.steelreed.cronbell.server.pings.Ping;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;

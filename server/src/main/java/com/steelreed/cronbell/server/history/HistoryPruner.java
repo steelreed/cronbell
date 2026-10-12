@@ -7,7 +7,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.function.IntSupplier;
 
 import com.steelreed.cronbell.server.notify.DeliveryRepository;
-import com.steelreed.cronbell.server.ping.PingRepository;
+import com.steelreed.cronbell.server.pings.PingHistory;
 import com.steelreed.cronbell.server.shared.database.Ids;
 import com.steelreed.cronbell.server.shared.database.JobLocks;
 import org.slf4j.Logger;
@@ -36,7 +36,7 @@ public class HistoryPruner {
 	public record Result(boolean ran, int pings, int deliveries) {
 	}
 
-	private final PingRepository pings;
+	private final PingHistory pings;
 
 	private final DeliveryRepository deliveries;
 
@@ -46,8 +46,8 @@ public class HistoryPruner {
 
 	private final Clock clock;
 
-	public HistoryPruner(PingRepository pings, DeliveryRepository deliveries, JobLocks locks,
-			HistoryProperties properties, Clock clock) {
+	public HistoryPruner(PingHistory pings, DeliveryRepository deliveries, JobLocks locks, HistoryProperties properties,
+			Clock clock) {
 		this.pings = pings;
 		this.deliveries = deliveries;
 		this.locks = locks;

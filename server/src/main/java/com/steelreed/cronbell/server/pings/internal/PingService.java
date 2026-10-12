@@ -1,4 +1,4 @@
-package com.steelreed.cronbell.server.ping;
+package com.steelreed.cronbell.server.pings.internal;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -9,6 +9,7 @@ import java.util.UUID;
 import com.steelreed.cronbell.server.checks.Check;
 import com.steelreed.cronbell.server.checks.CheckService;
 import com.steelreed.cronbell.server.checks.PingKind;
+import com.steelreed.cronbell.server.pings.Ping;
 import com.steelreed.cronbell.server.shared.database.Ids;
 
 import org.springframework.stereotype.Service;
@@ -17,9 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
 /** Records a ping and applies it to its check: one insert plus one update. */
 @Service
 public class PingService {
-
-	/** Bodies are stored up to this many bytes and truncated beyond. */
-	public static final int MAX_BODY_BYTES = 10 * 1024;
 
 	public enum Result {
 

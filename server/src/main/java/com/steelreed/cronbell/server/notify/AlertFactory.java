@@ -9,8 +9,8 @@ import com.steelreed.cronbell.server.checks.CheckStatus;
 import com.steelreed.cronbell.server.checks.DownReason;
 import com.steelreed.cronbell.server.checks.PingKind;
 import com.steelreed.cronbell.server.checks.internal.CheckRepository;
-import com.steelreed.cronbell.server.ping.Ping;
-import com.steelreed.cronbell.server.ping.PingRepository;
+import com.steelreed.cronbell.server.pings.Ping;
+import com.steelreed.cronbell.server.pings.PingHistory;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -29,11 +29,11 @@ class AlertFactory {
 
 	private final CheckRepository checks;
 
-	private final PingRepository pings;
+	private final PingHistory pings;
 
 	private final String baseUrl;
 
-	AlertFactory(CheckRepository checks, PingRepository pings, @Value("${cronbell.base-url:}") String baseUrl) {
+	AlertFactory(CheckRepository checks, PingHistory pings, @Value("${cronbell.base-url:}") String baseUrl) {
 		this.checks = checks;
 		this.pings = pings;
 		this.baseUrl = baseUrl.strip().replaceAll("/+$", "");
@@ -48,7 +48,7 @@ class AlertFactory {
 		return switch (event) {
 			case CheckEvent.WentDown down -> {
 				DownReason reason = down.reason();
-				List<Ping> recent = this.pings.findRecent(check.id(), RECENT_PINGS);
+				List<Ping> recent = this.pings.recent(check.id(), RECENT_PINGS);
 				Ping logPing = recent.stream()
 					.filter((ping) -> ping.body() != null && !ping.body().isBlank())
 					.findFirst()

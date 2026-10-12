@@ -1,4 +1,4 @@
-package com.steelreed.cronbell.server.ping;
+package com.steelreed.cronbell.server.pings.web;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -12,6 +12,8 @@ import java.util.Arrays;
 import java.util.UUID;
 
 import com.steelreed.cronbell.server.checks.PingKind;
+import com.steelreed.cronbell.server.pings.Ping;
+import com.steelreed.cronbell.server.pings.internal.PingService;
 import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.http.HttpStatus;
@@ -112,13 +114,13 @@ class PingController {
 		return (code <= 255) ? code : null;
 	}
 
-	/** Reads up to {@link PingService#MAX_BODY_BYTES} bytes as UTF-8; null when empty. */
+	/** Reads up to {@link Ping#MAX_BODY_BYTES} bytes as UTF-8; null when empty. */
 	static String readBody(HttpServletRequest request) throws IOException {
 		byte[] bytes;
 		try (InputStream in = request.getInputStream()) {
-			bytes = in.readNBytes(PingService.MAX_BODY_BYTES);
+			bytes = in.readNBytes(Ping.MAX_BODY_BYTES);
 		}
-		if (bytes.length == PingService.MAX_BODY_BYTES) {
+		if (bytes.length == Ping.MAX_BODY_BYTES) {
 			bytes = dropIncompleteTail(bytes);
 		}
 		return decode(bytes);

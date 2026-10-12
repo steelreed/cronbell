@@ -1,9 +1,7 @@
 package com.steelreed.cronbell.server.checks.web;
 
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -12,11 +10,8 @@ import com.steelreed.cronbell.server.checks.Check;
 import com.steelreed.cronbell.server.checks.CheckService;
 import com.steelreed.cronbell.server.checks.CheckStatus;
 import com.steelreed.cronbell.server.checks.DownReason;
-import com.steelreed.cronbell.server.checks.PingKind;
 import com.steelreed.cronbell.server.checks.ScheduleKind;
 import com.steelreed.cronbell.server.checks.internal.domain.Schedule;
-import com.steelreed.cronbell.server.ping.Ping;
-import com.steelreed.cronbell.server.ping.PingRepository;
 import com.steelreed.cronbell.server.shared.web.ManagementApi;
 
 import org.springframework.http.HttpStatus;
@@ -29,7 +24,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
@@ -39,19 +33,12 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 @RequestMapping("/api/v1/checks")
 class ChecksController {
 
-	static final int DEFAULT_PING_LIMIT = 50;
-
-	static final int MAX_PING_LIMIT = 200;
-
 	private final CheckService checks;
-
-	private final PingRepository pings;
 
 	private final Clock clock;
 
-	ChecksController(CheckService checks, PingRepository pings, Clock clock) {
+	ChecksController(CheckService checks, Clock clock) {
 		this.checks = checks;
-		this.pings = pings;
 		this.clock = clock;
 	}
 
@@ -84,17 +71,6 @@ class ChecksController {
 	ResponseEntity<Void> delete(@AuthenticationPrincipal ProjectPrincipal project, @PathVariable String slug) {
 		this.checks.delete(project.projectId(), slug);
 		return ResponseEntity.noContent().build();
-	}
-
-	/** Latest pings, newest first, with run durations where the start is in the list. */
-	@GetMapping("/{slug}/pings")
-	List<PingResponse> pings(@AuthenticationPrincipal ProjectPrincipal project, @PathVariable String slug,
-			@RequestParam(defaultValue = "" + DEFAULT_PING_LIMIT) int limit) {
-		if (limit < 1 || limit > MAX_PING_LIMIT) {
-			throw new IllegalArgumentException("limit must be 1 to " + MAX_PING_LIMIT);
-		}
-		Check check = this.checks.get(project.projectId(), slug);
-		return PingResponse.of(this.pings.findRecent(check.id(), limit));
 	}
 
 	@PostMapping("/{slug}/resume")
@@ -149,38 +125,6 @@ class ChecksController {
 				return due;
 			}
 			return (c.scheduleKind() == ScheduleKind.CRON) ? Schedule.of(c).next(now) : null;
-		}
-
-	}
-
-	record PingResponse(String id, PingKind kind, Integer exitCode, String rid, String body, Instant receivedAt,
-			String remoteAddr, String userAgent, Long durationMs) {
-
-		/**
-		 * Pairs each {@code success}/{@code fail} with its {@code start}: the one with
-		 * the same rid, else the latest start not yet closed.
-		 * @param newestFirst pings, newest first
-		 */
-		static List<PingResponse> of(List<Ping> newestFirst) {
-			List<Ping> open = new ArrayList<>();
-			List<PingResponse> result = new ArrayList<>(newestFirst.size());
-			for (Ping ping : newestFirst.reversed()) {
-				Long duration = null;
-				if (ping.kind() == PingKind.START) {
-					open.add(ping);
-				}
-				else if (ping.kind() != PingKind.LOG && !open.isEmpty()) {
-					Ping start = open.stream()
-						.filter((candidate) -> ping.rid() != null && ping.rid().equals(candidate.rid()))
-						.findFirst()
-						.orElse(open.getLast());
-					open.remove(start);
-					duration = Duration.between(start.receivedAt(), ping.receivedAt()).toMillis();
-				}
-				result.add(new PingResponse(ping.id(), ping.kind(), ping.exitCode(), ping.rid(), ping.body(),
-						ping.receivedAt(), ping.remoteAddr(), ping.userAgent(), duration));
-			}
-			return result.reversed();
 		}
 
 	}

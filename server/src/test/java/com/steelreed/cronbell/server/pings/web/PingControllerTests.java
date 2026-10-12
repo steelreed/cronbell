@@ -1,4 +1,4 @@
-package com.steelreed.cronbell.server.ping;
+package com.steelreed.cronbell.server.pings.web;
 
 import java.nio.charset.StandardCharsets;
 

@@ -1,4 +1,4 @@
-package com.steelreed.cronbell.server.ping;
+package com.steelreed.cronbell.server.pings.internal;
 
 import java.time.Duration;
 import java.time.Instant;
