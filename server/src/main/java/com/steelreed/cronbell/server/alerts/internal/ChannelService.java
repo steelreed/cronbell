@@ -7,6 +7,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.steelreed.cronbell.server.shared.database.Ids;
 
@@ -116,15 +117,15 @@ public class ChannelService {
 	public void test(String projectId, String id) throws DeliveryException {
 		Channel channel = find(projectId, id);
 		Instant now = now();
-		boolean[] allowed = { false };
+		AtomicBoolean allowed = new AtomicBoolean();
 		this.lastTests.compute(channel.id(), (key, previous) -> {
 			if (previous != null && now.isBefore(previous.plus(TEST_INTERVAL))) {
 				return previous;
 			}
-			allowed[0] = true;
+			allowed.set(true);
 			return now;
 		});
-		if (!allowed[0]) {
+		if (!allowed.get()) {
 			throw new TooManyTestsException();
 		}
 		this.senders.send(channel, Alert.test(now), "test-" + Ids.newId());

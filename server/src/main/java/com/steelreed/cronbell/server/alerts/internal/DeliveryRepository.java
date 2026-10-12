@@ -39,6 +39,10 @@ public class DeliveryRepository {
 
 	}
 
+	/** Status and error of the latest attempt to a channel. */
+	private record LastAttempt(String status, String error) {
+	}
+
 	private final JdbcClient jdbc;
 
 	private final Database database;
@@ -67,11 +71,12 @@ public class DeliveryRepository {
 	 * locked by another instance are skipped. Call in a transaction.
 	 */
 	public List<Delivery> claimDue(Instant now, Instant leaseUntil, int limit) {
-		List<Delivery> due = this.jdbc.sql("SELECT " + COLUMNS + """
-				 FROM deliveries
-				WHERE status = 'PENDING' AND next_attempt_at <= :now
-				ORDER BY next_attempt_at
-				LIMIT :limit""" + this.database.forUpdateSkipLocked())
+		List<Delivery> due = this.jdbc.sql("""
+				SELECT %s
+				  FROM deliveries
+				 WHERE status = 'PENDING' AND next_attempt_at <= :now
+				 ORDER BY next_attempt_at
+				 LIMIT :limit%s""".formatted(COLUMNS, this.database.forUpdateSkipLocked()))
 			.param("now", now.toEpochMilli())
 			.param("limit", limit)
 			.query(this::map)
@@ -112,14 +117,14 @@ public class DeliveryRepository {
 
 	/** Delivery status of every channel of the project that has deliveries. */
 	public Map<String, ChannelStatus> statusByChannel(String projectId) {
-		Map<String, Object[]> latest = new HashMap<>();
+		Map<String, LastAttempt> latest = new HashMap<>();
 		this.jdbc.sql("""
 				SELECT d.channel_id, d.status, d.last_error FROM deliveries d
 				  JOIN channels c ON c.id = d.channel_id
 				 WHERE c.project_id = ?
 				   AND d.last_attempt_at = (SELECT MAX(x.last_attempt_at) FROM deliveries x
 				                             WHERE x.channel_id = d.channel_id)""").param(projectId).query((rs) -> {
-			latest.put(rs.getString("channel_id"), new Object[] { rs.getString("status"), rs.getString("last_error") });
+			latest.put(rs.getString("channel_id"), new LastAttempt(rs.getString("status"), rs.getString("last_error")));
 		});
 		Map<String, ChannelStatus> result = new HashMap<>();
 		this.jdbc.sql("""
@@ -129,8 +134,8 @@ public class DeliveryRepository {
 				 WHERE c.project_id = ?
 				 GROUP BY d.channel_id""").param(projectId).query((rs) -> {
 			String channelId = rs.getString("channel_id");
-			Object[] last = latest.get(channelId);
-			String error = (last != null && !Status.DELIVERED.name().equals(last[0])) ? (String) last[1] : null;
+			LastAttempt last = latest.get(channelId);
+			String error = (last != null && !Status.DELIVERED.name().equals(last.status())) ? last.error() : null;
 			result.put(channelId, new ChannelStatus(instant(rs, "last_attempt_at"), instant(rs, "delivered_at"), error,
 					rs.getInt("pending")));
 		});

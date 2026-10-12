@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
 
 /** Telegram Bot API {@code sendMessage} with {@code parse_mode=HTML}. */
 @Component
-class TelegramSender implements ChannelSender {
+final class TelegramSender implements ChannelSender {
 
 	private final HttpPoster http;
 

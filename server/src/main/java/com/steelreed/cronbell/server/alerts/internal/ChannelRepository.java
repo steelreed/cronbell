@@ -32,18 +32,24 @@ public class ChannelRepository {
 	}
 
 	public List<Channel> findAllByProject(String projectId) {
-		return this.jdbc.sql("SELECT " + COLUMNS + " FROM channels WHERE project_id = ? ORDER BY created_at, id")
-			.param(projectId)
-			.query(this::map)
-			.list();
+		return this.jdbc.sql("""
+				SELECT %s
+				  FROM channels
+				 WHERE project_id = ?
+				 ORDER BY created_at, id""".formatted(COLUMNS)).param(projectId).query(this::map).list();
 	}
 
 	public Optional<Channel> findById(String id) {
-		return this.jdbc.sql("SELECT " + COLUMNS + " FROM channels WHERE id = ?").param(id).query(this::map).optional();
+		return this.jdbc.sql("""
+				SELECT %s
+				  FROM channels
+				 WHERE id = ?""".formatted(COLUMNS)).param(id).query(this::map).optional();
 	}
 
 	public void insert(Channel channel) {
-		this.jdbc.sql("INSERT INTO channels (" + COLUMNS + ") VALUES (?, ?, ?, ?, ?, ?, ?)")
+		this.jdbc.sql("""
+				INSERT INTO channels (%s)
+				VALUES (?, ?, ?, ?, ?, ?, ?)""".formatted(COLUMNS))
 			.params(channel.id(), channel.projectId(), channel.type().name(), channel.name(),
 					this.json.writeValueAsString(channel.config()), channel.createdAt().toEpochMilli(),
 					channel.updatedAt().toEpochMilli())

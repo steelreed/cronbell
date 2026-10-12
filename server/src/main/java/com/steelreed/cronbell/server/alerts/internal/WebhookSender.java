@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
  * signature when the channel has a secret.
  */
 @Component
-class WebhookSender implements ChannelSender {
+final class WebhookSender implements ChannelSender {
 
 	private final HttpPoster http;
 

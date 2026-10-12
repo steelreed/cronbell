@@ -17,7 +17,7 @@ import org.springframework.util.StringUtils;
 
 /** Plain-text email through the server's SMTP settings ({@code CRONBELL_SMTP_*}). */
 @Component
-class EmailSender implements ChannelSender {
+final class EmailSender implements ChannelSender {
 
 	private final SmtpProperties smtp;
 

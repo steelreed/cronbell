@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 
 /** Slack incoming webhook: {@code {"text": …}} in mrkdwn. */
 @Component
-class SlackSender implements ChannelSender {
+final class SlackSender implements ChannelSender {
 
 	private final HttpPoster http;
 

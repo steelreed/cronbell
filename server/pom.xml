@@ -188,11 +188,15 @@
 					</execution>
 				</executions>
 			</plugin>
-			<!-- Javadoc of the modules feeds the Spring Modulith canvases (ModularityTests). -->
+			<!-- Deprecated APIs are reported. Javadoc of the modules feeds the Spring Modulith canvases. -->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
 				<configuration>
+					<compilerArgs>
+						<arg>-Xlint:deprecation</arg>
+						<arg>-Xlint:removal</arg>
+					</compilerArgs>
 					<annotationProcessorPaths>
 						<path>
 							<groupId>org.springframework.modulith</groupId>

@@ -3,6 +3,7 @@ package com.steelreed.cronbell.server.accounts.internal.security;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -76,7 +77,7 @@ public class LoginRateLimiter {
 	}
 
 	private static String key(String clientAddress, String email) {
-		return clientAddress + "|" + ((email != null) ? email.strip().toLowerCase(java.util.Locale.ROOT) : "");
+		return clientAddress + "|" + ((email != null) ? email.strip().toLowerCase(Locale.ROOT) : "");
 	}
 
 }

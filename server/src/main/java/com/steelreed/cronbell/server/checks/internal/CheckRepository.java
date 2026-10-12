@@ -43,18 +43,27 @@ public class CheckRepository {
 	 * ends.
 	 */
 	public Optional<Check> findByPingKeyForUpdate(UUID pingKey) {
-		return this.jdbc.sql("SELECT " + COLUMNS + " FROM checks WHERE ping_key = ?" + this.database.forUpdate())
+		return this.jdbc.sql("""
+				SELECT %s
+				  FROM checks
+				 WHERE ping_key = ?%s""".formatted(COLUMNS, this.database.forUpdate()))
 			.param(pingKey.toString())
 			.query(MAPPER)
 			.optional();
 	}
 
 	public Optional<Check> findById(String id) {
-		return this.jdbc.sql("SELECT " + COLUMNS + " FROM checks WHERE id = ?").param(id).query(MAPPER).optional();
+		return this.jdbc.sql("""
+				SELECT %s
+				  FROM checks
+				 WHERE id = ?""".formatted(COLUMNS)).param(id).query(MAPPER).optional();
 	}
 
 	public Optional<Check> findBySlug(String projectId, String slug) {
-		return this.jdbc.sql("SELECT " + COLUMNS + " FROM checks WHERE project_id = ? AND slug = ?")
+		return this.jdbc.sql("""
+				SELECT %s
+				  FROM checks
+				 WHERE project_id = ? AND slug = ?""".formatted(COLUMNS))
 			.param(projectId)
 			.param(slug)
 			.query(MAPPER)
@@ -62,10 +71,11 @@ public class CheckRepository {
 	}
 
 	public List<Check> findAllByProject(String projectId) {
-		return this.jdbc.sql("SELECT " + COLUMNS + " FROM checks WHERE project_id = ? ORDER BY slug")
-			.param(projectId)
-			.query(MAPPER)
-			.list();
+		return this.jdbc.sql("""
+				SELECT %s
+				  FROM checks
+				 WHERE project_id = ?
+				 ORDER BY slug""".formatted(COLUMNS)).param(projectId).query(MAPPER).list();
 	}
 
 	/**
@@ -75,23 +85,24 @@ public class CheckRepository {
 	 * other instances are skipped.
 	 */
 	public List<Check> claimOverdue(Instant now, int limit) {
-		String sql = "SELECT " + COLUMNS + """
-				 FROM checks
-				WHERE status = 'UP'
-				  AND ((run_started_at IS NOT NULL
-				        AND run_started_at + COALESCE(max_runtime_seconds, grace_seconds) * 1000 < :now)
-				    OR (next_due_at IS NOT NULL AND next_due_at + grace_seconds * 1000 < :now
-				        AND (last_ping_at IS NULL OR last_ping_at < next_due_at)))
-				ORDER BY next_due_at
-				LIMIT :limit""" + this.database.forUpdateSkipLocked();
+		String sql = """
+				SELECT %s
+				  FROM checks
+				 WHERE status = 'UP'
+				   AND ((run_started_at IS NOT NULL
+				         AND run_started_at + COALESCE(max_runtime_seconds, grace_seconds) * 1000 < :now)
+				     OR (next_due_at IS NOT NULL AND next_due_at + grace_seconds * 1000 < :now
+				         AND (last_ping_at IS NULL OR last_ping_at < next_due_at)))
+				 ORDER BY next_due_at
+				 LIMIT :limit%s""".formatted(COLUMNS, this.database.forUpdateSkipLocked());
 		return this.jdbc.sql(sql).param("now", now.toEpochMilli()).param("limit", limit).query(MAPPER).list();
 	}
 
 	public void insert(Check check, Instant now) {
 		CheckState s = check.state();
-		this.jdbc
-			.sql("INSERT INTO checks (" + COLUMNS + ", updated_at) VALUES "
-					+ "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+		this.jdbc.sql("""
+				INSERT INTO checks (%s, updated_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""".formatted(COLUMNS))
 			.params(check.id(), check.pingKey().toString(), check.projectId(), check.slug(), check.name(),
 					check.scheduleKind().name(), check.cronExpression(), check.timeZone().getId(),
 					check.periodSeconds(), check.graceSeconds(), check.maxRuntimeSeconds(), s.status().name(),

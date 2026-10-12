@@ -1,7 +1,7 @@
 package com.steelreed.cronbell.server.alerts.internal;
 
 /** Sends one alert to one channel of its type. */
-interface ChannelSender {
+sealed interface ChannelSender permits EmailSender, SlackSender, TelegramSender, WebhookSender {
 
 	ChannelType type();
 

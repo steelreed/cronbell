@@ -2,8 +2,11 @@ package com.steelreed.cronbell.server.alerts.internal;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.ConnectException;
 import java.net.URI;
+import java.net.UnknownHostException;
 import java.net.http.HttpClient;
+import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
@@ -112,13 +115,13 @@ class HttpPoster {
 		}
 		String type = cause.getClass().getSimpleName();
 		String message = cause.getMessage();
-		if (cause instanceof java.net.http.HttpTimeoutException || type.contains("Timeout")) {
+		if (cause instanceof HttpTimeoutException || type.contains("Timeout")) {
 			return "timed out";
 		}
-		if (cause instanceof java.net.ConnectException) {
+		if (cause instanceof ConnectException) {
 			return "connection refused or unreachable";
 		}
-		if (cause instanceof java.net.UnknownHostException) {
+		if (cause instanceof UnknownHostException) {
 			return "unknown host";
 		}
 		return type + ((message != null) ? ": " + oneLine(message) : "");

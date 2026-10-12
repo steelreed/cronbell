@@ -101,11 +101,13 @@ public final class CheckStateMachine {
 	 * moves the due time forward.
 	 */
 	static Instant nextDueAfterRun(Schedule schedule, Instant at, Instant currentDue) {
-		if (schedule instanceof CronSchedule && currentDue != null && at.isBefore(currentDue)
-				&& !at.isBefore(currentDue.minus(EARLY_TOLERANCE))) {
-			return schedule.next(currentDue);
-		}
-		return schedule.next(at);
+		return switch (schedule) {
+			case CronSchedule cron when currentDue != null && at.isBefore(currentDue)
+					&& !at.isBefore(currentDue.minus(EARLY_TOLERANCE)) ->
+				cron.next(currentDue);
+			case CronSchedule cron -> cron.next(at);
+			case PeriodSchedule period -> period.next(at);
+		};
 	}
 
 	/**
