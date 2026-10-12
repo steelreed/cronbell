@@ -10,21 +10,24 @@
 	</parent>
 	<groupId>com.steelreed</groupId>
 	<artifactId>cronbell-server</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>0.1.0-SNAPSHOT</version>
 	<name>cronbell-server</name>
-	<description/>
-	<url/>
+	<description>Cronbell server: monitoring for scheduled and background jobs</description>
+	<url>https://github.com/steelreed/cronbell</url>
 	<licenses>
-		<license/>
+		<license>
+			<name>AGPL-3.0-only</name>
+			<url>https://www.gnu.org/licenses/agpl-3.0.txt</url>
+		</license>
 	</licenses>
-	<developers>
-		<developer/>
-	</developers>
+	<organization>
+		<name>Steelreed</name>
+		<url>https://steelreed.com</url>
+	</organization>
 	<scm>
-		<connection/>
-		<developerConnection/>
-		<tag/>
-		<url/>
+		<connection>scm:git:https://github.com/steelreed/cronbell.git</connection>
+		<developerConnection>scm:git:git@github.com:steelreed/cronbell.git</developerConnection>
+		<url>https://github.com/steelreed/cronbell</url>
 	</scm>
 	<properties>
 		<java.version>25</java.version>

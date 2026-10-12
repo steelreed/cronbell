@@ -41,7 +41,7 @@ the steps are in `RELEASING.md`. Never create tags, releases or deploys yourself
   for value types and DTOs, sealed types with pattern-matching `switch` for closed sets, text blocks
   for SQL, constructor injection, `final` fields, `Optional` only as a return type, no deprecated
   APIs (the build reports them).
-- Licence: AGPL-3.0 for `server/` and `web/`; Apache-2.0 for `starter/`.
+- Licence: AGPL-3.0-only for `server/` and `web/`; Apache-2.0 for `starter/`.
 - English in code, comments, docs and commits. Talk to the maintainer in Vietnamese.
 - Never add AI attribution (Co-Authored-By, "Generated with") to commits or PRs.
 - Every change goes through a branch and a PR once the GitHub repo exists. The maintainer merges.

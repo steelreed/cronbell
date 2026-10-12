@@ -1,7 +1,7 @@
 # Cronbell
 
 [![CI](https://github.com/steelreed/cronbell/actions/workflows/ci.yml/badge.svg)](https://github.com/steelreed/cronbell/actions/workflows/ci.yml)
-[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
+[![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSE)
 
 **Know when a cron job stops running.** Cronbell is open-source monitoring for cron jobs,
 scheduled tasks and background workers, in any language. Each job reports its runs; Cronbell knows
@@ -70,7 +70,7 @@ Requirements: JDK 25, Node 24 or newer, Docker. See [CONTRIBUTING.md](CONTRIBUTI
 
 ## License
 
-Cronbell server and web are licensed under the [GNU AGPL-3.0](LICENSE). Client libraries and the
+Cronbell server and web are licensed under the [GNU AGPL-3.0-only](LICENSE). Client libraries and the
 Spring Boot starter will be Apache-2.0.
 
 Cronbell is made by [Steelreed](https://steelreed.com), open-source tools for the parts of your

@@ -13,7 +13,7 @@ or build and run the jar:
 
 ```bash
 ./mvnw -B verify                          # tests need Docker (Testcontainers PostgreSQL)
-java -jar target/cronbell-server-0.0.1-SNAPSHOT.jar
+java -jar target/cronbell-server-0.1.0-SNAPSHOT.jar
 ```
 
 On first start, with an empty database, the server creates a `Default` project and prints its API
