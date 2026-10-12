@@ -23,6 +23,7 @@ import com.steelreed.cronbell.server.account.AccountService;
 import com.steelreed.cronbell.server.account.AdminBootstrap;
 import com.steelreed.cronbell.server.check.CheckEvent;
 import com.steelreed.cronbell.server.check.Detector;
+import com.steelreed.cronbell.server.history.HistoryPruner;
 import com.steelreed.cronbell.server.notify.Channel;
 import com.steelreed.cronbell.server.notify.ChannelRepository;
 import com.steelreed.cronbell.server.notify.ChannelType;
@@ -58,7 +59,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 		properties = { "cronbell.scheduling.enabled=false",
 				"cronbell.bootstrap.api-key=" + AbstractIntegrationTests.API_KEY,
 				"cronbell.base-url=https://cronbell.example.com/", "cronbell.notifier.read-timeout=PT1S",
-				"server.forward-headers-strategy=native" })
+				"cronbell.history.batch-size=2", "server.forward-headers-strategy=native" })
 @Import(AbstractIntegrationTests.EventCollector.class)
 abstract class AbstractIntegrationTests {
 
@@ -104,6 +105,9 @@ abstract class AbstractIntegrationTests {
 
 	@Autowired
 	DeliveryDispatcher dispatcher;
+
+	@Autowired
+	HistoryPruner pruner;
 
 	@Autowired
 	ChannelRepository channelRepository;
@@ -1095,6 +1099,125 @@ abstract class AbstractIntegrationTests {
 		return JsonPath.parse(response.body()).read(path, type);
 	}
 
+	// --- History ---
+
+	@Test
+	void pruningDeletesOldPingsInBatchesAndKeepsRecentOnes() {
+		String key = createCheck(uniqueSlug(), "{\"cron\":\"0 * * * *\"}");
+		for (int i = 0; i < 5; i++) {
+			get("/ping/" + key);
+			CLOCK.advance(Duration.ofMinutes(1));
+		}
+		CLOCK.advance(Duration.ofDays(95));
+		postBody("/ping/" + key + "/log", "recent");
+		CLOCK.advance(Duration.ofDays(5));
+		get("/ping/" + key);
+		HistoryPruner.Result result = this.pruner.runOnce();
+		assertThat(result.ran()).isTrue();
+		// Batches of 2 (see the test properties): five old pings take three.
+		assertThat(result.pings()).isGreaterThanOrEqualTo(5);
+		assertThat(pings(key)).extracting((ping) -> ping.get("kind")).containsExactly("SUCCESS", "LOG");
+		assertThat(this.pruner.runOnce().pings()).isZero();
+	}
+
+	@Test
+	void pruningKeepsTheLatestPingAndLogOfACheckForStateAndAlerts() {
+		Project project = newProject();
+		createChannel(project, "{\"type\":\"webhook\",\"config\":{\"url\":\"" + RECEIVER.url("/history") + "\"}}");
+		String slug = uniqueSlug();
+		String key = createCheck(project, slug, "{\"cron\":\"0 * * * *\"}");
+		postBody("/ping/" + key, "first log");
+		CLOCK.advance(Duration.ofMinutes(1));
+		postBody("/ping/" + key, "second log");
+		CLOCK.advance(Duration.ofMinutes(1));
+		get("/ping/" + key);
+		Object lastPingAt = field(project.key(), slug, "lastPingAt");
+		Object lastSuccessAt = field(project.key(), slug, "lastSuccessAt");
+		CLOCK.advance(Duration.ofDays(100));
+		assertThat(this.pruner.runOnce().pings()).isGreaterThanOrEqualTo(1);
+		assertThat(pings(key)).extracting((ping) -> ping.get("body")).containsExactly(null, "second log");
+		assertThat(field(project.key(), slug, "status")).isEqualTo("UP");
+		assertThat(field(project.key(), slug, "lastPingAt")).isEqualTo(lastPingAt);
+		assertThat(field(project.key(), slug, "lastSuccessAt")).isEqualTo(lastSuccessAt);
+		// The missed run's alert still carries the last log.
+		this.detector.runOnce();
+		assertThat(field(project.key(), slug, "status")).isEqualTo("DOWN");
+		String payload = this.jdbc
+			.sql("SELECT d.payload FROM deliveries d JOIN checks c ON c.id = d.check_id WHERE c.slug = ?")
+			.param(slug)
+			.query(String.class)
+			.single();
+		assertThat(JsonPath.<String>read(payload, "$.log")).isEqualTo("second log");
+	}
+
+	@Test
+	void pruningKeepsThePingsOfTheOpenRun() {
+		String slug = uniqueSlug();
+		String key = createCheck(slug, "{\"cron\":\"0 * * * *\",\"maxRuntimeSeconds\":3600}");
+		get("/ping/" + key);
+		CLOCK.advance(Duration.ofMinutes(1));
+		get("/ping/" + key + "/start");
+		CLOCK.advance(Duration.ofMinutes(1));
+		get("/ping/" + key + "/log");
+		CLOCK.advance(Duration.ofDays(100));
+		this.pruner.runOnce();
+		assertThat(pings(key)).extracting((ping) -> ping.get("kind")).containsExactly("LOG", "START");
+		// The run is still open: finishing it closes it as usual.
+		get("/ping/" + key);
+		assertThat(field(slug, "status")).isEqualTo("UP");
+	}
+
+	@Test
+	void pruningDeletesFinishedDeliveriesAndKeepsPendingOnes() {
+		Project project = newProject();
+		for (int i = 0; i < 4; i++) {
+			createChannel(project,
+					"{\"type\":\"webhook\",\"config\":{\"url\":\"" + RECEIVER.url("/history/" + i) + "\"}}");
+		}
+		String key = goDown(project);
+		List<String> ids = this.jdbc.sql("""
+				SELECT d.id FROM deliveries d JOIN checks c ON c.id = d.check_id
+				 WHERE c.ping_key = ? ORDER BY d.id""").param(key).query(String.class).list();
+		assertThat(ids).hasSize(4);
+		setDelivery(ids.get(0), "DELIVERED", CLOCK.instant());
+		setDelivery(ids.get(1), "FAILED", CLOCK.instant());
+		setDelivery(ids.get(2), "PENDING", CLOCK.instant());
+		setDelivery(ids.get(3), "DELIVERED", CLOCK.instant().plus(Duration.ofDays(95)));
+		CLOCK.advance(Duration.ofDays(100));
+		assertThat(this.pruner.runOnce().deliveries()).isGreaterThanOrEqualTo(2);
+		assertThat(this.jdbc.sql("SELECT id FROM deliveries WHERE id IN (:ids) ORDER BY id")
+			.param("ids", ids)
+			.query(String.class)
+			.list()).containsExactly(ids.get(2), ids.get(3));
+	}
+
+	@Test
+	void pruningSkipsWhileAnotherInstanceHoldsTheLease() {
+		String key = createCheck(uniqueSlug(), "{\"cron\":\"0 * * * *\"}");
+		get("/ping/" + key);
+		CLOCK.advance(Duration.ofMinutes(1));
+		get("/ping/" + key);
+		CLOCK.advance(Duration.ofDays(100));
+		this.jdbc.sql("UPDATE job_locks SET locked_by = 'other', locked_until = ? WHERE name = 'history-pruning'")
+			.param(CLOCK.instant().plus(Duration.ofMinutes(5)).toEpochMilli())
+			.update();
+		assertThat(this.pruner.runOnce().ran()).isFalse();
+		assertThat(pings(key)).hasSize(2);
+		// The lease of an instance that died runs out.
+		CLOCK.advance(Duration.ofMinutes(5));
+		assertThat(this.pruner.runOnce().ran()).isTrue();
+		assertThat(pings(key)).hasSize(1);
+		assertThat(this.jdbc.sql("SELECT locked_until FROM job_locks WHERE name = 'history-pruning'")
+			.query(Long.class)
+			.single()).isZero();
+	}
+
+	void setDelivery(String id, String status, Instant createdAt) {
+		this.jdbc.sql("UPDATE deliveries SET status = ?, created_at = ? WHERE id = ?")
+			.params(status, createdAt.toEpochMilli(), id)
+			.update();
+	}
+
 	// --- Helpers ---
 
 	static String uniqueSlug() {
@@ -1112,7 +1235,11 @@ abstract class AbstractIntegrationTests {
 	}
 
 	Object field(String slug, String name) {
-		ResponseEntity<String> response = exchange(HttpMethod.GET, "/api/v1/checks", null, API_KEY);
+		return field(API_KEY, slug, name);
+	}
+
+	Object field(String apiKey, String slug, String name) {
+		ResponseEntity<String> response = exchange(HttpMethod.GET, "/api/v1/checks", null, apiKey);
 		List<Object> values = JsonPath.read(response.getBody(), "$[?(@.slug == '" + slug + "')]." + name);
 		assertThat(values).hasSize(1);
 		return values.getFirst();

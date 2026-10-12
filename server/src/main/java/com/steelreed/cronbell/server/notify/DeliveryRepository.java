@@ -137,6 +137,19 @@ public class DeliveryRepository {
 		return result;
 	}
 
+	/**
+	 * Deletes up to {@code limit} delivered or failed deliveries created before
+	 * {@code cutoff}. Pending ones are kept, whatever their age. Returns how many were
+	 * deleted.
+	 */
+	public int deleteFinishedBefore(Instant cutoff, int limit) {
+		return this.jdbc.sql("""
+				DELETE FROM deliveries WHERE id IN (
+				  SELECT id FROM deliveries
+				   WHERE created_at < :cutoff AND status IN ('DELIVERED', 'FAILED')
+				   LIMIT :limit)""").param("cutoff", cutoff.toEpochMilli()).param("limit", limit).update();
+	}
+
 	private Delivery map(ResultSet rs, int row) throws SQLException {
 		return new Delivery(rs.getString("id"), rs.getString("channel_id"), rs.getString("check_id"),
 				this.json.readValue(rs.getString("payload"), Alert.class), Status.valueOf(rs.getString("status")),
