@@ -36,8 +36,10 @@ templates), on-call rotations, SSO.
 
 | Term | Meaning |
 |---|---|
-| **Account** | A person who signs in with email and password. v0.1 has one admin account per instance. |
-| **Project** | A group of checks with its API keys and alert channels. Accounts reach projects through memberships (`project_members`, role `OWNER` or `MEMBER`); in v0.1 the admin owns the `Default` project. |
+| **Account** | A person who signs in with email and password. There is no open registration: the first account comes from the setup, every other one from an invite. |
+| **Instance admin** | The account made by the setup (or `CRONBELL_ADMIN_EMAIL`). The only one who can invite people to a project of their own. Being admin gives no access to other accounts' projects. |
+| **Project** | A group of checks with its API keys and alert channels, isolated from every other project. Accounts reach projects through memberships (`project_members`, role `OWNER` or `MEMBER`); an account can be in several projects and works in one at a time (the session's current project). The setup account owns the `Default` project. |
+| **Invite** | A single-use link that lets someone create an account (or use theirs). A *project invite* (from the instance admin) gives a new project they own; a *member invite* (from an owner) adds them to that owner's project as `MEMBER`. |
 | **Check** | One job being watched. Identified publicly by a random UUID (`ping key`) and inside a project by a `slug`. |
 | **Schedule** | Either a cron expression with a time zone, or a fixed period. |
 | **Grace** | How long after the due time a run may still arrive before it counts as missed. |
@@ -151,14 +153,29 @@ JSON over `/api/v1`, documented by OpenAPI at `/api/v1/openapi.json`.
 Key endpoint for the starter: `PUT /api/v1/checks/{slug}` creates or updates a check by slug and
 returns its ping key, so registration at startup is idempotent.
 
-v0.1 endpoints. Every one accepts either a bearer key or a signed-in session, except where noted:
+v0.1 endpoints. Every one accepts either a bearer key or a signed-in session, except where noted.
+Everything that is not about accounts acts on one project: the bearer key's project, or the
+session's current project:
 
 ```
 GET    /api/v1/setup                  {"required": true} while no account exists (public)
 POST   /api/v1/setup                  creates the first account and signs it in (public, once)
-GET    /api/v1/session                the signed-in account, its project and the ping base URL; 401 if none
+GET    /api/v1/session                the signed-in account, its current project and role, its projects and the ping base URL; 401 if none
 POST   /api/v1/session                sign in: {"email", "password"} (public)
 DELETE /api/v1/session                sign out (204, also when not signed in)
+POST   /api/v1/session/project        switch the current project: {"projectId"} (session only; 404 if not a member)
+GET    /api/v1/projects               projects of the signed-in account with its role, oldest membership first (session only)
+POST   /api/v1/account/password       {"currentPassword", "newPassword"}: 204, other sessions of the account end (session only)
+GET    /api/v1/members                members of the current project: accountId, email, role, joinedAt (session only)
+DELETE /api/v1/members/{accountId}    204: an owner removes a member, or a member leaves (session only)
+GET    /api/v1/invites                member invites of the current project (session, owner)
+POST   /api/v1/invites                {"note"} -> 201 with the invite link, shown this once (session, owner)
+DELETE /api/v1/invites/{id}           204: a pending link stops working (session, owner)
+GET    /api/v1/admin/invites          project invites of the instance (session, instance admin)
+POST   /api/v1/admin/invites          {"note"} -> 201 with the invite link, shown this once (session, instance admin)
+DELETE /api/v1/admin/invites/{id}     204 (session, instance admin)
+GET    /api/v1/invites/{token}        what the link offers: kind, projectName, invitedBy, expiresAt (public)
+POST   /api/v1/invites/{token}/accept {"email", "password", "projectName"} -> the new session (public)
 GET    /api/v1/checks                 checks of the project
 GET    /api/v1/checks/{slug}          one check
 PUT    /api/v1/checks/{slug}          create (201) or update (200); the ping key never changes
@@ -205,17 +222,96 @@ expression or zone, or one that never fires (30 February).
 API keys can read and change checks and channels but cannot manage keys: a leaked key cannot mint
 new ones or revoke the owner's. Key management needs a signed-in session.
 
+### Roles
+
+What each caller may do in a project. Everything else (sign-in, switching project, the password)
+only concerns the caller's own account.
+
+| | Owner | Member | API key |
+|---|---|---|---|
+| Checks, pings, runs, stats: read, create, edit, pause, resume, delete | yes | yes | yes |
+| Alert channels: read, create, edit, test, delete | yes | yes | yes |
+| API keys: list (name and prefix) | yes | yes | no |
+| API keys: create, revoke | yes | no | no |
+| Members: list | yes | yes | no |
+| Members: remove | anyone but the last owner | only themself (leave) | no |
+| Member invites: list, create, delete | yes | no | no |
+
+Project invites (`/api/v1/admin/invites`) are for the instance admin only, whatever their role in
+the current project. A refused action is `403`. A session whose current project is no longer one of
+its memberships (it was removed) gets `403` on project endpoints until it switches project or reads
+`GET /api/v1/session` (below).
+
+### Projects and invites
+
+- **Isolation.** Every check, ping, run, channel, delivery and API key belongs to one project, and
+  every query of the management API is filtered by the caller's project. A check, channel, key,
+  member or invite of another project is `404` (never `403`, so ids and slugs of other projects
+  cannot be probed). Ping URLs stay global: the ping key is the secret. The detector, the notifier
+  and the history pruner work across projects, and an alert goes only to the channels of the
+  check's own project.
+- **Several projects.** The session has a current project: at sign-in the oldest membership.
+  `POST /api/v1/session/project` switches it (`404` for a project the account is not a member of,
+  whether it exists or not). Membership and role are read again on every request, so a removed
+  member loses access at once. When the current project is no longer a membership,
+  `GET /api/v1/session` moves the session to the oldest remaining one. An account can end up with
+  no project (it was removed from its last one): it can still sign in, sees `project: null`, can
+  accept invites and change its password. Bearer keys stay bound to their project.
+- **Invites.** A link is `<CRONBELL_BASE_URL>/invite/<token>` (the request's own address when the
+  base URL is unset). The token is 32 random bytes in URL-safe Base64; only its SHA-256 is stored,
+  so the link is shown once, when it is made. A link is valid for `CRONBELL_INVITE_TTL` (default
+  7 days), is used once, and can be deleted before. An invite records its kind, an optional note
+  (at most 200 characters), who made it, when it expires, and who accepted it when. Lists show
+  every invite, newest first, with `status` `PENDING`, `ACCEPTED` or `EXPIRED`; deleting an
+  accepted invite only removes it from the list. Invites are not sent by email: the inviter copies
+  the link.
+- **Reading a link.** `GET /api/v1/invites/{token}` answers `404` alike for an unknown, used,
+  deleted or expired link, so it tells nothing about other invites. `projectName` is the project a
+  member invite joins (`null` for a project invite).
+- **Accepting.** `POST /api/v1/invites/{token}/accept`:
+  - Not signed in: `email` and `password` (same rules as setup) create the account and sign it in
+    like sign-in (new session id, CSRF token rotated; the CSRF header is needed as for setup).
+    `201`. An email that already has an account is `409` ("sign in first, then open the link
+    again").
+  - Signed in: the invite goes to the signed-in account; `email` and `password` are ignored. `200`.
+    A member invite to a project the account is already in is `409`.
+  - A project invite creates a new project owned by the account, named `projectName` (1 to 200
+    characters, default "<local part of the email>'s project"). A new project starts empty: no
+    checks, channels or API keys. Its owner creates an API key on the API keys page; only the
+    `Default` project of a new instance gets a key at start-up.
+  - A member invite adds the account to the inviter's project as `MEMBER`.
+  - Either way the new project becomes the session's current project.
+  - Accepting is one transaction that claims the invite with a conditional update, so of two
+    concurrent accepts exactly one wins; the other is `404` and creates nothing.
+  - Reads and accepts of unknown links count against the client address like failed sign-ins
+    (Accounts and sessions, brute force): after 5, `429` with `Retry-After`.
+- **Leaving and removing.** `DELETE /api/v1/members/{accountId}` by an owner removes anyone; a
+  member may remove only themself. The last owner of a project cannot be removed or leave (`409`),
+  so every project keeps an owner. Removing an account from a project does not delete the account.
+  Projects are not deleted in v0.1.
+- **Check limit.** `CRONBELL_PROJECT_MAX_CHECKS` (unset: no limit) caps the checks of each project,
+  for hosted betas. Creating a check beyond it is `403` with a problem detail naming the limit
+  (as Healthchecks.io does); updating existing checks always works. Concurrent creates on
+  PostgreSQL may pass the limit by one or two.
+
 ### Accounts and sessions
 
 - **Accounts.** Email (stored lower-case, unique) and a password hash made by Spring Security's
   `DelegatingPasswordEncoder` (`{bcrypt}…`, so the algorithm can change later). Passwords are 8 to
-  128 characters.
+  128 characters. Accounts are made by the setup and by invites only.
+- **Password change.** `POST /api/v1/account/password` checks the current password (failures
+  count like failed sign-ins, `400` for a wrong one), stores the new one and ends every other
+  session of the account: the account has a session version, raised by the change, and a session
+  made with an older version is signed out on its next request. This works with sessions in
+  memory and would with sessions in the database. The session that made the change stays signed
+  in, with a new session id.
 - **First start.** When no account exists and both `CRONBELL_ADMIN_EMAIL` and
   `CRONBELL_ADMIN_PASSWORD` are set, the server creates that account at start-up. Otherwise the
   dashboard shows a one-time setup page that posts to `POST /api/v1/setup`, which is accepted only
   while no account exists. The first account takes a unique "setup slot" in its row, so two
   concurrent setups cannot both succeed: the loser gets `409`, as does any setup once an account
-  exists. The setup account owns the oldest project (the `Default` project made at first start).
+  exists. The setup account owns the oldest project (the `Default` project made at first start)
+  and is the instance admin (`accounts.instance_admin`; on upgrade, the existing setup account).
 - **Sessions.** The browser signs in with `POST /api/v1/session` and gets a server-side session
   cookie `cronbell_session`: `HttpOnly`, `SameSite=Lax`, `Secure` when the request came over HTTPS
   (directly or through a proxy whose `X-Forwarded-Proto` the server trusts). Sign-in changes the
@@ -231,8 +327,8 @@ new ones or revoke the owner's. Key management needs a signed-in session.
   `Retry-After` for 30 s, doubling per failure up to 15 minutes, even with the right password. A
   success clears the count; counts are forgotten after an hour without failures. Wrong email and
   wrong password give the same `401`.
-- The cloud (§11) will add magic links or OAuth; the model already allows several accounts and
-  projects.
+- The cloud (§11) will add magic links or OAuth on top of the same accounts, projects and
+  invites.
 
 `PUT` body: `name` (default: the slug), exactly one of `cron` or `periodSeconds`, `timeZone`
 (IANA id, default `UTC`), `graceSeconds`, `maxRuntimeSeconds`. Slugs are 1-128 characters of
@@ -446,8 +542,9 @@ red, warnings and PAUSED amber; system fonts; status is coloured text with a sma
 badges). Dense and calm, data first. English in v0.1; strings live in one module so Vietnamese
 can follow.
 
-The shell is a collapsible left sidebar (Overview, Checks, Alert channels, API keys; theme and
-account at the bottom; a sheet on phones) and a header with the page title, or the parent pages as a
+The shell is a collapsible left sidebar (the project switcher at the top; Overview, Checks, Alert
+channels, API keys, then Members, Invites for the instance admin, and Account; theme and account
+at the bottom; a sheet on phones) and a header with the page title, or the parent pages as a
 breadcrumb, and a command menu (⌘K, Ctrl+K or `/`: jump to a check by name or slug, go to a page,
 create a check, switch theme). The active page is marked with a grey fill and the product's amber on
 its icon. Theme: dark (default), light or system.
@@ -461,7 +558,15 @@ its icon. Theme: dark (default), light or system.
 | Check | `/checks/{slug}` | status and since when; the latest runs as ticks (90, 40 on phones) and run durations with the max runtime line; recent pings with exit code, duration and output (expand to read; cards on phones); details; ping URL with copy and snippets (crontab, shell, Kubernetes CronJob, Spring Boot starter); pause/resume, edit, delete (confirmed) |
 | New / edit check | `/checks/new`, `/checks/{slug}/edit` | slug, name, cron or period, time zone (searchable, common zones first, UTC offsets), the next five runs of a cron schedule (`/schedules/next`), grace, max runtime |
 | Channels | `/channels` | channels with type, target, last delivery or last error; add and edit in a dialog per type (secrets shown masked, kept unless replaced); send test; delete (confirmed) |
-| API keys | `/keys` | keys by name and prefix; create in a dialog that shows the key once with copy; revoke (confirmed) |
+| API keys | `/keys` | keys by name and prefix; create in a dialog that shows the key once with copy; revoke (confirmed); create and revoke for owners only |
+| Members | `/members` | members of the current project with role and "you"; remove (owners) or leave (confirmed); for owners, "Invite member" in a dialog that makes a link and shows it once with copy, and the member invites with status, expiry and delete (confirmed) |
+| Invites | `/invites` | instance admin only: create a project invite with an optional note (link shown once with copy), the project invites with status, who accepted them and expiry; delete (confirmed) |
+| Account | `/account` | email, change password (current and new), sign out |
+| Invite | `/invite/{token}` | public: who invites to what and until when; email, password (and project name for a project invite) to create the account, or "Accept as <email>" when signed in; a clear message for an invalid or expired link |
+
+The project switcher shows the current project and the role; it opens a menu of the account's
+projects (a plain label when there is only one). Switching goes to the overview. An account with
+no project sees a short page that says so, with its email and sign out.
 
 Any page needs a session: the app asks `GET /api/v1/setup` and `GET /api/v1/session` first and
 sends the visitor to `/setup` or `/signin` (then back).
@@ -477,6 +582,9 @@ The cloud sells not having to run it, plus team features.
 | Channels | all | email, Telegram | all, incl. Slack, webhook, Zalo later |
 | History | configurable (default 90 days) | 30 days | 1 year |
 | Members | unlimited | 1 | 10 |
+
+`CRONBELL_PROJECT_MAX_CHECKS` (§6, Projects and invites) is how a hosted instance caps checks per
+project before billing exists.
 | Support | GitHub issues | GitHub issues | email |
 
 Billing is not built in v0.1.
