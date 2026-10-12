@@ -6,17 +6,20 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import com.steelreed.cronbell.server.shared.database.Database;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** The default setup: SQLite in a fresh data directory. */
-class SqliteIntegrationTests extends AbstractIntegrationTests {
+class SqliteIntegrationTests extends AbstractProjectsIntegrationTests {
 
 	private static final Path DATA_DIR = createDataDir();
 
@@ -68,6 +71,16 @@ class SqliteIntegrationTests extends AbstractIntegrationTests {
 			.isEqualTo(401);
 		assertThat(this.http.get().uri("/ping").retrieve().toEntity(String.class).getBody())
 			.doesNotContain("Cronbell test dashboard");
+	}
+
+	@Test
+	void upgradesABeta1Database() throws IOException {
+		Path file = Files.createTempFile("cronbell-upgrade", ".db");
+		String url = "jdbc:sqlite:" + file;
+		upgradeFromBeta1MakesTheSetupAccountInstanceAdmin(
+				Flyway.configure().dataSource(url, null, null).target("4").load(),
+				Flyway.configure().dataSource(url, null, null).load(),
+				JdbcClient.create(new DriverManagerDataSource(url)));
 	}
 
 	private static Path createDataDir() {

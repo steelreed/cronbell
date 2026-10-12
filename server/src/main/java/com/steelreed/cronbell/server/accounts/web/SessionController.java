@@ -1,12 +1,17 @@
 package com.steelreed.cronbell.server.accounts.web;
 
+import java.util.List;
+
 import com.steelreed.cronbell.server.accounts.ProjectPrincipal;
 import com.steelreed.cronbell.server.accounts.internal.Account;
 import com.steelreed.cronbell.server.accounts.internal.AccountService;
 import com.steelreed.cronbell.server.accounts.internal.ProjectService;
+import com.steelreed.cronbell.server.accounts.internal.ProjectService.Membership;
+import com.steelreed.cronbell.server.accounts.internal.ProjectService.Role;
 import com.steelreed.cronbell.server.accounts.internal.security.LoginRateLimiter;
 import com.steelreed.cronbell.server.accounts.internal.security.SessionSignIn;
 import com.steelreed.cronbell.server.shared.web.ManagementApi;
+import com.steelreed.cronbell.server.shared.web.NotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
@@ -20,7 +25,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
-/** Browser sign-in and sign-out (DESIGN.md §6, Accounts and sessions). */
+/**
+ * Browser sign-in and sign-out, and the session's current project (DESIGN.md §6, Accounts
+ * and sessions; Projects and invites).
+ */
 @RestController
 @ManagementApi
 @RequestMapping("/api/v1/session")
@@ -42,11 +50,23 @@ class SessionController {
 		this.limiter = limiter;
 	}
 
-	/** The signed-in account, or 401. A bearer API key is not a session. */
+	/**
+	 * The signed-in account, or 401. A bearer API key is not a session. When the current
+	 * project is no longer one of the account's, the session moves to the oldest one.
+	 */
 	@GetMapping
-	SessionResponse get(@AuthenticationPrincipal ProjectPrincipal principal) {
+	SessionResponse get(@AuthenticationPrincipal ProjectPrincipal principal, HttpServletRequest request,
+			HttpServletResponse response) {
 		if (principal == null || !principal.isAccount()) {
 			throw new NotSignedInException("not signed in");
+		}
+		if (principal.projectId() == null) {
+			Account account = this.accounts.findById(principal.accountId()).orElseThrow();
+			List<Membership> memberships = this.projects.findMemberships(account.id());
+			if (!memberships.isEmpty()) {
+				return response(this.sessions.switchProject(principal, memberships.getFirst(), account.instanceAdmin(),
+						request, response));
+			}
 		}
 		return response(principal);
 	}
@@ -73,28 +93,65 @@ class SessionController {
 		return ResponseEntity.noContent().build();
 	}
 
+	/**
+	 * Makes another project of the account the current one. 404 for a project it is not a
+	 * member of, whether or not it exists.
+	 */
+	@PostMapping("/project")
+	SessionResponse switchProject(@AuthenticationPrincipal ProjectPrincipal principal,
+			@RequestBody ProjectChoice choice, HttpServletRequest request, HttpServletResponse response) {
+		String projectId = (choice != null) ? choice.projectId() : null;
+		if (projectId == null || projectId.isBlank()) {
+			throw new IllegalArgumentException("projectId is required");
+		}
+		Membership membership = this.projects.findMembership(principal.accountId(), projectId)
+			.orElseThrow(() -> new ProjectNotFoundException(projectId));
+		Account account = this.accounts.findById(principal.accountId()).orElseThrow();
+		return response(this.sessions.switchProject(principal, membership, account.instanceAdmin(), request, response));
+	}
+
 	SessionResponse response(ProjectPrincipal principal) {
-		String projectName = this.projects.findMemberships(principal.accountId())
-			.stream()
-			.filter((membership) -> membership.projectId().equals(principal.projectId()))
+		Account account = this.accounts.findById(principal.accountId()).orElseThrow();
+		List<ProjectView> projects = this.projects.findMemberships(account.id()).stream().map(ProjectView::of).toList();
+		ProjectView current = projects.stream()
+			.filter((project) -> project.id().equals(principal.projectId()))
 			.findFirst()
-			.map(ProjectService.Membership::projectName)
 			.orElse(null);
 		String pingBaseUrl = ServletUriComponentsBuilder.fromCurrentContextPath().path("/ping/").toUriString();
-		return new SessionResponse(new AccountView(principal.accountId(), principal.email()),
-				new ProjectView(principal.projectId(), projectName), pingBaseUrl);
+		return new SessionResponse(new AccountView(account.id(), account.email(), account.instanceAdmin()), current,
+				projects, pingBaseUrl);
 	}
 
 	record Credentials(String email, String password) {
 	}
 
-	record AccountView(String id, String email) {
+	record ProjectChoice(String projectId) {
 	}
 
-	record ProjectView(String id, String name) {
+	record AccountView(String id, String email, boolean instanceAdmin) {
 	}
 
-	record SessionResponse(AccountView account, ProjectView project, String pingBaseUrl) {
+	record ProjectView(String id, String name, Role role) {
+
+		static ProjectView of(Membership membership) {
+			return new ProjectView(membership.projectId(), membership.projectName(), membership.role());
+		}
+
+	}
+
+	/**
+	 * @param project the current project, or null when the account has none
+	 * @param projects every project of the account, oldest membership first
+	 */
+	record SessionResponse(AccountView account, ProjectView project, List<ProjectView> projects, String pingBaseUrl) {
+	}
+
+	static class ProjectNotFoundException extends NotFoundException {
+
+		ProjectNotFoundException(String id) {
+			super("no project " + id);
+		}
+
 	}
 
 }
