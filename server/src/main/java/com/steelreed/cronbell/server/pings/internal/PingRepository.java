@@ -1,6 +1,7 @@
 package com.steelreed.cronbell.server.pings.internal;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 
 import com.steelreed.cronbell.server.checks.PingKind;
@@ -42,6 +43,71 @@ public class PingRepository {
 						Instant.ofEpochMilli(rs.getLong("received_at")), rs.getString("remote_addr"),
 						rs.getString("user_agent"));
 			})
+			.list();
+	}
+
+	/** A finished run: a {@code success} or {@code fail} ping. */
+	public record FinishedRun(Instant at, PingKind kind, Integer exitCode) {
+	}
+
+	/** How many {@code success} or {@code fail} pings fell in one bucket. */
+	public record BucketCount(int bucket, PingKind kind, long count) {
+	}
+
+	/**
+	 * The latest finished runs of a check, most recent first. Uses the
+	 * {@code (check_id, received_at)} index backwards and stops after {@code limit} rows.
+	 */
+	public List<FinishedRun> findRecentFinished(String checkId, int limit) {
+		return this.jdbc.sql("""
+				SELECT kind, exit_code, received_at FROM pings
+				 WHERE check_id = ? AND kind IN ('SUCCESS', 'FAIL')
+				 ORDER BY received_at DESC, id DESC LIMIT ?""").param(checkId).param(limit).query((rs, row) -> {
+			int code = rs.getInt("exit_code");
+			Integer exitCode = rs.wasNull() ? null : code;
+			return new FinishedRun(Instant.ofEpochMilli(rs.getLong("received_at")),
+					PingKind.valueOf(rs.getString("kind")), exitCode);
+		}).list();
+	}
+
+	/**
+	 * Counts the {@code success} and {@code fail} pings of the checks per bucket, where
+	 * bucket {@code i} is {@code boundaries[i] <= received_at < boundaries[i + 1]}. One
+	 * statement: the range is read through the {@code (check_id, received_at)} index and
+	 * the bucket is picked with a {@code CASE} over the boundaries.
+	 * @param boundaries at least two instants, ascending
+	 */
+	public List<BucketCount> countFinishedByBucket(Collection<String> checkIds, List<Instant> boundaries) {
+		if (checkIds.isEmpty() || boundaries.size() < 2) {
+			return List.of();
+		}
+		int last = boundaries.size() - 2;
+		StringBuilder bucket = new StringBuilder();
+		if (last == 0) {
+			bucket.append("0");
+		}
+		else {
+			bucket.append("CASE");
+			for (int i = 1; i <= last; i++) {
+				bucket.append(" WHEN received_at < :b").append(i).append(" THEN ").append(i - 1);
+			}
+			bucket.append(" ELSE ").append(last).append(" END");
+		}
+		var spec = this.jdbc.sql("""
+				SELECT bucket, kind, COUNT(*) AS n FROM (
+				  SELECT %s AS bucket, kind FROM pings
+				   WHERE check_id IN (:ids) AND kind IN ('SUCCESS', 'FAIL')
+				     AND received_at >= :start AND received_at < :end
+				) counted GROUP BY bucket, kind""".formatted(bucket))
+			.param("ids", checkIds)
+			.param("start", boundaries.getFirst().toEpochMilli())
+			.param("end", boundaries.getLast().toEpochMilli());
+		for (int i = 1; i <= last; i++) {
+			spec = spec.param("b" + i, boundaries.get(i).toEpochMilli());
+		}
+		return spec
+			.query((rs, row) -> new BucketCount(rs.getInt("bucket"), PingKind.valueOf(rs.getString("kind")),
+					rs.getLong("n")))
 			.list();
 	}
 

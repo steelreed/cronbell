@@ -175,6 +175,9 @@ POST   /api/v1/channels/{id}/test     sends a test message now (200, or 502 with
 GET    /api/v1/keys                   API keys of the project: id, name, prefix, createdAt (session only)
 POST   /api/v1/keys                   {"name"} -> 201 with the key, shown this once (session only)
 DELETE /api/v1/keys/{id}              204, the key stops working at once (session only)
+GET    /api/v1/runs/recent            latest finished runs per check: {slug: [{at, ok, exitCode}]}, oldest first (?limit=, default 20, at most 90)
+GET    /api/v1/stats/daily            finished runs and failures per day: [{date, runs, failures}], oldest first (?days=, default 14, at most 90; ?tz=, default UTC)
+GET    /api/v1/schedules/next         next runs of a cron expression: {cron, timeZone, runs} (?cron=, ?timeZone=, default UTC; ?count=, default 5, at most 10)
 ```
 
 A check has its definition, `status`, `downReason`, `lastPingAt`, `lastStartAt`, `lastSuccessAt`,
@@ -187,6 +190,17 @@ dashboard shows a missed run as "Missed 02:00 run" with the next run, not as "du
 A ping in the list has `kind`, `exitCode`, `rid`, `body`, `receivedAt`, `remoteAddr`, `userAgent`,
 and for a `success`/`fail` that closes a `start` seen in the same list, `durationMs` (matched by
 `rid`, else the latest open `start`).
+
+Runs and daily stats feed the dashboard's run bars and overview. A finished run is a `success`
+or `fail` ping, so both only cover what pings recorded: a missed run leaves no ping and is not
+counted (the check's `status` and `downReason` say when the latest run was missed), and history
+older than the retention (§9) is gone. `runs/recent` reads the latest pings of each check through
+the `(check_id, received_at)` index, one short query per check. `stats/daily` cuts days at
+midnight in `tz` (the browser's zone), so a day can be 23 or 25 hours long around a DST change, and
+counts them in one statement. Status changes (DOWN, recovered) are not stored apart from the alert
+outbox, so there is no incident history yet. `schedules/next` lets the check form preview a cron
+schedule with the detector's own code (DST rules included); it returns `400` for an invalid
+expression or zone, or one that never fires (30 February).
 
 API keys can read and change checks and channels but cannot manage keys: a leaked key cannot mint
 new ones or revoke the owner's. Key management needs a signed-in session.
@@ -432,15 +446,22 @@ red, warnings and PAUSED amber; system fonts; status is coloured text with a sma
 badges). Dense and calm, data first. English in v0.1; strings live in one module so Vietnamese
 can follow.
 
+The shell is a collapsible left sidebar (Overview, Checks, Alert channels, API keys; theme and
+account at the bottom; a sheet on phones) and a header with the page title, or the parent pages as a
+breadcrumb, and a command menu (⌘K, Ctrl+K or `/`: jump to a check by name or slug, go to a page,
+create a check, switch theme). The active page is marked with a grey fill and the product's amber on
+its icon. Theme: dark (default), light or system.
+
 | Screen | Path | Content |
 |---|---|---|
 | Setup | `/setup` | first run only: admin email and password |
 | Sign in | `/signin` | email and password; shows the rate-limit wait |
-| Checks | `/` | name, schedule and time zone, status with reason, last ping (relative, exact on hover), next due (a missed run by its time, with the next run); filter by status; refreshed every 15 s; empty state with a ready `curl` to create and ping the first check |
-| Check | `/checks/{slug}` | status, schedule, grace, max runtime, ping URL with copy, snippets (crontab line, shell wrapper, Kubernetes CronJob); latest pings with duration, exit code and output (expand to read; cards on phones); pause/resume, edit, delete (confirmed in the page) |
-| New / edit check | `/checks/new`, `/checks/{slug}/edit` | slug, name, cron or period, time zone (from the browser's list), grace, max runtime |
-| Channels | `/channels` | channels with last delivery and last error; add and edit per type (secrets shown masked, kept unless replaced); send test |
-| API keys | `/keys` | keys by name and prefix; a new key is shown once; revoke |
+| Overview | `/` | counts (checks, down, late, up; each opens the filtered list); what needs attention (DOWN first, then late, then never pinged) with the reason and since when, from the check's state; runs and failures per day for 14 days in the browser's zone; a first-check guide when there is no check |
+| Checks | `/checks` | table: name and slug, schedule and time zone, status with reason (late = overdue within grace), the last 20 runs as ticks, last ping (relative, exact on hover), next run (a missed run by its time, with the next run); search, status filter with counts, sortable columns, problems first by default, 25 per page, all in the URL; row menu (open, pause or resume, copy ping URL, delete with confirmation); a list on phones; refreshed every 15 s; empty state with a ready `curl` to create and ping the first check |
+| Check | `/checks/{slug}` | status and since when; the latest runs as ticks (90, 40 on phones) and run durations with the max runtime line; recent pings with exit code, duration and output (expand to read; cards on phones); details; ping URL with copy and snippets (crontab, shell, Kubernetes CronJob, Spring Boot starter); pause/resume, edit, delete (confirmed) |
+| New / edit check | `/checks/new`, `/checks/{slug}/edit` | slug, name, cron or period, time zone (searchable, common zones first, UTC offsets), the next five runs of a cron schedule (`/schedules/next`), grace, max runtime |
+| Channels | `/channels` | channels with type, target, last delivery or last error; add and edit in a dialog per type (secrets shown masked, kept unless replaced); send test; delete (confirmed) |
+| API keys | `/keys` | keys by name and prefix; create in a dialog that shows the key once with copy; revoke (confirmed) |
 
 Any page needs a session: the app asks `GET /api/v1/setup` and `GET /api/v1/session` first and
 sends the visitor to `/setup` or `/signin` (then back).

@@ -1,123 +1,86 @@
-import { useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { LogOutIcon, MoonIcon, SunIcon, UserIcon } from "lucide-react";
-import { type ReactNode, useState } from "react";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { api } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { Link, useRouterState } from "@tanstack/react-router";
+import { ChevronRightIcon, SearchIcon } from "lucide-react";
+import { type ReactNode, useCallback, useState } from "react";
+import { Separator } from "@/components/ui/separator";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { headerFor } from "@/lib/nav";
+import { checksQuery } from "@/lib/queries";
+import { countByHealth } from "@/lib/status";
 import { t } from "@/lib/strings";
-import { applyTheme, currentTheme, type Theme } from "@/lib/theme";
 import type { Session } from "@/lib/types";
-import { cn } from "@/lib/utils";
-import { CronbellMark } from "./logo";
+import { useNow } from "@/lib/use-now";
+import { AppSidebar } from "./app-sidebar";
+import { CommandMenu, useCommandShortcut } from "./command-menu";
 
-const NAV = [
-  {
-    to: "/",
-    label: t.nav.checks,
-    match: (path: string) => path === "/" || path.startsWith("/checks"),
-  },
-  { to: "/channels", label: t.nav.channels, match: (path: string) => path.startsWith("/channels") },
-  { to: "/keys", label: t.nav.keys, match: (path: string) => path.startsWith("/keys") },
-] as const;
-
-export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>(() => currentTheme());
-  const next = theme === "dark" ? "light" : "dark";
-  return (
-    <Button
-      variant="ghost"
-      size="icon"
-      aria-label={next === "light" ? t.theme.toLight : t.theme.toDark}
-      onClick={() => {
-        applyTheme(next);
-        setTheme(next);
-      }}
-    >
-      {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-    </Button>
-  );
-}
-
+/** Sidebar, a header with the page title or breadcrumb and search, and the page. */
 export function AppShell({ session, children }: { session: Session; children: ReactNode }) {
-  const queryClient = useQueryClient();
-  const navigate = useNavigate();
-  const signOut = async () => {
-    try {
-      await api("/session", { method: "DELETE" });
-    } finally {
-      queryClient.clear();
-      await navigate({ to: "/signin" });
-    }
-  };
+  const [searching, setSearching] = useState(false);
+  const openSearch = useCallback(() => setSearching(true), []);
+  useCommandShortcut(openSearch);
+  const checks = useQuery(checksQuery);
+  const now = useNow();
+  const counts = checks.data ? countByHealth(checks.data, now) : null;
+  const problems = counts ? counts.down : 0;
   return (
-    <div className="min-h-dvh">
-      <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/85">
-        <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4 sm:px-6">
-          <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight">
-            <CronbellMark />
-            {t.product}
-          </Link>
-          <nav className="hidden h-full items-stretch gap-5 md:flex" aria-label="Main">
-            <NavItems />
-          </nav>
-          <div className="ml-auto flex items-center gap-1">
-            <ThemeToggle />
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label={t.account.menu}>
-                  <UserIcon />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-52">
-                <DropdownMenuLabel className="truncate font-normal text-muted-foreground">
-                  {session.account.email}
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={signOut}>
-                  <LogOutIcon />
-                  {t.account.signOut}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-        <nav
-          className="flex h-10 items-stretch gap-5 overflow-x-auto border-t px-4 md:hidden"
-          aria-label="Main"
-        >
-          <NavItems />
-        </nav>
-      </header>
-      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">{children}</main>
-    </div>
+    <SidebarProvider>
+      <AppSidebar session={session} problems={problems} />
+      <SidebarInset className="min-w-0 bg-page">
+        <AppHeader onSearch={openSearch} />
+        <main className="mx-auto w-full min-w-0 max-w-[1600px] flex-1 p-4 sm:p-6">{children}</main>
+      </SidebarInset>
+      <CommandMenu open={searching} onOpenChange={setSearching} />
+    </SidebarProvider>
   );
 }
 
-/** Active item: foreground text and an amber rule, the product accent. */
-function NavItems() {
+function AppHeader({ onSearch }: { onSearch: () => void }) {
   const path = useRouterState({ select: (state) => state.location.pathname });
-  return NAV.map((item) => {
-    const active = item.match(path);
-    return (
-      <Link
-        key={item.to}
-        to={item.to}
-        aria-current={active ? "page" : undefined}
-        className={cn(
-          "flex items-center whitespace-nowrap border-transparent border-b-2 text-muted-foreground text-sm transition-colors hover:text-foreground",
-          active && "border-cron text-foreground",
+  const header = headerFor(path);
+  return (
+    <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b bg-background px-3 sm:px-4">
+      <SidebarTrigger aria-label={t.nav.toggleSidebar} className="size-9" />
+      <Separator
+        orientation="vertical"
+        className="mr-1 data-vertical:h-5 data-vertical:self-center"
+      />
+      <div className="min-w-0 flex-1">
+        {"title" in header ? (
+          <h1 className="truncate font-semibold text-base">{header.title}</h1>
+        ) : (
+          <nav aria-label="Breadcrumb">
+            <ol className="flex min-w-0 items-center gap-1.5 text-sm">
+              {header.crumbs.map((crumb, i) => (
+                <li key={crumb.href} className="flex min-w-0 items-center gap-1.5">
+                  {i > 0 && (
+                    <ChevronRightIcon
+                      aria-hidden
+                      className="size-4 shrink-0 text-muted-foreground"
+                    />
+                  )}
+                  <Link
+                    to={crumb.href}
+                    className="inline-flex h-9 max-w-48 items-center truncate text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    {crumb.label}
+                  </Link>
+                </li>
+              ))}
+            </ol>
+          </nav>
         )}
+      </div>
+      <button
+        type="button"
+        onClick={onSearch}
+        className="flex h-9 shrink-0 items-center gap-2 rounded-lg border border-input bg-card px-3 text-muted-foreground text-sm transition-colors hover:bg-muted hover:text-foreground sm:w-64"
       >
-        {item.label}
-      </Link>
-    );
-  });
+        <SearchIcon aria-hidden className="size-4" />
+        <span className="sr-only sm:not-sr-only sm:flex-1 sm:text-left">{t.search.open}…</span>
+        <kbd className="hidden rounded border px-1.5 font-mono text-muted-foreground text-xs sm:inline">
+          ⌘K
+        </kbd>
+      </button>
+    </header>
+  );
 }

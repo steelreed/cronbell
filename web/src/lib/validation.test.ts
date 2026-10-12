@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   type CheckFormValues,
   isCronLike,
+  SLUG,
+  slugify,
   splitSeconds,
   toDefinition,
   validateCheckForm,
@@ -92,5 +94,19 @@ describe("splitSeconds", () => {
     expect(splitSeconds(1800)).toEqual({ value: "30", unit: "m" });
     expect(splitSeconds(90)).toEqual({ value: "90", unit: "s" });
     expect(splitSeconds(null)).toEqual({ value: "", unit: "m" });
+  });
+});
+
+describe("slugify", () => {
+  it("makes an ASCII kebab-case slug that passes validation", () => {
+    expect(slugify("Nightly database backup")).toBe("nightly-database-backup");
+    expect(slugify("  Sao lưu đêm (prod) ")).toBe("sao-luu-dem-prod");
+    expect(slugify("--Weekly report!!")).toBe("weekly-report");
+    expect(slugify("db.vacuum_analyze")).toBe("db.vacuum_analyze");
+    expect(slugify("")).toBe("");
+    const long = slugify("x".repeat(300));
+    expect(long).toHaveLength(128);
+    for (const name of ["Nightly backup", "Sao lưu", "a/b c"])
+      expect(SLUG.test(slugify(name))).toBe(true);
   });
 });

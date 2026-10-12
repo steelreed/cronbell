@@ -1,10 +1,27 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { type FormEvent, useState } from "react";
+import { EllipsisIcon, KeyRoundIcon, PlusIcon } from "lucide-react";
+import { type FormEvent, useId, useState } from "react";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CopyButton } from "@/components/copy-button";
-import { ConfirmBar, ErrorNote, LoadingRows, PageHeader } from "@/components/page";
+import { FormField } from "@/components/form-field";
+import { ErrorNote, ErrorState, LoadingList } from "@/components/page";
 import { Time } from "@/components/time";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import { keysQuery } from "@/lib/queries";
@@ -16,70 +33,62 @@ export const Route = createFileRoute("/_app/keys")({
   component: KeysPage,
 });
 
+/** Keys for scripts and the starter: name, prefix, age; create shows the key once; revoke. */
 function KeysPage() {
-  const queryClient = useQueryClient();
   const keys = useQuery(keysQuery);
   const now = useNow();
-  const [created, setCreated] = useState<NewApiKey | null>(null);
-  const create = useMutation({
-    mutationFn: (name: string) => api<NewApiKey>("/keys", { method: "POST", body: { name } }),
-    onSuccess: async (key) => {
-      setCreated(key);
-      await queryClient.invalidateQueries({ queryKey: keysQuery.queryKey });
-    },
-  });
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    create.mutate(String(new FormData(form).get("name") ?? ""), { onSuccess: () => form.reset() });
-  };
+  const [creating, setCreating] = useState(false);
   return (
-    <>
-      <PageHeader title={t.keys.title} lead={t.keys.lead} />
-      <form onSubmit={submit} className="mb-6 flex max-w-xl flex-wrap items-end gap-2">
-        <div className="min-w-48 flex-1 space-y-1.5">
-          <label htmlFor="key-name" className="font-medium text-sm">
-            {t.keys.name}
-          </label>
-          <Input id="key-name" name="name" placeholder={t.keys.namePlaceholder} maxLength={200} />
-        </div>
-        <Button type="submit" disabled={create.isPending}>
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="max-w-[65ch] text-muted-foreground text-sm text-pretty">{t.keys.lead}</p>
+        <Button onClick={() => setCreating(true)} className="shrink-0 self-start sm:self-auto">
+          <PlusIcon aria-hidden />
           {t.keys.create}
         </Button>
-      </form>
-      {create.error && <ErrorNote error={create.error} />}
-      {created && (
-        <div role="status" className="mb-6 space-y-2 rounded-md border border-warn/50 p-4">
-          <p className="text-sm">
-            <span className="text-warn">{t.keys.created}</span>
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <code className="min-w-0 flex-1 break-all rounded-md border bg-surface px-3 py-1.5 text-[13px]">
-              {created.key}
-            </code>
-            <CopyButton value={created.key} />
-            <Button variant="ghost" size="sm" onClick={() => setCreated(null)}>
-              {t.keys.done}
-            </Button>
-          </div>
-        </div>
-      )}
-      {keys.isPending ? (
-        <LoadingRows rows={2} />
-      ) : keys.isError ? (
-        <ErrorNote error={keys.error} onRetry={() => keys.refetch()} />
-      ) : keys.data.length === 0 ? (
-        <p className="rounded-md border px-4 py-10 text-center text-muted-foreground text-sm">
-          {t.keys.empty}
-        </p>
-      ) : (
-        <ul className="divide-y rounded-md border">
-          {keys.data.map((key) => (
-            <KeyRow key={key.id} apiKey={key} now={now} />
-          ))}
-        </ul>
-      )}
-    </>
+      </div>
+      <section className="overflow-hidden rounded-xl border bg-card">
+        {keys.isPending ? (
+          <LoadingList rows={2} />
+        ) : keys.isError ? (
+          <ErrorState error={keys.error} onRetry={() => keys.refetch()} />
+        ) : keys.data.length === 0 ? (
+          <p className="px-4 py-10 text-center text-muted-foreground text-sm">{t.keys.empty}</p>
+        ) : (
+          <table className="w-full table-fixed text-sm">
+            <thead className="border-b">
+              <tr className="text-left text-muted-foreground text-xs">
+                <th scope="col" className="h-10 px-4 font-medium sm:pl-5">
+                  {t.keys.columns.name}
+                </th>
+                <th scope="col" className="hidden w-48 px-4 font-medium sm:table-cell">
+                  {t.keys.columns.key}
+                </th>
+                <th scope="col" className="w-28 px-4 font-medium sm:w-36">
+                  {t.keys.columns.created}
+                </th>
+                <th scope="col" className="w-14">
+                  <span className="sr-only">{t.common.actions}</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {keys.data.map((key) => (
+                <KeyRow key={key.id} apiKey={key} now={now} />
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+      <Dialog open={creating} onOpenChange={setCreating}>
+        <DialogContent
+          className="sm:max-w-md"
+          onInteractOutside={(event) => event.preventDefault()}
+        >
+          {creating && <CreateKey onDone={() => setCreating(false)} />}
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
 
@@ -91,29 +100,123 @@ function KeyRow({ apiKey, now }: { apiKey: ApiKey; now: number }) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: keysQuery.queryKey }),
   });
   return (
-    <li className="space-y-3 px-4 py-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate font-medium">{apiKey.name}</p>
-          <p className="text-muted-foreground text-xs">
-            <code>{apiKey.prefix}…</code> · {t.keys.columns.created.toLowerCase()}{" "}
-            <Time iso={apiKey.createdAt} now={now} />
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => setConfirming(true)}>
-          {t.keys.revoke}
-        </Button>
-      </div>
-      {confirming && (
-        <ConfirmBar
-          message={t.keys.revokeConfirm(apiKey.name)}
-          confirmLabel={t.keys.revoke}
+    <tr>
+      <td className="px-4 py-3 sm:pl-5">
+        <span className="block truncate font-medium" title={apiKey.name}>
+          {apiKey.name}
+        </span>
+        <code className="block truncate text-muted-foreground text-xs sm:hidden">
+          {apiKey.prefix}…
+        </code>
+      </td>
+      <td className="hidden px-4 py-3 sm:table-cell">
+        <code className="text-muted-foreground text-xs">{apiKey.prefix}…</code>
+      </td>
+      <td className="px-4 py-3 text-muted-foreground">
+        <Time iso={apiKey.createdAt} now={now} />
+      </td>
+      <td className="py-3 pr-3 text-right">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`${t.common.actions}: ${apiKey.name}`}
+            >
+              <EllipsisIcon aria-hidden />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-auto min-w-40">
+            <DropdownMenuItem variant="destructive" onSelect={() => setConfirming(true)}>
+              <KeyRoundIcon aria-hidden />
+              {t.keys.revokeButton}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <ConfirmDialog
+          open={confirming}
+          onOpenChange={setConfirming}
+          title={t.keys.revokeTitle}
+          description={
+            <>
+              <span className="font-medium text-foreground">{apiKey.name}</span> {t.keys.revokeRest}
+            </>
+          }
+          confirmLabel={t.keys.revokeButton}
           pending={revoke.isPending}
+          error={revoke.error}
           onConfirm={() => revoke.mutate()}
-          onCancel={() => setConfirming(false)}
         />
-      )}
-      {revoke.error && <ErrorNote error={revoke.error} />}
-    </li>
+      </td>
+    </tr>
+  );
+}
+
+/** Name the key, then the same dialog shows it once with a copy button. */
+function CreateKey({ onDone }: { onDone: () => void }) {
+  const id = useId();
+  const queryClient = useQueryClient();
+  const [created, setCreated] = useState<NewApiKey | null>(null);
+  const create = useMutation({
+    mutationFn: (name: string) => api<NewApiKey>("/keys", { method: "POST", body: { name } }),
+    onSuccess: async (key) => {
+      setCreated(key);
+      await queryClient.invalidateQueries({ queryKey: keysQuery.queryKey });
+    },
+  });
+  if (created) {
+    return (
+      <div className="grid gap-5">
+        <DialogHeader>
+          <DialogTitle>{t.keys.createdTitle}</DialogTitle>
+          <DialogDescription>{t.keys.created}</DialogDescription>
+        </DialogHeader>
+        <code className="block select-all break-all rounded-lg border bg-page px-3 py-2.5 font-mono text-[13px]">
+          {created.key}
+        </code>
+        <DialogFooter>
+          <Button variant="ghost" size="lg" onClick={onDone}>
+            {t.keys.done}
+          </Button>
+          <CopyButton value={created.key} label={t.keys.copyKey} variant="default" size="lg" />
+        </DialogFooter>
+      </div>
+    );
+  }
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    create.mutate(String(new FormData(event.currentTarget).get("name") ?? ""));
+  };
+  return (
+    <form onSubmit={submit} className="grid gap-5">
+      <DialogHeader>
+        <DialogTitle>{t.keys.createTitle}</DialogTitle>
+        <DialogDescription>{t.keys.lead}</DialogDescription>
+      </DialogHeader>
+      <FormField id={`${id}-name`} label={t.keys.name} hint={t.keys.nameHint}>
+        <Input
+          id={`${id}-name`}
+          name="name"
+          placeholder={t.keys.namePlaceholder}
+          maxLength={200}
+          autoFocus
+          aria-describedby={`${id}-name-hint`}
+        />
+      </FormField>
+      {create.error && <ErrorNote error={create.error} />}
+      <DialogFooter>
+        <Button type="button" variant="ghost" size="lg" onClick={onDone}>
+          {t.common.cancel}
+        </Button>
+        <Button
+          type="submit"
+          size="lg"
+          disabled={create.isPending}
+          aria-busy={create.isPending || undefined}
+        >
+          {t.keys.create}
+        </Button>
+      </DialogFooter>
+    </form>
   );
 }

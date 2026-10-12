@@ -50,19 +50,43 @@ describe("auth guard", () => {
     expect(router.state.location.search).toEqual({ redirect: "/channels" });
   });
 
-  it("shows the checks to a signed-in visitor and keeps them off the sign-in page", async () => {
+  it("shows the overview to a signed-in visitor and keeps them off the sign-in page", async () => {
     vi.stubGlobal(
       "fetch",
       stubFetch({
         "GET /api/v1/setup": () => [200, { required: false }],
         "GET /api/v1/session": () => [200, SESSION],
         "GET /api/v1/checks": () => [200, [aCheck({ status: "DOWN", downReason: "MISSED" })]],
+        "GET /api/v1/stats/daily": () => [200, [{ date: "2026-01-05", runs: 3, failures: 1 }]],
       }),
     );
     const router = renderAt("/signin");
     await waitFor(() => expect(router.state.location.pathname).toBe("/"));
+    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
     expect((await screen.findAllByText("Nightly backup")).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("missed run").length).toBeGreaterThan(0);
+    expect(screen.getByText(/Missed the .* run/)).toBeInTheDocument();
+  });
+
+  it("lists checks with their status and run history", async () => {
+    vi.stubGlobal(
+      "fetch",
+      stubFetch({
+        "GET /api/v1/setup": () => [200, { required: false }],
+        "GET /api/v1/session": () => [200, SESSION],
+        "GET /api/v1/checks": () => [200, [aCheck({ status: "DOWN", downReason: "FAILED" })]],
+        "GET /api/v1/runs/recent": () => [
+          200,
+          { "nightly-backup": [{ at: "2026-01-04T20:01:00Z", ok: false, exitCode: 3 }] },
+        ],
+      }),
+    );
+    renderAt("/checks?status=down");
+    expect((await screen.findAllByText("Nightly backup")).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("run failed").length).toBeGreaterThan(0);
+    expect(screen.getByRole("radio", { name: /Down/ })).toHaveAttribute("aria-checked", "true");
+    expect(
+      (await screen.findAllByRole("img", { name: /1 run: 0 ok, 1 failed/ })).length,
+    ).toBeGreaterThan(0);
   });
 
   it("shows how to add the first check when there is none", async () => {
@@ -75,7 +99,7 @@ describe("auth guard", () => {
       }),
     );
     renderAt("/");
-    expect(await screen.findByText("No checks yet")).toBeInTheDocument();
+    expect(await screen.findByText("Add your first check")).toBeInTheDocument();
     expect(
       screen.getByText(/curl -X PUT http:\/\/localhost(:\d+)?\/api\/v1\/checks\/nightly-backup/),
     ).toBeInTheDocument();

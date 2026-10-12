@@ -1006,6 +1006,97 @@ abstract class AbstractIntegrationTests {
 	}
 
 	@Test
+	@SuppressWarnings("unchecked")
+	void recentRunsPerCheckOldestFirst() {
+		Project project = newProject();
+		String busy = uniqueSlug();
+		String key = createCheck(project, busy, "{\"cron\":\"0 * * * *\"}");
+		String idle = uniqueSlug();
+		createCheck(project, idle, "{\"cron\":\"0 * * * *\"}");
+		get("/ping/" + key + "/start");
+		CLOCK.advance(Duration.ofSeconds(1));
+		get("/ping/" + key);
+		CLOCK.advance(Duration.ofSeconds(1));
+		get("/ping/" + key + "/log");
+		CLOCK.advance(Duration.ofSeconds(1));
+		get("/ping/" + key + "/3");
+		CLOCK.advance(Duration.ofSeconds(1));
+		post("/ping/" + key + "/fail");
+		CLOCK.advance(Duration.ofSeconds(1));
+		get("/ping/" + key);
+
+		String all = exchange(HttpMethod.GET, "/api/v1/runs/recent", null, project.key()).getBody();
+		assertThat((List<Boolean>) JsonPath.read(all, "$['" + busy + "'][*].ok")).containsExactly(true, false, false,
+				true);
+		assertThat((List<Object>) JsonPath.read(all, "$['" + busy + "'][*].exitCode")).containsExactly(null, 3, null,
+				null);
+		assertThat((List<Object>) JsonPath.read(all, "$['" + idle + "']")).isEmpty();
+
+		String limited = exchange(HttpMethod.GET, "/api/v1/runs/recent?limit=2", null, project.key()).getBody();
+		assertThat((List<Boolean>) JsonPath.read(limited, "$['" + busy + "'][*].ok")).containsExactly(false, true);
+		assertThat(
+				exchange(HttpMethod.GET, "/api/v1/runs/recent?limit=91", null, project.key()).getStatusCode().value())
+			.isEqualTo(400);
+		// Another project's checks are not listed.
+		String other = exchange(HttpMethod.GET, "/api/v1/runs/recent", null, API_KEY).getBody();
+		assertThat((Map<String, Object>) JsonPath.read(other, "$")).doesNotContainKey(busy);
+	}
+
+	@Test
+	@SuppressWarnings("unchecked")
+	void dailyRunsAndFailuresInTheCallersTimeZone() {
+		Project project = newProject();
+		String key = createCheck(project, uniqueSlug(), "{\"cron\":\"0 * * * *\"}");
+		// 2026-01-03 23:30 UTC is 2026-01-04 06:30 in Ho Chi Minh City (UTC+7).
+		CLOCK.set("2026-01-03T23:30:00Z");
+		get("/ping/" + key);
+		CLOCK.set("2026-01-04T12:00:00Z");
+		get("/ping/" + key + "/start");
+		CLOCK.advance(Duration.ofSeconds(1));
+		post("/ping/" + key + "/fail");
+		CLOCK.set("2026-01-05T10:00:00Z");
+		get("/ping/" + key + "/0");
+		get("/ping/" + key + "/log");
+
+		String utc = exchange(HttpMethod.GET, "/api/v1/stats/daily?days=3", null, project.key()).getBody();
+		assertThat((List<String>) JsonPath.read(utc, "$[*].date")).containsExactly("2026-01-03", "2026-01-04",
+				"2026-01-05");
+		assertThat((List<Integer>) JsonPath.read(utc, "$[*].runs")).containsExactly(1, 1, 1);
+		assertThat((List<Integer>) JsonPath.read(utc, "$[*].failures")).containsExactly(0, 1, 0);
+
+		String hcm = exchange(HttpMethod.GET, "/api/v1/stats/daily?days=3&tz=Asia/Ho_Chi_Minh", null, project.key())
+			.getBody();
+		assertThat((List<Integer>) JsonPath.read(hcm, "$[*].runs")).containsExactly(0, 2, 1);
+		assertThat((List<Integer>) JsonPath.read(hcm, "$[*].failures")).containsExactly(0, 1, 0);
+
+		String fortnight = exchange(HttpMethod.GET, "/api/v1/stats/daily", null, project.key()).getBody();
+		assertThat((List<Object>) JsonPath.read(fortnight, "$")).hasSize(14);
+		assertThat(exchange(HttpMethod.GET, "/api/v1/stats/daily?tz=Mars/Base", null, project.key()).getStatusCode()
+			.value()).isEqualTo(400);
+		assertThat(exchange(HttpMethod.GET, "/api/v1/stats/daily?days=0", null, project.key()).getStatusCode().value())
+			.isEqualTo(400);
+		String empty = exchange(HttpMethod.GET, "/api/v1/stats/daily?days=1", null, newProject().key()).getBody();
+		assertThat((List<Integer>) JsonPath.read(empty, "$[*].runs")).containsExactly(0);
+	}
+
+	@Test
+	@SuppressWarnings("unchecked")
+	void schedulePreviewListsTheNextRunsInTheTimeZone() {
+		String preview = exchange(HttpMethod.GET,
+				"/api/v1/schedules/next?cron=0 3 * * *&timeZone=Asia/Ho_Chi_Minh&count=3", null, API_KEY)
+			.getBody();
+		assertThat((List<String>) JsonPath.read(preview, "$.runs")).containsExactly("2026-01-05T20:00:00Z",
+				"2026-01-06T20:00:00Z", "2026-01-07T20:00:00Z");
+		assertThat(exchange(HttpMethod.GET, "/api/v1/schedules/next?cron=every night", null, API_KEY).getStatusCode()
+			.value()).isEqualTo(400);
+		assertThat(exchange(HttpMethod.GET, "/api/v1/schedules/next?cron=0 0 30 2 *", null, API_KEY).getStatusCode()
+			.value()).isEqualTo(400);
+		assertThat(exchange(HttpMethod.GET, "/api/v1/schedules/next?cron=@daily&timeZone=Nowhere", null, API_KEY)
+			.getStatusCode()
+			.value()).isEqualTo(400);
+	}
+
+	@Test
 	void resumeEndsAPauseWithoutAPing() {
 		String slug = uniqueSlug();
 		String key = createCheck(slug, "{\"cron\":\"0 * * * *\",\"graceSeconds\":60}");

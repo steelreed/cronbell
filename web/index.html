@@ -9,7 +9,11 @@
     <script>
       // Dark by default; a saved choice wins. Runs before paint to avoid a flash.
       try {
-        if (localStorage.getItem("cronbell.theme") === "light") {
+        const theme = localStorage.getItem("cronbell.theme");
+        if (
+          theme === "light" ||
+          (theme === "system" && matchMedia("(prefers-color-scheme: light)").matches)
+        ) {
           document.documentElement.classList.remove("dark");
         }
       } catch {}

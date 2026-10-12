@@ -38,6 +38,15 @@ All notable changes to Cronbell are listed here. The format follows
 - History retention: pings and finished alert deliveries older than `CRONBELL_HISTORY_RETENTION`
   (default 90 days) are pruned daily in batches; each check keeps its latest ping, its latest log
   and the pings of a run in progress. Several PostgreSQL instances take turns through a lease.
+- Web dashboard redesign: sidebar shell with a command menu (⌘K), an overview (counts, what needs
+  attention, runs per day), a checks table with search, status filter, sorting, pagination and run
+  history ticks, a check page with run history, durations and Spring Boot snippet, a time zone picker
+  and next-run preview in the check form, dialogs for channels and API keys, and a system theme option.
+  The check form fills the slug from the name, and legacy zone names such as Asia/Saigon are shown
+  under their current name (Asia/Ho_Chi_Minh).
+- API: `GET /api/v1/runs/recent` (latest finished runs per check), `GET /api/v1/stats/daily`
+  (runs and failures per day in a given time zone) and `GET /api/v1/schedules/next` (preview of a
+  cron schedule's next runs).
 
 ### Changed
 
