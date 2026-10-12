@@ -17,3 +17,11 @@ describe("StatusText", () => {
     expect(screen.getByText("up")).toHaveClass("text-ok");
   });
 });
+
+describe("StatusText late", () => {
+  it("renders a late check in the warning tone with its reason", () => {
+    render(<StatusText check={aCheck({ nextDueAt: "2026-01-05T09:00:00Z" })} now={NOW} />);
+    expect(screen.getByText("late")).toHaveClass("text-warn");
+    expect(screen.getByText("within grace")).toBeInTheDocument();
+  });
+});

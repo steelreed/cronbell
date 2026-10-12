@@ -54,7 +54,7 @@ function SetupPage() {
         <FormField id="email" label={t.setup.email}>
           <Input id="email" name="email" type="email" autoComplete="username" required autoFocus />
         </FormField>
-        <FormField id="password" label={t.setup.password} hint="8 to 128 characters.">
+        <FormField id="password" label={t.setup.password} hint={t.setup.passwordHint}>
           <Input
             id="password"
             name="password"
@@ -80,7 +80,7 @@ function SetupPage() {
           />
         </FormField>
         {setUp.error && <ErrorNote error={setUp.error} />}
-        <Button type="submit" size="lg" className="w-full" disabled={setUp.isPending}>
+        <Button type="submit" size="lg" className="mt-2 w-full" disabled={setUp.isPending}>
           {t.setup.submit}
         </Button>
       </form>

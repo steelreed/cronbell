@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { CheckForm } from "@/components/check-form";
 import { PageHeader } from "@/components/page";
 import { ApiError, api } from "@/lib/api";
@@ -23,7 +23,7 @@ function NewCheckPage() {
           throw error;
         },
       );
-      if (exists) throw new Error(`A check named ${slug} already exists.`);
+      if (exists) throw new Error(t.form.errors.exists(slug));
       return api<Check>(`/checks/${encodeURIComponent(slug)}`, { method: "PUT", body: definition });
     },
     onSuccess: async (check) => {
@@ -33,17 +33,12 @@ function NewCheckPage() {
   });
   return (
     <>
-      <nav className="mb-2 text-sm">
-        <Link to="/" className="text-muted-foreground hover:text-foreground">
-          ← {t.check.back}
-        </Link>
-      </nav>
       <PageHeader title={t.form.newTitle} />
       <CheckForm
         pending={create.isPending}
         error={create.error}
         onSubmit={(slug, definition) => create.mutate({ slug, definition })}
-        onCancel={() => navigate({ to: "/" })}
+        onCancel={() => navigate({ to: "/checks" })}
       />
     </>
   );

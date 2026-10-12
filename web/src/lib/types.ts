@@ -82,3 +82,26 @@ export interface Session {
 export interface SetupStatus {
   required: boolean;
 }
+
+/** A finished run from GET /runs/recent: a success or fail ping. */
+export interface RecentRun {
+  at: string;
+  ok: boolean;
+  exitCode: number | null;
+}
+
+/** Slug to its latest finished runs, oldest first. */
+export type RecentRuns = Record<string, RecentRun[]>;
+
+/** One day of GET /stats/daily, in the zone asked for. */
+export interface DayStat {
+  date: string;
+  runs: number;
+  failures: number;
+}
+
+export interface NextRuns {
+  cron: string;
+  timeZone: string;
+  runs: string[];
+}

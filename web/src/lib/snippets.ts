@@ -58,3 +58,32 @@ export function firstCheckSnippets(origin: string, pingBaseUrl: string, timeZone
 ${CURL} ${pingBaseUrl}<pingKey>`,
   };
 }
+
+/** The Spring Boot starter: name the check on a @Scheduled method. */
+export function springSnippet(check: Check): string {
+  const schedule =
+    check.scheduleKind === "CRON"
+      ? `cron = "${springCron(check.cron ?? "")}", zone = "${check.timeZone}"`
+      : `fixedRate = ${check.periodSeconds ?? 3600}, timeUnit = TimeUnit.SECONDS`;
+  return `@Scheduled(${schedule})
+@CronbellCheck("${check.slug}")
+void ${camel(check.slug)}() {
+    // the job; a thrown exception reports a failed run
+}`;
+}
+
+/** Spring cron has a seconds field first; 5-field Unix cron runs at second 0. */
+function springCron(cron: string): string {
+  const fields = cron.trim().split(/\s+/);
+  return fields.length === 5 ? `0 ${cron.trim()}` : cron.trim();
+}
+
+function camel(slug: string): string {
+  const words = slug.split(/[^A-Za-z0-9]+/).filter(Boolean);
+  const name = words
+    .map((word, i) =>
+      i === 0 ? word.toLowerCase() : word[0].toUpperCase() + word.slice(1).toLowerCase(),
+    )
+    .join("");
+  return /^[A-Za-z]/.test(name) ? name : `run${name}`;
+}

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { CheckForm } from "@/components/check-form";
-import { ErrorNote, LoadingRows, PageHeader } from "@/components/page";
+import { Bar, ErrorState, PageHeader, Panel } from "@/components/page";
 import { api } from "@/lib/api";
 import { checkQuery } from "@/lib/queries";
 import { t } from "@/lib/strings";
@@ -27,20 +27,20 @@ function EditCheckPage() {
   });
   return (
     <>
-      <nav className="mb-2 text-sm">
-        <Link
-          to="/checks/$slug"
-          params={{ slug }}
-          className="text-muted-foreground hover:text-foreground"
-        >
-          ← {slug}
-        </Link>
-      </nav>
-      <PageHeader title={t.form.editTitle(slug)} />
+      <PageHeader title={t.form.editTitle(check.data?.name ?? slug)} />
       {check.isPending ? (
-        <LoadingRows rows={6} />
+        <Panel className="max-w-4xl">
+          <div aria-busy="true" className="space-y-6">
+            {Array.from({ length: 5 }, (_, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: placeholders have no identity
+              <Bar key={i} className="h-4 w-2/3" />
+            ))}
+          </div>
+        </Panel>
       ) : check.isError ? (
-        <ErrorNote error={check.error} onRetry={() => check.refetch()} />
+        <Panel className="max-w-4xl">
+          <ErrorState error={check.error} onRetry={() => check.refetch()} />
+        </Panel>
       ) : (
         <CheckForm
           check={check.data}

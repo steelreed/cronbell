@@ -1,5 +1,6 @@
 import { t } from "./strings";
 import type { CheckDefinition } from "./types";
+import { canonicalZone } from "./zones";
 
 export const SLUG = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const CRON_MACROS = new Set([
@@ -113,6 +114,7 @@ export function supportedTimeZones(): string[] {
   return zones.includes("UTC") ? zones : ["UTC", ...zones];
 }
 
+/** The browser's zone under its current IANA name (Chrome still says Asia/Saigon). */
 export function browserTimeZone(): string {
-  return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  return canonicalZone(Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC");
 }

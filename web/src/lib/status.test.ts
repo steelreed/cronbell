@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { aCheck, NOW } from "@/test/fixtures";
-import { dueView, statusView } from "./status";
+import { attention, countByHealth, dueView, health, needsAttention, statusView } from "./status";
 
 describe("statusView", () => {
   it("shows UP in the OK tone without a reason", () => {
@@ -60,5 +60,50 @@ describe("dueView", () => {
   it("calls an overdue run late while the check is not down for a missed run", () => {
     const late = aCheck({ nextDueAt: "2026-01-05T09:58:00Z", nextRunAt: null });
     expect(dueView(late, NOW)).toMatchObject({ kind: "overdue", missed: false, next: null });
+  });
+});
+
+describe("late and attention", () => {
+  const late = aCheck({ nextDueAt: "2026-01-05T09:50:00Z" });
+
+  it("calls an UP check past its due time late, a warning, not down", () => {
+    expect(health(late, NOW)).toBe("late");
+    expect(statusView(late, NOW)).toMatchObject({ label: "late", tone: "warn" });
+    expect(health(aCheck(), NOW)).toBe("up");
+  });
+
+  it("explains each problem with the time it started", () => {
+    const failed = aCheck({
+      status: "DOWN",
+      downReason: "FAILED",
+      lastPingAt: "2026-01-05T09:00:00Z",
+    });
+    expect(attention(failed, NOW)).toMatchObject({ health: "down", since: "2026-01-05T09:00:00Z" });
+    const tooLong = aCheck({
+      status: "DOWN",
+      downReason: "RUNNING_TOO_LONG",
+      lastStartAt: "2026-01-05T08:00:00Z",
+    });
+    expect(attention(tooLong, NOW)?.since).toBe("2026-01-05T08:00:00Z");
+    expect(attention(late, NOW)).toMatchObject({ health: "late", since: "2026-01-05T09:50:00Z" });
+    expect(attention(aCheck(), NOW)).toBeNull();
+    expect(attention(aCheck({ status: "PAUSED" }), NOW)).toBeNull();
+  });
+
+  it("orders what needs attention: down, then late, then never pinged", () => {
+    const stale = aCheck({ slug: "stale", status: "NEW", createdAt: "2026-01-01T00:00:00Z" });
+    const down = aCheck({ slug: "down", status: "DOWN", downReason: "FAILED" });
+    const items = needsAttention(
+      [stale, aCheck({ slug: "fine" }), { ...late, slug: "late" }, down],
+      NOW,
+    );
+    expect(items.map((item) => item.check.slug)).toEqual(["down", "late", "stale"]);
+    expect(countByHealth([stale, late, down], NOW)).toEqual({
+      down: 1,
+      late: 1,
+      up: 0,
+      new: 1,
+      paused: 0,
+    });
   });
 });

@@ -38,6 +38,20 @@ export function formatExact(iso: string | null): string {
   });
 }
 
+/** A run time in a list: "Tue 13 Oct, 03:00", with the year only when it is not this year. */
+export function formatRun(iso: string, now: number = Date.now()): string {
+  const date = new Date(iso);
+  const sameYear = date.getFullYear() === new Date(now).getFullYear();
+  return date.toLocaleString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: sameYear ? undefined : "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 /** Local clock time, "02:00"; with the day when it is not today: "4 Jan 02:00". */
 export function formatClock(iso: string, now: number = Date.now()): string {
   const date = new Date(iso);

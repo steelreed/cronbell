@@ -68,7 +68,7 @@ function SignInPage() {
           />
         </FormField>
         {signIn.error && <ErrorNote error={new Error(signInMessage(signIn.error))} />}
-        <Button type="submit" size="lg" className="w-full" disabled={signIn.isPending}>
+        <Button type="submit" size="lg" className="mt-2 w-full" disabled={signIn.isPending}>
           {t.signIn.submit}
         </Button>
       </form>

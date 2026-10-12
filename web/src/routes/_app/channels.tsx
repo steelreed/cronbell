@@ -1,12 +1,39 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { PencilIcon, PlusIcon, SendIcon, Trash2Icon } from "lucide-react";
-import { type FormEvent, useId, useState } from "react";
+import {
+  EllipsisIcon,
+  HashIcon,
+  MailIcon,
+  PencilIcon,
+  PlusIcon,
+  SendIcon,
+  Trash2Icon,
+  WebhookIcon,
+} from "lucide-react";
+import { type FormEvent, type ReactNode, useId, useState } from "react";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormField } from "@/components/form-field";
-import { ConfirmBar, ErrorNote, LoadingRows, PageHeader } from "@/components/page";
+import { ErrorNote, ErrorState, LoadingList } from "@/components/page";
+import { StatusDot } from "@/components/status-text";
 import { Time } from "@/components/time";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { api } from "@/lib/api";
 import { CHANNEL_FIELDS, CHANNEL_TYPES, channelConfig, channelTarget } from "@/lib/channels";
 import { channelsQuery } from "@/lib/queries";
@@ -18,53 +45,110 @@ export const Route = createFileRoute("/_app/channels")({
   component: ChannelsPage,
 });
 
+const CHANNEL_ICONS: Record<ChannelType, ReactNode> = {
+  email: <MailIcon aria-hidden className="size-4" />,
+  telegram: <SendIcon aria-hidden className="size-4" />,
+  slack: <HashIcon aria-hidden className="size-4" />,
+  webhook: <WebhookIcon aria-hidden className="size-4" />,
+};
+
+/** Where alerts go: one row per channel with its last delivery, test, edit and delete. */
 function ChannelsPage() {
   const channels = useQuery(channelsQuery);
-  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<Channel | "new" | null>(null);
   const now = useNow();
   return (
-    <>
-      <PageHeader
-        title={t.channels.title}
-        lead={t.channels.lead}
-        actions={
-          !adding && (
-            <Button onClick={() => setAdding(true)}>
-              <PlusIcon />
-              {t.channels.add}
-            </Button>
-          )
-        }
-      />
-      {adding && (
-        <div className="mb-6 rounded-md border p-4 sm:p-5">
-          <ChannelForm onDone={() => setAdding(false)} />
-        </div>
-      )}
-      {channels.isPending ? (
-        <LoadingRows rows={3} />
-      ) : channels.isError ? (
-        <ErrorNote error={channels.error} onRetry={() => channels.refetch()} />
-      ) : channels.data.length === 0 ? (
-        !adding && (
-          <p className="rounded-md border px-4 py-10 text-center text-muted-foreground text-sm">
-            {t.channels.empty}
-          </p>
-        )
-      ) : (
-        <ul className="divide-y rounded-md border">
-          {channels.data.map((channel) => (
-            <ChannelRow key={channel.id} channel={channel} now={now} />
-          ))}
-        </ul>
-      )}
-    </>
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="max-w-[65ch] text-muted-foreground text-sm text-pretty">{t.channels.lead}</p>
+        <Button onClick={() => setEditing("new")} className="shrink-0 self-start sm:self-auto">
+          <PlusIcon aria-hidden />
+          {t.channels.add}
+        </Button>
+      </div>
+      <section className="overflow-hidden rounded-xl border bg-card">
+        {channels.isPending ? (
+          <LoadingList rows={3} />
+        ) : channels.isError ? (
+          <ErrorState error={channels.error} onRetry={() => channels.refetch()} />
+        ) : channels.data.length === 0 ? (
+          <p className="px-4 py-10 text-center text-muted-foreground text-sm">{t.channels.empty}</p>
+        ) : (
+          <ul className="divide-y">
+            {channels.data.map((channel) => (
+              <ChannelRow
+                key={channel.id}
+                channel={channel}
+                now={now}
+                onEdit={() => setEditing(channel)}
+              />
+            ))}
+          </ul>
+        )}
+      </section>
+      <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
+        <DialogContent
+          className="sm:max-w-lg"
+          onInteractOutside={(event) => event.preventDefault()}
+        >
+          {editing !== null && (
+            <ChannelForm
+              channel={editing === "new" ? undefined : editing}
+              onDone={() => setEditing(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
 
-function ChannelRow({ channel, now }: { channel: Channel; now: number }) {
+function DeliveryStatus({ channel, now }: { channel: Channel; now: number }) {
+  if (channel.lastError !== null) {
+    return (
+      <span className="flex min-w-0 items-start gap-2 text-sm">
+        <StatusDot tone="problem" className="mt-1.5" />
+        <span className="min-w-0">
+          <span className="text-problem">{t.channels.failed}</span>{" "}
+          <span className="text-muted-foreground">
+            <Time iso={channel.lastAttemptAt} now={now} />
+          </span>
+          <span className="mt-0.5 block break-words font-mono text-muted-foreground text-xs">
+            {channel.lastError}
+          </span>
+        </span>
+      </span>
+    );
+  }
+  if (channel.lastDeliveryAt) {
+    return (
+      <span className="flex items-center gap-2 text-sm">
+        <StatusDot tone="ok" />
+        <span className="text-ok">{t.channels.delivered}</span>
+        <span className="text-muted-foreground">
+          <Time iso={channel.lastDeliveryAt} now={now} />
+        </span>
+      </span>
+    );
+  }
+  return (
+    <span className="flex items-center gap-2 text-muted-foreground text-sm">
+      <StatusDot tone="muted" />
+      {t.channels.noDeliveries}
+    </span>
+  );
+}
+
+function ChannelRow({
+  channel,
+  now,
+  onEdit,
+}: {
+  channel: Channel;
+  now: number;
+  onEdit: () => void;
+}) {
   const queryClient = useQueryClient();
-  const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const test = useMutation({
     mutationFn: () =>
@@ -75,88 +159,85 @@ function ChannelRow({ channel, now }: { channel: Channel; now: number }) {
     mutationFn: () => api<void>(`/channels/${channel.id}`, { method: "DELETE" }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: channelsQuery.queryKey }),
   });
-  if (editing) {
-    return (
-      <li className="p-4 sm:p-5">
-        <ChannelForm channel={channel} onDone={() => setEditing(false)} />
-      </li>
-    );
-  }
-  const failed = channel.lastError !== null;
   return (
-    <li className="space-y-3 px-4 py-3">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 space-y-0.5">
-          <div className="flex items-baseline gap-2">
-            <span className="font-medium">{channel.name}</span>
-            <span className="text-muted-foreground text-xs">{t.channels.types[channel.type]}</span>
-          </div>
+    <li className="grid gap-3 px-4 py-4 sm:px-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-center md:gap-6">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="grid size-9 shrink-0 place-items-center rounded-lg border bg-page text-muted-foreground">
+          {CHANNEL_ICONS[channel.type]}
+        </span>
+        <div className="min-w-0">
+          <p className="truncate font-medium text-sm" title={channel.name}>
+            {channel.name}
+            <span className="ml-2 font-normal text-muted-foreground text-xs">
+              {t.channels.types[channel.type]}
+            </span>
+          </p>
           <p className="truncate font-mono text-muted-foreground text-xs">
             {channelTarget(channel.type, channel.config)}
           </p>
-          <p className="text-sm">
-            {failed ? (
-              <span className="text-problem">
-                <span className="mr-1.5 inline-block size-2 rounded-full bg-problem" aria-hidden />
-                {t.channels.failed} <Time iso={channel.lastAttemptAt} now={now} />:{" "}
-                {channel.lastError}
-              </span>
-            ) : channel.lastDeliveryAt ? (
-              <span className="text-ok">
-                <span className="mr-1.5 inline-block size-2 rounded-full bg-ok" aria-hidden />
-                {t.channels.delivered("")}
-                <Time iso={channel.lastDeliveryAt} now={now} />
-              </span>
-            ) : (
-              <span className="text-muted-foreground">{t.channels.noDeliveries}</span>
-            )}
-            {channel.pendingDeliveries > 0 && (
-              <span className="ml-2 text-warn">
-                {t.channels.pending(channel.pendingDeliveries)}
-              </span>
-            )}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => test.mutate()}
-            disabled={test.isPending}
-          >
-            <SendIcon />
-            {test.isPending ? t.channels.testing : t.channels.test}
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-            <PencilIcon />
-            {t.common.edit}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setConfirming(true)}
-            aria-label={`${t.common.delete} ${channel.name}`}
-          >
-            <Trash2Icon />
-          </Button>
         </div>
       </div>
-      {test.isSuccess && (
-        <p role="status" className="text-ok text-sm">
-          {t.channels.testOk}
-        </p>
-      )}
-      {test.error && <ErrorNote error={test.error} />}
-      {confirming && (
-        <ConfirmBar
-          message={t.channels.deleteConfirm(channel.name)}
-          confirmLabel={t.common.delete}
-          pending={remove.isPending}
-          onConfirm={() => remove.mutate()}
-          onCancel={() => setConfirming(false)}
-        />
-      )}
-      {remove.error && <ErrorNote error={remove.error} />}
+      <div className="min-w-0 space-y-1">
+        <DeliveryStatus channel={channel} now={now} />
+        {channel.pendingDeliveries > 0 && (
+          <p className="text-warn text-xs">{t.channels.pending(channel.pendingDeliveries)}</p>
+        )}
+        {test.isSuccess && (
+          <p role="status" className="text-ok text-xs">
+            {t.channels.testOk}
+          </p>
+        )}
+        {test.error && <ErrorNote error={test.error} />}
+      </div>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => test.mutate()}
+          disabled={test.isPending}
+          aria-busy={test.isPending || undefined}
+        >
+          <SendIcon aria-hidden />
+          {test.isPending ? t.channels.testing : t.channels.test}
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`${t.common.actions}: ${channel.name}`}
+            >
+              <EllipsisIcon aria-hidden />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-auto min-w-44">
+            <DropdownMenuItem onSelect={onEdit}>
+              <PencilIcon aria-hidden />
+              {t.common.edit}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onSelect={() => setConfirming(true)}>
+              <Trash2Icon aria-hidden />
+              {t.common.delete}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={t.channels.deleteTitle}
+        description={
+          <>
+            <span className="font-medium text-foreground">{channel.name}</span>{" "}
+            {t.channels.deleteRest}
+          </>
+        }
+        confirmLabel={t.channels.deleteButton}
+        pending={remove.isPending}
+        error={remove.error}
+        onConfirm={() => remove.mutate()}
+      />
     </li>
   );
 }
@@ -183,35 +264,56 @@ function ChannelForm({ channel, onDone }: { channel?: Channel; onDone: () => voi
     for (const field of CHANNEL_FIELDS[type]) values[field.key] = String(data.get(field.key) ?? "");
     const { config, errors: found } = channelConfig(type, values, Boolean(channel));
     setErrors(found);
-    if (Object.keys(found).length > 0) return;
+    const first = Object.keys(found)[0];
+    if (first) {
+      document.getElementById(`${id}-${first}`)?.focus();
+      return;
+    }
     const name = String(data.get("name") ?? "").trim();
     save.mutate({ type, name: name || undefined, config });
   };
   return (
-    <form onSubmit={submit} noValidate className="max-w-xl space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <FormField id={`${id}-type`} label={t.channels.type}>
-          <select
-            id={`${id}-type`}
+    <form onSubmit={submit} noValidate className="grid gap-5">
+      <DialogHeader>
+        <DialogTitle>
+          {channel ? t.channels.editTitle(channel.name) : t.channels.addTitle}
+        </DialogTitle>
+        <DialogDescription>{t.channels.lead}</DialogDescription>
+      </DialogHeader>
+      {!channel && (
+        <div className="space-y-2">
+          <span id={`${id}-type`} className="block font-medium text-sm">
+            {t.channels.type}
+          </span>
+          <ToggleGroup
+            type="single"
+            variant="outline"
+            aria-labelledby={`${id}-type`}
             value={type}
-            disabled={Boolean(channel)}
-            onChange={(event) => {
-              setType(event.target.value as ChannelType);
+            onValueChange={(next) => {
+              if (!next) return;
+              setType(next as ChannelType);
               setErrors({});
             }}
-            className="h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm disabled:opacity-60 dark:bg-input/30"
+            className="grid w-full grid-cols-2 sm:grid-cols-4"
           >
             {CHANNEL_TYPES.map((option) => (
-              <option key={option} value={option}>
+              <ToggleGroupItem key={option} value={option} className="gap-2">
+                {CHANNEL_ICONS[option]}
                 {t.channels.types[option]}
-              </option>
+              </ToggleGroupItem>
             ))}
-          </select>
-        </FormField>
-        <FormField id={`${id}-name`} label={t.channels.name} hint={t.channels.nameHint}>
-          <Input id={`${id}-name`} name="name" defaultValue={channel?.name ?? ""} />
-        </FormField>
-      </div>
+          </ToggleGroup>
+        </div>
+      )}
+      <FormField id={`${id}-name`} label={t.channels.name} hint={t.channels.nameHint}>
+        <Input
+          id={`${id}-name`}
+          name="name"
+          defaultValue={channel?.name ?? ""}
+          autoFocus={Boolean(channel)}
+        />
+      </FormField>
       {CHANNEL_FIELDS[type].map((field) => {
         const fieldId = `${id}-${field.key}`;
         const masked = channel?.config[field.key];
@@ -236,20 +338,26 @@ function ChannelForm({ channel, onDone }: { channel?: Channel; onDone: () => voi
               autoComplete="off"
               spellCheck={false}
               aria-invalid={errors[field.key] ? true : undefined}
+              aria-describedby={errors[field.key] ? `${fieldId}-error` : `${fieldId}-hint`}
               className={field.inputType === "email" ? undefined : "font-mono"}
             />
           </FormField>
         );
       })}
       {save.error && <ErrorNote error={save.error} />}
-      <div className="flex gap-2">
-        <Button type="submit" disabled={save.isPending}>
-          {save.isPending ? t.common.saving : channel ? t.common.save : t.channels.add}
-        </Button>
-        <Button type="button" variant="ghost" onClick={onDone}>
+      <DialogFooter>
+        <Button type="button" variant="ghost" size="lg" onClick={onDone}>
           {t.common.cancel}
         </Button>
-      </div>
+        <Button
+          type="submit"
+          size="lg"
+          disabled={save.isPending}
+          aria-busy={save.isPending || undefined}
+        >
+          {save.isPending ? t.common.saving : channel ? t.common.save : t.channels.add}
+        </Button>
+      </DialogFooter>
     </form>
   );
 }

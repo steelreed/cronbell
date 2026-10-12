@@ -9,7 +9,7 @@ export const TONE_TEXT: Record<Tone, string> = {
   muted: "text-muted-foreground",
 };
 
-const TONE_DOT: Record<Tone, string> = {
+export const TONE_DOT: Record<Tone, string> = {
   ok: "bg-ok",
   problem: "bg-problem",
   warn: "bg-warn",
@@ -20,26 +20,37 @@ const TONE_DOT: Record<Tone, string> = {
 export function StatusText({
   check,
   now,
+  showReason = true,
   className,
 }: {
-  check: Pick<Check, "status" | "downReason" | "createdAt">;
+  check: Pick<Check, "status" | "downReason" | "createdAt"> & Partial<Pick<Check, "nextDueAt">>;
   now?: number;
+  showReason?: boolean;
   className?: string;
 }) {
-  return <StatusLabel view={statusView(check, now)} className={className} />;
+  const view = statusView(check, now);
+  return <StatusLabel view={showReason ? view : { ...view, reason: null }} className={className} />;
+}
+
+export function StatusDot({ tone, className }: { tone: Tone; className?: string }) {
+  return (
+    <span
+      aria-hidden
+      className={cn("inline-block size-2 shrink-0 rounded-full", TONE_DOT[tone], className)}
+    />
+  );
 }
 
 export function StatusLabel({ view, className }: { view: StatusView; className?: string }) {
   return (
-    <span className={cn("inline-flex items-baseline gap-2", className)}>
+    <span className={cn("inline-flex min-w-0 items-center gap-2", className)}>
+      <StatusDot tone={view.tone} />
       <span
-        aria-hidden
-        className={cn("size-2 shrink-0 translate-y-[-1px] rounded-full", TONE_DOT[view.tone])}
-      />
-      <span className={cn("font-medium uppercase tracking-wide text-xs", TONE_TEXT[view.tone])}>
+        className={cn("shrink-0 font-medium text-xs uppercase tracking-wide", TONE_TEXT[view.tone])}
+      >
         {view.label}
       </span>
-      {view.reason && <span className="text-muted-foreground text-sm">{view.reason}</span>}
+      {view.reason && <span className="truncate text-muted-foreground text-sm">{view.reason}</span>}
     </span>
   );
 }
