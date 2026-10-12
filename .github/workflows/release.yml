@@ -1,17 +1,72 @@
-name: Release image
+name: Release
 
-# The maintainer creates a v* tag; this publishes ghcr.io/steelreed/cronbell for amd64 and arm64.
+# The maintainer pushes a tag such as v0.1.0 or v0.1.0-beta.1 (see RELEASING.md). This
+#   1. checks the tag and its CHANGELOG.md section,
+#   2. publishes ghcr.io/steelreed/cronbell for amd64 and arm64, with provenance and an SBOM,
+#   3. creates the GitHub Release with the changelog section as notes.
+# Image tags: the version (0.1.0-beta.1), plus "beta" for pre-releases, or "0.1" and "latest"
+# for releases.
 on:
   push:
     tags: ["v*"]
 
-permissions:
-  contents: read
-  packages: write
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/steelreed/cronbell
 
 jobs:
-  image:
+  prepare:
+    name: Check tag and changelog
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: version
+        name: Tag is a release version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [[ ! "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(alpha|beta|rc)\.(0|[1-9][0-9]*))?$ ]]; then
+            echo "::error::Tag '$TAG' is not vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-(alpha|beta|rc).N"
+            exit 1
+          fi
+          version="${TAG#v}"
+          prerelease=false
+          [[ "$version" == *-* ]] && prerelease=true
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+          echo "Version $version, pre-release: $prerelease"
+      - name: Tagged commit is on main
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_SHA is not on main. Tag a commit that was merged to main."
+            exit 1
+          fi
+      - name: CHANGELOG.md has dated notes for this version
+        run: .github/scripts/changelog-notes.sh "${{ steps.version.outputs.version }}" > /dev/null
+
+  image:
+    name: Publish image
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      # Signed build provenance attestation (actions/attest).
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-qemu-action@v4
@@ -23,18 +78,104 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: meta
         uses: docker/metadata-action@v6
+        env:
+          # Multi-arch image: put the annotations on the index too, where registries read them.
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
         with:
-          images: ghcr.io/steelreed/cronbell
+          images: ${{ env.IMAGE }}
+          flavor: latest=false
           tags: |
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest
-      - uses: docker/build-push-action@v7
+            type=semver,pattern={{major}}.{{minor}},enable=${{ needs.prepare.outputs.prerelease == 'false' }}
+            type=raw,value=latest,enable=${{ needs.prepare.outputs.prerelease == 'false' }}
+            type=raw,value=beta,enable=${{ needs.prepare.outputs.prerelease == 'true' }}
+          labels: |
+            org.opencontainers.image.title=Cronbell
+            org.opencontainers.image.description=Open-source monitoring for cron jobs and scheduled tasks
+            org.opencontainers.image.licenses=AGPL-3.0
+            org.opencontainers.image.vendor=Steelreed
+            org.opencontainers.image.version=${{ needs.prepare.outputs.version }}
+          annotations: |
+            org.opencontainers.image.title=Cronbell
+            org.opencontainers.image.description=Open-source monitoring for cron jobs and scheduled tasks
+            org.opencontainers.image.licenses=AGPL-3.0
+            org.opencontainers.image.vendor=Steelreed
+            org.opencontainers.image.version=${{ needs.prepare.outputs.version }}
+      - id: build
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          annotations: ${{ steps.meta.outputs.annotations }}
+          # BuildKit attestations stored with the image in the registry.
+          provenance: mode=max
+          sbom: true
+          # Reuse layers from earlier releases and from CI builds on main.
+          cache-from: |
+            type=gha,scope=release
+            type=gha
+          cache-to: type=gha,scope=release,mode=max
+      # GitHub artifact attestation, verifiable with `gh attestation verify`. GitHub offers these
+      # for public repositories on the Free and Team plans, so a private repository skips it.
+      - name: Attest build provenance
+        if: ${{ !github.event.repository.private }}
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+      - name: Summary
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          {
+            echo "### Image published"
+            echo
+            echo "Digest: \`$DIGEST\`"
+            echo
+            echo "$TAGS" | sed 's/^/- `/; s/$/`/'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  github-release:
+    name: GitHub Release
+    needs: [prepare, image]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+        run: |
+          notes="$RUNNER_TEMP/notes.md"
+          .github/scripts/changelog-notes.sh "$VERSION" > "$notes"
+          {
+            echo
+            echo "## Container image"
+            echo
+            echo '```bash'
+            echo "docker pull $IMAGE:$VERSION"
+            echo '```'
+          } >> "$notes"
+
+          flags=()
+          if [[ "$PRERELEASE" == true ]]; then
+            flags+=(--prerelease --latest=false)
+          else
+            flags+=(--latest)
+          fi
+
+          # Re-running the workflow updates the notes instead of failing.
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release edit "$TAG" --title "Cronbell $VERSION" --notes-file "$notes" "${flags[@]}"
+          else
+            gh release create "$TAG" --verify-tag --title "Cronbell $VERSION" --notes-file "$notes" "${flags[@]}"
+          fi
