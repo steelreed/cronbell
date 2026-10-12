@@ -6,6 +6,8 @@ All notable changes to Cronbell are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0-beta.1] - TBD
+
 ### Added
 
 - Ping API compatible with Healthchecks.io: `/ping/<key>`, `/start`, `/fail`, `/log`, exit codes.
