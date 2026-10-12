@@ -59,6 +59,20 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  deploy:
+    name: Deploy kit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # The compose file must parse with the example settings (no real .env in the repo).
+      - name: Compose file is valid
+        working-directory: deploy
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
+      - name: Shellcheck backup.sh
+        run: shellcheck deploy/backup.sh
+
   dco:
     name: DCO sign-off
     if: github.event_name == 'pull_request'
