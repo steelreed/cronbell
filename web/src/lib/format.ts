@@ -38,6 +38,14 @@ export function formatExact(iso: string | null): string {
   });
 }
 
+/** Local clock time, "02:00"; with the day when it is not today: "4 Jan 02:00". */
+export function formatClock(iso: string, now: number = Date.now()): string {
+  const date = new Date(iso);
+  const time = date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  if (date.toDateString() === new Date(now).toDateString()) return time;
+  return `${date.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} ${time}`;
+}
+
 /** 90 -> "1m 30s", 3600 -> "1h", 86400 -> "1d". */
 export function formatSeconds(total: number): string {
   if (total === 0) return "0s";

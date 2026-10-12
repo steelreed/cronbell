@@ -28,9 +28,18 @@ All notable changes to Cronbell are listed here. The format follows
 - API: `GET`/`DELETE /api/v1/checks/{slug}`, `GET /api/v1/checks/{slug}/pings`,
   `POST /api/v1/checks/{slug}/resume`, `/api/v1/keys`, `/api/v1/session`, `/api/v1/setup`.
 - The server serves the web dashboard.
+- Deploy kit in `deploy/`: Docker Compose with Caddy for automatic HTTPS, an annotated
+  `.env.example`, and `backup.sh` for consistent SQLite backups while the server runs. Step-by-step
+  guide in `docs/self-hosting.md` (Ubuntu, DNS, first check, backups and restore, upgrades,
+  PostgreSQL). CI validates the compose file and shellchecks the script.
+- API: checks carry `nextRunAt`, the next run the schedule expects, also after a missed run.
 
 ### Fixed
 
 - Pings without an exit code were reported with exit code 0.
 - The bundled `/assets` files were answered with the dashboard's `index.html`.
 - Container image built from one Dockerfile.
+- The dashboard showed a missed run's due time as "Next due: 1 min. ago"; it now reads
+  "Missed 02:00 run" with the next run.
+- Recent pings scrolled sideways on phones; they are cards below 768 px, and a ping's output opens
+  full width.

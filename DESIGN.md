@@ -177,6 +177,13 @@ POST   /api/v1/keys                   {"name"} -> 201 with the key, shown this o
 DELETE /api/v1/keys/{id}              204, the key stops working at once (session only)
 ```
 
+A check has its definition, `status`, `downReason`, `lastPingAt`, `lastStartAt`, `lastSuccessAt`,
+`nextDueAt` and `nextRunAt`. `nextDueAt` is the run being waited for (§4), so for a late or missed
+run it stays in the past. `nextRunAt` is when the schedule next expects a run, seen from now:
+`nextDueAt` while that is ahead, else the next cron time after now; `null` for a period schedule
+that is overdue (it only moves on with a run), for a paused check and before the first ping. The
+dashboard shows a missed run as "Missed 02:00 run" with the next run, not as "due 1 h ago".
+
 A ping in the list has `kind`, `exitCode`, `rid`, `body`, `receivedAt`, `remoteAddr`, `userAgent`,
 and for a `success`/`fail` that closes a `start` seen in the same list, `durationMs` (matched by
 `rid`, else the latest open `start`).
@@ -403,8 +410,8 @@ can follow.
 |---|---|---|
 | Setup | `/setup` | first run only: admin email and password |
 | Sign in | `/signin` | email and password; shows the rate-limit wait |
-| Checks | `/` | name, schedule and time zone, status with reason, last ping (relative, exact on hover), next due; filter by status; refreshed every 15 s; empty state with a ready `curl` to create and ping the first check |
-| Check | `/checks/{slug}` | status, schedule, grace, max runtime, ping URL with copy, snippets (crontab line, shell wrapper, Kubernetes CronJob); latest pings with duration and exit code; pause/resume, edit, delete (confirmed in the page) |
+| Checks | `/` | name, schedule and time zone, status with reason, last ping (relative, exact on hover), next due (a missed run by its time, with the next run); filter by status; refreshed every 15 s; empty state with a ready `curl` to create and ping the first check |
+| Check | `/checks/{slug}` | status, schedule, grace, max runtime, ping URL with copy, snippets (crontab line, shell wrapper, Kubernetes CronJob); latest pings with duration, exit code and output (expand to read; cards on phones); pause/resume, edit, delete (confirmed in the page) |
 | New / edit check | `/checks/new`, `/checks/{slug}/edit` | slug, name, cron or period, time zone (from the browser's list), grace, max runtime |
 | Channels | `/channels` | channels with last delivery and last error; add and edit per type (secrets shown masked, kept unless replaced); send test |
 | API keys | `/keys` | keys by name and prefix; a new key is shown once; revoke |
