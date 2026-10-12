@@ -99,6 +99,14 @@ export const en = {
     kinds: { START: "start", SUCCESS: "success", FAIL: "fail", LOG: "log" },
     notFound: "This check does not exist.",
     sameAsGrace: "same as grace",
+    showOutput: "Show output",
+    hideOutput: "Hide output",
+    noOutput: "no output",
+  },
+  due: {
+    missed: (time: string) => `Missed ${time} run`,
+    late: (time: string) => `Late, due ${time}`,
+    next: "next",
   },
   form: {
     newTitle: "New check",

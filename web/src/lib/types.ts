@@ -23,6 +23,8 @@ export interface Check {
   lastStartAt: string | null;
   lastSuccessAt: string | null;
   nextDueAt: string | null;
+  /** When the schedule next expects a run; past nextDueAt for a late or missed run. */
+  nextRunAt: string | null;
   createdAt: string;
 }
 

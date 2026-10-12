@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { PauseIcon, PencilIcon, PlayIcon, Trash2Icon } from "lucide-react";
+import { ChevronRightIcon, PauseIcon, PencilIcon, PlayIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
 import { CodeBlock, CopyButton } from "@/components/copy-button";
+import { NextDue } from "@/components/next-due";
 import { ConfirmBar, ErrorNote, Field, LoadingRows, PageHeader } from "@/components/page";
 import { StatusText } from "@/components/status-text";
 import { Time } from "@/components/time";
@@ -87,7 +88,7 @@ function CheckPage() {
           <Time iso={data.lastSuccessAt} now={now} />
         </Field>
         <Field label={t.check.nextDue}>
-          {data.status === "PAUSED" ? "—" : <Time iso={data.nextDueAt} now={now} />}
+          <NextDue check={data} now={now} />
         </Field>
         <Field label={t.check.created}>
           <Time iso={data.createdAt} now={now} />
@@ -220,65 +221,153 @@ function Pings({ slug, now }: { slug: string; now: number }) {
     );
   }
   return (
-    <div className="overflow-x-auto rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="pl-4">{t.check.pingColumns.time}</TableHead>
-            <TableHead>{t.check.pingColumns.kind}</TableHead>
-            <TableHead className="text-right">{t.check.pingColumns.exit}</TableHead>
-            <TableHead className="text-right">{t.check.pingColumns.duration}</TableHead>
-            <TableHead className="hidden lg:table-cell">{t.check.pingColumns.source}</TableHead>
-            <TableHead className="pr-4">{t.check.pingColumns.body}</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {pings.data.map((ping) => (
-            <PingRow key={ping.id} ping={ping} now={now} />
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+    <>
+      <div className="hidden rounded-md border md:block">
+        <Table className="table-fixed">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-32 pl-4">{t.check.pingColumns.time}</TableHead>
+              <TableHead className="w-20">{t.check.pingColumns.kind}</TableHead>
+              <TableHead className="w-14 text-right">{t.check.pingColumns.exit}</TableHead>
+              <TableHead className="w-24 text-right">{t.check.pingColumns.duration}</TableHead>
+              <TableHead className="hidden w-56 lg:table-cell">
+                {t.check.pingColumns.source}
+              </TableHead>
+              <TableHead className="pr-4">{t.check.pingColumns.body}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {pings.data.map((ping) => (
+              <PingRow key={ping.id} ping={ping} now={now} />
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+      <ul className="divide-y rounded-md border md:hidden">
+        {pings.data.map((ping) => (
+          <PingItem key={ping.id} ping={ping} now={now} />
+        ))}
+      </ul>
+    </>
+  );
+}
+
+/** The last non-empty line of a ping's output: usually the result or the error. */
+function lastLine(body: string) {
+  return body.split("\n").findLast((line) => line.trim()) ?? body;
+}
+
+function OutputToggle({
+  ping,
+  open,
+  onToggle,
+}: {
+  ping: Ping;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  if (!ping.body) return <span className="text-muted-foreground text-xs">{t.check.noOutput}</span>;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      aria-label={open ? t.check.hideOutput : t.check.showOutput}
+      className="flex w-full min-w-0 items-center gap-1.5 text-left font-mono text-muted-foreground text-xs hover:text-foreground"
+    >
+      <ChevronRightIcon
+        aria-hidden
+        className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-90")}
+      />
+      <span className="truncate">{lastLine(ping.body)}</span>
+    </button>
+  );
+}
+
+function Output({ body }: { body: string }) {
+  return (
+    <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded border bg-surface p-3 font-mono text-xs leading-relaxed">
+      {body}
+    </pre>
   );
 }
 
 function PingRow({ ping, now }: { ping: Ping; now: number }) {
+  const [open, setOpen] = useState(false);
   return (
-    <TableRow className="align-top">
-      <TableCell className="pl-4">
-        <Time iso={ping.receivedAt} now={now} />
-      </TableCell>
-      <TableCell>
-        <span className={cn("font-mono text-xs", KIND_TONE[ping.kind])}>
-          {t.check.kinds[ping.kind]}
-        </span>
-      </TableCell>
-      <TableCell
-        className={cn(
-          "text-right font-mono text-xs tabular-nums",
-          ping.kind === "FAIL" && "text-problem",
-        )}
-      >
-        {ping.exitCode ?? ""}
-      </TableCell>
-      <TableCell className="text-right text-xs tabular-nums">
-        {formatDuration(ping.durationMs)}
-      </TableCell>
-      <TableCell className="hidden max-w-56 truncate text-muted-foreground text-xs lg:table-cell">
-        {[ping.remoteAddr, ping.userAgent].filter(Boolean).join(" · ")}
-      </TableCell>
-      <TableCell className="max-w-64 pr-4 sm:max-w-md">
-        {ping.body ? (
-          <details>
-            <summary className="cursor-pointer truncate font-mono text-muted-foreground text-xs">
-              {ping.body.split("\n").findLast((line) => line.trim()) ?? ping.body}
-            </summary>
-            <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-all rounded bg-surface p-2 text-xs">
-              {ping.body}
-            </pre>
-          </details>
-        ) : null}
-      </TableCell>
-    </TableRow>
+    <>
+      <TableRow className={cn(open && "border-b-0")}>
+        <TableCell className="pl-4">
+          <Time iso={ping.receivedAt} now={now} />
+        </TableCell>
+        <TableCell>
+          <span className={cn("font-mono text-xs", KIND_TONE[ping.kind])}>
+            {t.check.kinds[ping.kind]}
+          </span>
+        </TableCell>
+        <TableCell
+          className={cn(
+            "text-right font-mono text-xs tabular-nums",
+            ping.kind === "FAIL" && "text-problem",
+          )}
+        >
+          {ping.exitCode ?? ""}
+        </TableCell>
+        <TableCell className="text-right text-xs tabular-nums">
+          {formatDuration(ping.durationMs)}
+        </TableCell>
+        <TableCell className="hidden truncate text-muted-foreground text-xs lg:table-cell">
+          {source(ping)}
+        </TableCell>
+        <TableCell className="pr-4">
+          <OutputToggle ping={ping} open={open} onToggle={() => setOpen(!open)} />
+        </TableCell>
+      </TableRow>
+      {open && ping.body && (
+        <TableRow className="hover:bg-transparent">
+          <TableCell colSpan={6} className="whitespace-normal px-4 pt-0 pb-3">
+            <Output body={ping.body} />
+          </TableCell>
+        </TableRow>
+      )}
+    </>
   );
+}
+
+/** One ping on a phone: event, exit code, duration and time; output below, on demand. */
+function PingItem({ ping, now }: { ping: Ping; now: number }) {
+  const [open, setOpen] = useState(false);
+  const facts = [
+    ping.exitCode !== null && `${t.check.pingColumns.exit.toLowerCase()} ${ping.exitCode}`,
+    formatDuration(ping.durationMs),
+  ].filter(Boolean);
+  return (
+    <li className="space-y-1.5 px-4 py-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="min-w-0 truncate text-xs">
+          <span className={cn("font-mono", KIND_TONE[ping.kind])}>{t.check.kinds[ping.kind]}</span>
+          {facts.length > 0 && (
+            <span
+              className={cn(
+                "tabular-nums",
+                ping.kind === "FAIL" ? "text-problem" : "text-muted-foreground",
+              )}
+            >
+              {" · "}
+              {facts.join(" · ")}
+            </span>
+          )}
+        </span>
+        <span className="shrink-0 text-muted-foreground text-xs">
+          <Time iso={ping.receivedAt} now={now} />
+        </span>
+      </div>
+      {ping.body && <OutputToggle ping={ping} open={open} onToggle={() => setOpen(!open)} />}
+      {open && ping.body && <Output body={ping.body} />}
+    </li>
+  );
+}
+
+function source(ping: Ping) {
+  return [ping.remoteAddr, ping.userAgent].filter(Boolean).join(" · ");
 }

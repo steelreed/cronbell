@@ -20,6 +20,7 @@ export function aCheck(overrides: Partial<Check> = {}): Check {
     lastStartAt: null,
     lastSuccessAt: "2026-01-04T20:01:00Z",
     nextDueAt: "2026-01-05T20:00:00Z",
+    nextRunAt: "2026-01-05T20:00:00Z",
     createdAt: "2026-01-01T00:00:00Z",
     ...overrides,
   };

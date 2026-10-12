@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { PlusIcon } from "lucide-react";
 import { CodeBlock } from "@/components/copy-button";
+import { NextDue } from "@/components/next-due";
 import { ErrorNote, LoadingRows, PageHeader } from "@/components/page";
 import { StatusText } from "@/components/status-text";
 import { Time } from "@/components/time";
@@ -154,11 +155,7 @@ function ChecksPage() {
                       <Time iso={check.lastPingAt} now={now} />
                     </TableCell>
                     <TableCell className="pr-4">
-                      {check.status === "PAUSED" ? (
-                        <span className="text-muted-foreground">—</span>
-                      ) : (
-                        <Time iso={check.nextDueAt} now={now} />
-                      )}
+                      <NextDue check={check} now={now} />
                     </TableCell>
                   </TableRow>
                 ))}

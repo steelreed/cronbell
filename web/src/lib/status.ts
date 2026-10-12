@@ -40,3 +40,27 @@ export function statusView(
 
 /** Order for the list: problems first. */
 export const STATUS_ORDER: Record<CheckStatus, number> = { DOWN: 0, NEW: 1, UP: 2, PAUSED: 3 };
+
+export type DueView =
+  | { kind: "none" }
+  | { kind: "upcoming"; at: string }
+  | { kind: "overdue"; missed: boolean; at: string; next: string | null };
+
+/**
+ * What to show as "next due". Once the due time has passed it is not "due 3 min ago": a DOWN
+ * MISSED check names the run it missed, anything else is late; both add the next run the
+ * schedule expects, when the server knows one (nextRunAt).
+ */
+export function dueView(
+  check: Pick<Check, "status" | "downReason" | "nextDueAt" | "nextRunAt">,
+  now: number = Date.now(),
+): DueView {
+  if (check.status === "PAUSED" || !check.nextDueAt) return { kind: "none" };
+  if (Date.parse(check.nextDueAt) >= now) return { kind: "upcoming", at: check.nextDueAt };
+  return {
+    kind: "overdue",
+    missed: check.status === "DOWN" && check.downReason === "MISSED",
+    at: check.nextDueAt,
+    next: check.nextRunAt,
+  };
+}
