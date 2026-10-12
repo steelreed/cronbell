@@ -20,7 +20,7 @@ Each direct sub-package of `com.steelreed.cronbell.server` is a module:
 | Checks | `checks` | Checks and their schedules (cron with time zones, periods), the state machine (DESIGN.md §3, §4), the detector, `CheckEvent` |
 | Pings | `pings` | The `/ping` endpoint (Healthchecks.io compatible), its rate limit, ping storage, the recent pings of a check |
 | Alerts | `alerts` | Channels (email, Telegram, Slack, webhooks), the delivery outbox, the dispatcher and retries, message rendering per channel type |
-| Accounts | `accounts` | Accounts and setup, projects and memberships, API keys, sessions, the security filter chain |
+| Accounts | `accounts` | Accounts and setup, projects, members and roles, invites, API keys, sessions and the current project, the security filter chain |
 | History | `history` | Daily pruning of old pings and finished deliveries |
 | Shared | `shared` | Database support and web plumbing that every module uses and that depends on no module |
 
@@ -87,7 +87,7 @@ Public APIs per module:
 
 | Module | API |
 |---|---|
-| Checks | `Check`, `CheckState`, `CheckStatus`, `DownReason`, `PingKind`, `ScheduleKind`, `CheckEvent`, `CheckNotFoundException`, `CheckService` |
+| Checks | `Check`, `CheckState`, `CheckStatus`, `DownReason`, `PingKind`, `ScheduleKind`, `CheckEvent`, `CheckNotFoundException`, `CheckLimitReachedException`, `CheckService` |
 | Pings | `Ping`, `PingHistory` |
 | Alerts | `DeliveryHistory` |
 | Accounts | `ProjectPrincipal` |
@@ -140,6 +140,25 @@ Once a day (and a minute after start) `history.internal.HistoryPruner` takes the
 lease in `job_locks`, then deletes in batches through `PingHistory.deleteBefore` and
 `DeliveryHistory.deleteFinishedBefore`, renewing the lease between batches.
 
+### A request to the management API: whose project, which role
+
+Every controller acts for the `ProjectPrincipal` of the request and passes its `projectId` into
+each query, so a slug or id of another project is simply not found. The principal comes from one
+of two filters in `accounts.internal.security`:
+
+1. `ApiKeyAuthenticationFilter`: a bearer key resolves to its project (authority `PROJECT`).
+2. A browser session holds the principal `SessionSignIn` stored at sign-in, with the session's
+   current project. `AccountSessionFilter` reads the account and its membership of that project
+   again on every request (one query): it signs out a session older than the account's session
+   version (raised by a password change) and grants `ACCOUNT`, plus `PROJECT`, `MEMBER` and
+   `OWNER` from the current membership and `ADMIN` for the instance admin. A removed member
+   therefore loses access on the next request.
+
+`SecurityConfig` then decides by path: project endpoints need `PROJECT`, key management and
+member invites `OWNER`, members `MEMBER`, project invites `ADMIN`, the account's own endpoints
+`ACCOUNT` (DESIGN.md §6, Roles). Invites are accepted in one transaction that claims the invite
+row with a conditional update, so concurrent accepts of one link have one winner.
+
 ### Events and listeners
 
 `CheckEvent` is the only event between modules. Its listeners are plain
@@ -162,7 +181,7 @@ its API, never its tables.
 
 | Module | Tables |
 |---|---|
-| Accounts | `projects`, `api_keys` (SHA-256 hashes), `accounts`, `project_members` |
+| Accounts | `projects`, `api_keys` and `invites` (SHA-256 hashes of keys and tokens), `accounts`, `project_members` |
 | Checks | `checks` (definition and current state: status, last ping, next due, open run) |
 | Pings | `pings` |
 | Alerts | `channels` (config as JSON), `deliveries` (the outbox; the alert as a JSON payload) |

@@ -10,6 +10,7 @@ API: the check model, `c.s.c.s.c.CheckEvent` and `c.s.c.s.c.CheckService`.
 |_Controllers_
 
 * `c.s.c.s.c.web.ChecksController` -- Management API for checks (DESIGN.md §6). Scoped to the project of the API key.
+* `c.s.c.s.c.web.SchedulesController` -- Previews a cron schedule before a check is saved (DESIGN.md §6): the next runs, computed by the same code as the detector, so the form shows exactly what the server will expect.
 
 _Services_
 
@@ -23,11 +24,16 @@ _Event listeners_
 
 * `c.s.c.s.c.internal.CheckEventLogger` -- Logs status changes once committed. The notifier listens too (notify.AlertOutbox).
 
+_Configuration properties_
+
+* `c.s.c.s.c.internal.ChecksProperties` -- Check settings (`cronbell.checks.*`, DESIGN.md §6, Projects and invites).
+
 _Others_
 
 * `c.s.c.s.c.internal.Detector` -- Marks UP checks DOWN when a run is missed or runs too long (DESIGN.md §4). Runs every 15 s by default (`cronbell.detector.interval`).  
 +
 Each batch is claimed and updated in one transaction. On PostgreSQL the claim uses `FOR UPDATE SKIP LOCKED`, so several instances can run the detector at once without double-processing a check.
+* `c.s.c.s.c.web.ChecksExceptionHandler` -- Errors only the checks API raises, as RFC 9457 problem details.
 |Bean references
 |* `c.s.c.s.s.database.Database` (in Shared) -- Which database we run on, and the SQL that differs between them.
 |Events listened to

@@ -25,12 +25,12 @@ System_Boundary("Cronbell_boundary", "Cronbell", $tags="") {
 
 }
 
-Rel(Cronbell.Cronbell.Pings, Cronbell.Cronbell.Shared, "depends on", $techn="", $tags="", $link="")
-Rel(Cronbell.Cronbell.Alerts, Cronbell.Cronbell.Pings, "uses", $techn="", $tags="", $link="")
-Rel(Cronbell.Cronbell.Alerts, Cronbell.Cronbell.Shared, "uses", $techn="", $tags="", $link="")
 Rel(Cronbell.Cronbell.History, Cronbell.Cronbell.Pings, "uses", $techn="", $tags="", $link="")
 Rel(Cronbell.Cronbell.History, Cronbell.Cronbell.Alerts, "uses", $techn="", $tags="", $link="")
 Rel(Cronbell.Cronbell.History, Cronbell.Cronbell.Shared, "uses", $techn="", $tags="", $link="")
+Rel(Cronbell.Cronbell.Alerts, Cronbell.Cronbell.Pings, "uses", $techn="", $tags="", $link="")
+Rel(Cronbell.Cronbell.Alerts, Cronbell.Cronbell.Shared, "uses", $techn="", $tags="", $link="")
+Rel(Cronbell.Cronbell.Pings, Cronbell.Cronbell.Shared, "depends on", $techn="", $tags="", $link="")
 
 SHOW_LEGEND(true)
 hide stereotypes

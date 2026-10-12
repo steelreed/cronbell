@@ -24,9 +24,9 @@ System_Boundary("Cronbell_boundary", "Cronbell", $tags="") {
 
 }
 
-Rel(Cronbell.Cronbell.Accounts, Cronbell.Cronbell.Shared, "depends on", $techn="", $tags="", $link="")
 Rel(Cronbell.Cronbell.Checks, Cronbell.Cronbell.Accounts, "depends on", $techn="", $tags="", $link="")
 Rel(Cronbell.Cronbell.Checks, Cronbell.Cronbell.Shared, "uses", $techn="", $tags="", $link="")
+Rel(Cronbell.Cronbell.Accounts, Cronbell.Cronbell.Shared, "uses", $techn="", $tags="", $link="")
 
 SHOW_LEGEND(true)
 hide stereotypes
