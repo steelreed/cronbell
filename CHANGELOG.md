@@ -38,6 +38,9 @@ All notable changes to Cronbell are listed here. The format follows
 - History retention: pings and finished alert deliveries older than `CRONBELL_HISTORY_RETENTION`
   (default 90 days) are pruned daily in batches; each check keeps its latest ping, its latest log
   and the pings of a run in progress. Several PostgreSQL instances take turns through a lease.
+- API: `GET /api/v1/runs/recent` (latest finished runs per check), `GET /api/v1/stats/daily`
+  (runs and failures per day in a given time zone) and `GET /api/v1/schedules/next` (preview of a
+  cron schedule's next runs).
 
 ### Changed
 

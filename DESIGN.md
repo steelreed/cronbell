@@ -175,6 +175,9 @@ POST   /api/v1/channels/{id}/test     sends a test message now (200, or 502 with
 GET    /api/v1/keys                   API keys of the project: id, name, prefix, createdAt (session only)
 POST   /api/v1/keys                   {"name"} -> 201 with the key, shown this once (session only)
 DELETE /api/v1/keys/{id}              204, the key stops working at once (session only)
+GET    /api/v1/runs/recent            latest finished runs per check: {slug: [{at, ok, exitCode}]}, oldest first (?limit=, default 20, at most 90)
+GET    /api/v1/stats/daily            finished runs and failures per day: [{date, runs, failures}], oldest first (?days=, default 14, at most 90; ?tz=, default UTC)
+GET    /api/v1/schedules/next         next runs of a cron expression: {cron, timeZone, runs} (?cron=, ?timeZone=, default UTC; ?count=, default 5, at most 10)
 ```
 
 A check has its definition, `status`, `downReason`, `lastPingAt`, `lastStartAt`, `lastSuccessAt`,
@@ -187,6 +190,17 @@ dashboard shows a missed run as "Missed 02:00 run" with the next run, not as "du
 A ping in the list has `kind`, `exitCode`, `rid`, `body`, `receivedAt`, `remoteAddr`, `userAgent`,
 and for a `success`/`fail` that closes a `start` seen in the same list, `durationMs` (matched by
 `rid`, else the latest open `start`).
+
+Runs and daily stats feed the dashboard's run bars and overview. A finished run is a `success`
+or `fail` ping, so both only cover what pings recorded: a missed run leaves no ping and is not
+counted (the check's `status` and `downReason` say when the latest run was missed), and history
+older than the retention (§9) is gone. `runs/recent` reads the latest pings of each check through
+the `(check_id, received_at)` index, one short query per check. `stats/daily` cuts days at
+midnight in `tz` (the browser's zone), so a day can be 23 or 25 hours long around a DST change, and
+counts them in one statement. Status changes (DOWN, recovered) are not stored apart from the alert
+outbox, so there is no incident history yet. `schedules/next` lets the check form preview a cron
+schedule with the detector's own code (DST rules included); it returns `400` for an invalid
+expression or zone, or one that never fires (30 February).
 
 API keys can read and change checks and channels but cannot manage keys: a leaked key cannot mint
 new ones or revoke the owner's. Key management needs a signed-in session.
