@@ -39,7 +39,13 @@ export function RunsPanel({ check, runs }: { check: Check; runs: Run[] }) {
 
 function Durations({ check, runs }: { check: Check; runs: Run[] }) {
   const timed = runs.filter((run) => run.durationMs !== null).slice(-DURATION_RUNS);
-  const limitMs = check.maxRuntimeSeconds !== null ? check.maxRuntimeSeconds * 1000 : null;
+  const longest = Math.max(0, ...timed.map((run) => run.durationMs ?? 0));
+  // The max runtime line is drawn only when it is near the runs; an hour-long limit over
+  // 30-second runs would flatten every bar.
+  const limitMs =
+    check.maxRuntimeSeconds !== null && check.maxRuntimeSeconds * 1000 <= longest * 2
+      ? check.maxRuntimeSeconds * 1000
+      : null;
   return (
     <div className="mt-6 border-t pt-4">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
