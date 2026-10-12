@@ -1,4 +1,4 @@
-package com.steelreed.cronbell.server.security;
+package com.steelreed.cronbell.server.accounts.internal.security;
 
 import java.util.function.Supplier;
 

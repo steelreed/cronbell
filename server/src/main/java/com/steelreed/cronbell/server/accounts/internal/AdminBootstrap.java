@@ -1,4 +1,4 @@
-package com.steelreed.cronbell.server.account;
+package com.steelreed.cronbell.server.accounts.internal;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

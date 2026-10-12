@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import com.steelreed.cronbell.server.accounts.ProjectPrincipal;
 import com.steelreed.cronbell.server.check.Check;
 import com.steelreed.cronbell.server.check.CheckService;
 import com.steelreed.cronbell.server.check.CheckStatus;
@@ -15,7 +16,6 @@ import com.steelreed.cronbell.server.check.PingKind;
 import com.steelreed.cronbell.server.check.ScheduleKind;
 import com.steelreed.cronbell.server.ping.Ping;
 import com.steelreed.cronbell.server.ping.PingRepository;
-import com.steelreed.cronbell.server.security.ProjectPrincipal;
 import com.steelreed.cronbell.server.shared.web.ManagementApi;
 
 import org.springframework.http.HttpStatus;

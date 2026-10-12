@@ -1,9 +1,10 @@
-package com.steelreed.cronbell.server.security;
+package com.steelreed.cronbell.server.accounts.internal.security;
 
 import java.io.IOException;
 import java.util.List;
 
-import com.steelreed.cronbell.server.project.ProjectService;
+import com.steelreed.cronbell.server.accounts.ProjectPrincipal;
+import com.steelreed.cronbell.server.accounts.internal.ProjectService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

@@ -1,6 +1,6 @@
-package com.steelreed.cronbell.server.api;
+package com.steelreed.cronbell.server.accounts.web;
 
-import com.steelreed.cronbell.server.account.SetupAlreadyDoneException;
+import com.steelreed.cronbell.server.accounts.internal.SetupAlreadyDoneException;
 import com.steelreed.cronbell.server.shared.web.ManagementApi;
 
 import org.springframework.http.HttpHeaders;

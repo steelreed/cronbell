@@ -1,10 +1,10 @@
-package com.steelreed.cronbell.server.api;
+package com.steelreed.cronbell.server.accounts.web;
 
 import java.time.Instant;
 import java.util.List;
 
-import com.steelreed.cronbell.server.project.ProjectService;
-import com.steelreed.cronbell.server.security.ProjectPrincipal;
+import com.steelreed.cronbell.server.accounts.ProjectPrincipal;
+import com.steelreed.cronbell.server.accounts.internal.ProjectService;
 import com.steelreed.cronbell.server.shared.web.ManagementApi;
 import com.steelreed.cronbell.server.shared.web.NotFoundException;
 

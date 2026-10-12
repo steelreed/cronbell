@@ -1,4 +1,4 @@
-package com.steelreed.cronbell.server.account;
+package com.steelreed.cronbell.server.accounts.internal;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -7,7 +7,6 @@ import java.util.Optional;
 import java.util.regex.Pattern;
 
 import com.steelreed.cronbell.server.shared.database.Ids;
-import com.steelreed.cronbell.server.project.ProjectService;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;

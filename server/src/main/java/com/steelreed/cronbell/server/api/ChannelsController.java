@@ -5,12 +5,12 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+import com.steelreed.cronbell.server.accounts.ProjectPrincipal;
 import com.steelreed.cronbell.server.notify.Channel;
 import com.steelreed.cronbell.server.notify.ChannelConfigs;
 import com.steelreed.cronbell.server.notify.ChannelService;
 import com.steelreed.cronbell.server.notify.DeliveryException;
 import com.steelreed.cronbell.server.notify.DeliveryRepository;
-import com.steelreed.cronbell.server.security.ProjectPrincipal;
 import com.steelreed.cronbell.server.shared.web.ManagementApi;
 
 import org.springframework.http.ResponseEntity;

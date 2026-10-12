@@ -1,4 +1,4 @@
-package com.steelreed.cronbell.server.api;
+package com.steelreed.cronbell.server.accounts.web;
 
 import java.time.Duration;
 

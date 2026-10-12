@@ -1,11 +1,11 @@
-package com.steelreed.cronbell.server.api;
+package com.steelreed.cronbell.server.accounts.web;
 
-import com.steelreed.cronbell.server.account.Account;
-import com.steelreed.cronbell.server.account.AccountService;
-import com.steelreed.cronbell.server.project.ProjectService;
-import com.steelreed.cronbell.server.security.LoginRateLimiter;
-import com.steelreed.cronbell.server.security.ProjectPrincipal;
-import com.steelreed.cronbell.server.security.SessionSignIn;
+import com.steelreed.cronbell.server.accounts.ProjectPrincipal;
+import com.steelreed.cronbell.server.accounts.internal.Account;
+import com.steelreed.cronbell.server.accounts.internal.AccountService;
+import com.steelreed.cronbell.server.accounts.internal.ProjectService;
+import com.steelreed.cronbell.server.accounts.internal.security.LoginRateLimiter;
+import com.steelreed.cronbell.server.accounts.internal.security.SessionSignIn;
 import com.steelreed.cronbell.server.shared.web.ManagementApi;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;

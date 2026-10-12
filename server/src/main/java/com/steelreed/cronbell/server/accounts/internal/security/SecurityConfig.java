@@ -1,8 +1,8 @@
-package com.steelreed.cronbell.server.security;
+package com.steelreed.cronbell.server.accounts.internal.security;
 
 import java.util.Set;
 
-import com.steelreed.cronbell.server.project.ProjectService;
+import com.steelreed.cronbell.server.accounts.internal.ProjectService;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

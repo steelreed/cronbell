@@ -1,5 +1,6 @@
 package com.steelreed.cronbell.server;
 
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
@@ -12,15 +13,13 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.net.http.HttpResponse;
 
 import com.icegreen.greenmail.util.GreenMail;
 import com.icegreen.greenmail.util.ServerSetupTest;
 import com.jayway.jsonpath.JsonPath;
-import jakarta.mail.Message;
-import jakarta.mail.internet.MimeMessage;
-import com.steelreed.cronbell.server.account.AccountService;
-import com.steelreed.cronbell.server.account.AdminBootstrap;
+import com.steelreed.cronbell.server.accounts.internal.AccountService;
+import com.steelreed.cronbell.server.accounts.internal.AdminBootstrap;
+import com.steelreed.cronbell.server.accounts.internal.ProjectService;
 import com.steelreed.cronbell.server.check.CheckEvent;
 import com.steelreed.cronbell.server.check.Detector;
 import com.steelreed.cronbell.server.history.HistoryPruner;
@@ -29,13 +28,14 @@ import com.steelreed.cronbell.server.notify.ChannelRepository;
 import com.steelreed.cronbell.server.notify.ChannelType;
 import com.steelreed.cronbell.server.notify.DeliveryDispatcher;
 import com.steelreed.cronbell.server.notify.WebhookSigner;
-import com.steelreed.cronbell.server.project.ProjectService;
+import jakarta.mail.Message;
+import jakarta.mail.internet.MimeMessage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;

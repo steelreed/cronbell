@@ -1,4 +1,4 @@
-package com.steelreed.cronbell.server.account;
+package com.steelreed.cronbell.server.accounts.internal;
 
 import java.time.Instant;
 
