@@ -71,6 +71,7 @@ To run locally against PostgreSQL in a container, start `TestCronbellApplication
 | `CRONBELL_SMTP_PASSWORD` | unset | SMTP password. Never logged. |
 | `CRONBELL_SMTP_FROM` | the username, if it is an address | Sender address of alert emails, e.g. `Cronbell <cronbell@example.com>`. |
 | `CRONBELL_SMTP_STARTTLS` | `true` | Require STARTTLS on ports other than 465. Set `false` only for a local relay. |
+| `CRONBELL_HISTORY_RETENTION` | `90d` | How long pings and sent or failed alert deliveries are kept: `30d`, `365d` or ISO `P30D`. Zero or negative stops the server at startup. See [History](#history). |
 | `SERVER_PORT` | `8080` | HTTP port. |
 
 Any Spring Boot property works too, for example `SPRING_DATASOURCE_URL`, which wins over
@@ -81,6 +82,7 @@ Any Spring Boot property works too, for example `SPRING_DATASOURCE_URL`, which w
 | `cronbell.detector.interval` | `PT15S` | How often the detector looks for missed and too-long runs. |
 | `cronbell.ping.rate-limit-per-second` | `5` | Pings per second per check, per server instance. |
 | `cronbell.scheduling.enabled` | `true` | Turns the detector and the notifier's timer off (tests drive them by hand). |
+| `cronbell.history.batch-size` | `5000` | Rows the daily pruning deletes per statement (one short transaction each). |
 | `cronbell.notifier.interval` | `PT5S` | How often the notifier looks for alerts to send or retry. |
 | `cronbell.notifier.connect-timeout` | `PT5S` | Connect timeout for Slack, Telegram, webhooks and SMTP. |
 | `cronbell.notifier.read-timeout` | `PT10S` | Read timeout for the same. |
@@ -98,6 +100,30 @@ instance only. The ping rate limit is in memory, so it applies per instance.
 The same Flyway migrations (`src/main/resources/db/migration`) run on both databases. Keep them
 portable: `VARCHAR`, `TEXT`, `INTEGER`, `BIGINT` only, ids as UUIDv7 strings made by the server,
 times as epoch milliseconds.
+
+## History
+
+Once a day, and a minute after start, the server deletes pings older than
+`CRONBELL_HISTORY_RETENTION` and alert deliveries that were sent or gave up before then, in
+batches of 5,000 rows, and logs one line with the counts. Pending deliveries are never deleted.
+Each check keeps its latest ping, its latest ping with a body (the log shown in DOWN alerts) and
+the pings of a run still in progress, however old. A check's state (status, last ping, last
+success, next due) is stored on the check itself, so pruning never changes it. With PostgreSQL and
+several instances, one instance at a time does the work (a lease row in `job_locks`).
+
+Database size is mostly pings. A ping without a body takes about 300 bytes with its indexes; a
+body adds its size (up to 10 KB). Per check, roughly:
+
+| Job | Pings kept (90 days) | Size, no body | Size, 2 KB log on finish |
+|---|---|---|---|
+| hourly, `start` + finish | 4,320 | ~1.3 MB | ~5.6 MB |
+| every 5 minutes, finish only | 25,920 | ~8 MB | ~60 MB |
+| daily, `start` + finish | 180 | ~55 KB | ~0.25 MB |
+
+On SQLite the deleted space is reused for new pings, so the file stops growing once the retention
+window is full, but it does not shrink. To give the space back to the disk, stop the server and run
+`sqlite3 data/cronbell.db VACUUM` (it rewrites the whole file; the server does not do it by itself).
+PostgreSQL reuses the space through autovacuum.
 
 ## Try it
 
@@ -141,4 +167,5 @@ tokens, webhook URLs and secrets) are returned masked. Webhook receivers can che
 | `account` | Accounts, passwords, first-run setup and `CRONBELL_ADMIN_*` |
 | `security` | Bearer API keys, browser sessions, CSRF, sign-in backoff |
 | `web` | Serves the dashboard and its client-side routes |
-| `db` | Database detection, SQLite settings, `CRONBELL_DATABASE_URL` |
+| `history` | Daily pruning of old pings and deliveries |
+| `db` | Database detection, SQLite settings, `CRONBELL_DATABASE_URL`, job leases |
