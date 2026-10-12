@@ -45,7 +45,9 @@ docker run -d -p 8080:8080 -v cronbell-data:/data ghcr.io/steelreed/cronbell
 (The image is published with the first release. Until then, build it from this repository:
 `make docker`.)
 
-See [`server/README.md`](server/README.md) for configuration.
+For a server with your own domain and HTTPS (Docker Compose with Caddy, backups, upgrades), follow
+[`docs/self-hosting.md`](docs/self-hosting.md). See [`server/README.md`](server/README.md) for
+every setting.
 
 ## Repository layout
 
