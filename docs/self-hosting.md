@@ -196,6 +196,30 @@ docker compose up -d
 Everyone is signed out (sessions live in memory) and the checks, pings, channels and API keys are
 as they were at the backup.
 
+## Invite people
+
+There is no sign-up page: everyone else comes in through a single-use invite link that you copy
+and send yourself (Cronbell does not email it). Links are valid for 7 days
+(`CRONBELL_INVITE_TTL`, for example `CRONBELL_INVITE_TTL=14d` in `.env`) and can be deleted
+before they are used.
+
+- **Someone with a project of their own** (a tester, another team): as the admin, open
+  **Invites**, choose **Create invite**, add a note such as "Lan, beta tester", and copy the link.
+  Whoever opens it picks an email, a password and a project name, and gets an empty project with
+  its own checks, alert channels and API keys (they create a key on their API keys page). You do
+  not see their project, and they do not see yours. The Invites page shows when a link was
+  accepted, by whom.
+- **Someone in your project**: open **Members**, choose **Invite member** and copy the link. The
+  person joins your current project as a member: they can manage checks and alert channels and
+  see the API keys, but only owners create or revoke keys and manage members and invites. Remove a
+  member (or leave a project) from the same page; the account itself stays.
+
+Someone who already has an account opens the link while signed in and accepts with one click; the
+project then appears in the project switcher at the top of the sidebar. Everyone can change their
+password on the **Account** page, which signs out their other sessions.
+
+On a shared instance, `CRONBELL_PROJECT_MAX_CHECKS=20` limits each project to 20 checks.
+
 ## Upgrade
 
 Back up, then pull the new image and recreate the container:

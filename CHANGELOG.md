@@ -6,6 +6,27 @@ All notable changes to Cronbell are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Invites instead of open registration. The setup account is the instance admin (existing
+  databases are migrated) and makes single-use project invite links that give a new account a
+  project of its own; project owners make member invite links to theirs. Links last
+  `CRONBELL_INVITE_TTL` (default 7 days), are stored only as hashes, can be deleted, and are
+  accepted atomically, with a new account or the signed-in one.
+- Several projects per account: the session has a current project, switched in the sidebar
+  (`POST /api/v1/session/project`); `GET /api/v1/session` lists the projects with the role, and
+  `GET /api/v1/projects` too. Every project is isolated from the others.
+- Roles: owners manage members, member invites and API keys; members manage checks and alert
+  channels and see the keys. `GET`/`DELETE /api/v1/members`, `/api/v1/invites`,
+  `/api/v1/admin/invites`, `GET /api/v1/invites/{token}` and `POST /api/v1/invites/{token}/accept`.
+  Removed members lose access at once.
+- `POST /api/v1/account/password` changes the password and signs out the account's other
+  sessions.
+- `CRONBELL_PROJECT_MAX_CHECKS` caps the checks of each project (403 beyond it), for hosted
+  instances.
+- Dashboard: the invite page, a project switcher, and Members, Invites (instance admin) and Account
+  pages. API keys are read-only for members.
+
 ## [0.1.0-beta.1] - 2026-10-12
 
 ### Added

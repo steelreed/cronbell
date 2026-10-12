@@ -33,7 +33,16 @@ Only a hash of the key is stored. To choose the key yourself (Docker, automation
 The dashboard needs an account. On first start, with no account yet, either set
 `CRONBELL_ADMIN_EMAIL` and `CRONBELL_ADMIN_PASSWORD` (8 to 128 characters) and the server creates
 it, or open the dashboard and fill in the one-time setup page. Setup is accepted only while no
-account exists; afterwards `POST /api/v1/setup` answers `409`. The admin owns the `Default` project.
+account exists; afterwards `POST /api/v1/setup` answers `409`. The admin owns the `Default` project
+and is the instance admin.
+
+There is no open registration. Other people get in through single-use invite links: the instance
+admin's **project invites** give someone an account and a project of their own (the admin gets no
+access to it), and an owner's **member invites** add someone to that owner's project as a member.
+Links are made on the dashboard's Invites and Members pages, last `CRONBELL_INVITE_TTL` (7 days) and
+are not emailed: copy the link and send it. An account can be in several projects and switches
+between them in the sidebar. Roles: owners manage members, invites and API keys; members manage
+checks and alert channels and see the keys. See DESIGN.md §6 (Roles, Projects and invites).
 
 The browser signs in with a session cookie (`cronbell_session`: `HttpOnly`, `SameSite=Lax`,
 `Secure` over HTTPS). Changes made with the cookie need the `X-XSRF-TOKEN` header carrying the
@@ -48,8 +57,10 @@ the proxy is the only way in, since the server then trusts `X-Forwarded-*` from 
 API keys are managed on the dashboard's API keys page (or `/api/v1/keys` with a session); a new key
 is shown once. Keys cannot manage keys.
 
-There is no password reset yet: stop the server, delete the row from `accounts`, and run setup
-again.
+Passwords are changed on the dashboard's Account page, which signs out the account's other
+sessions. There is no reset of a forgotten password yet: invite the person again with another
+email, or, on an instance with only the admin account, stop the server, delete the row from
+`accounts`, and run setup again.
 
 To run locally against PostgreSQL in a container, start `TestCronbellApplication` from
 `src/test/java`.
@@ -64,6 +75,8 @@ To run locally against PostgreSQL in a container, start `TestCronbellApplication
 | `CRONBELL_ADMIN_EMAIL` | unset | Admin account created on first start when no account exists. Set with the password, or use the setup page. |
 | `CRONBELL_ADMIN_PASSWORD` | unset | Its password, 8 to 128 characters. Only its hash is stored. |
 | `CRONBELL_SESSION_TIMEOUT` | `7d` | Idle time after which a dashboard session ends. |
+| `CRONBELL_INVITE_TTL` | `7d` | How long an invite link stays valid (`48h`, `14d`, ISO `P7D`). Zero or negative stops the server at startup. |
+| `CRONBELL_PROJECT_MAX_CHECKS` | unset | Most checks per project, for hosted instances. Creating one more is `403`; unset means no limit. |
 | `CRONBELL_BASE_URL` | unset | Public address of the server, e.g. `https://cronbell.example.com`. Alerts link to `<base>/checks/<slug>`; unset, they carry no link. |
 | `CRONBELL_SMTP_HOST` | unset | SMTP server for email channels. Without it (and a sender address) email channels cannot be created. |
 | `CRONBELL_SMTP_PORT` | `587` | SMTP port. `465` uses implicit TLS (SMTPS). |
@@ -165,6 +178,6 @@ with a small public API, an `internal` package and a `web` package for its contr
 | `checks` | Checks, cron (5- or 6-field, time zones, DST) and period schedules, the state machine, the detector, status-change events, `/api/v1/checks` |
 | `pings` | Ping endpoint, rate limiter, ping storage, `/api/v1/checks/{slug}/pings` |
 | `alerts` | Alert channels, message rendering, the delivery outbox and its sender, `/api/v1/channels` |
-| `accounts` | Accounts, first-run setup and `CRONBELL_ADMIN_*`, projects, API keys, bearer keys, browser sessions, CSRF, sign-in backoff, `/api/v1/keys`, `/session`, `/setup` |
+| `accounts` | Accounts, first-run setup and `CRONBELL_ADMIN_*`, projects, members and roles, invites, API keys, bearer keys, browser sessions and the current project, CSRF, sign-in backoff, `/api/v1/keys`, `/session`, `/setup`, `/projects`, `/members`, `/invites`, `/admin/invites`, `/account` |
 | `history` | Daily pruning of old pings and deliveries |
 | `shared` | Database detection, SQLite settings, `CRONBELL_DATABASE_URL`, job leases, API error handling, serving the dashboard |
