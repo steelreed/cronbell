@@ -20,8 +20,9 @@ make docker     # image ghcr.io/steelreed/cronbell:dev (web bundled into the ser
 ```
 
 `make test` must pass before every commit. CI (`.github/workflows/ci.yml`) runs the same plus an
-image build and a DCO check; commit with `git commit -s`. `release.yml` publishes the image when
-the maintainer pushes a `v*` tag: never create tags yourself.
+image build and a DCO check; commit with `git commit -s`. `release.yml` publishes the image and the
+GitHub Release when the maintainer pushes a `v*` tag, and `deploy.yml` upgrades the beta server;
+the steps are in `RELEASING.md`. Never create tags, releases or deploys yourself.
 
 ## Conventions
 
