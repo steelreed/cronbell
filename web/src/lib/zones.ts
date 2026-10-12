@@ -39,6 +39,13 @@ export function canonicalZone(zone: string): string {
   return renamed && isValidZone(renamed) ? renamed : zone;
 }
 
+/** A human label next to zone ids that do not say where they are. */
+export const ZONE_LABELS: Readonly<Record<string, string>> = {
+  "Asia/Ho_Chi_Minh": "Vietnam",
+  "Asia/Kolkata": "India",
+  UTC: "Coordinated Universal Time",
+};
+
 export function isValidZone(zone: string): boolean {
   try {
     new Intl.DateTimeFormat("en-US", { timeZone: zone });

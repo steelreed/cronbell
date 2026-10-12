@@ -7,17 +7,27 @@ export function FormField({
   label,
   hint,
   error,
+  required,
   children,
 }: {
   id: string;
   label: string;
   hint?: ReactNode;
   error?: string;
+  /** Marks the field as required: a red asterisk, as the few required fields in a form. */
+  required?: boolean;
   children: ReactNode;
 }) {
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
+      <Label htmlFor={id}>
+        {label}
+        {required && (
+          <span aria-hidden className="text-problem">
+            *
+          </span>
+        )}
+      </Label>
       {children}
       {error ? (
         <p id={`${id}-error`} className="text-problem text-xs">

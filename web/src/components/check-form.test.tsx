@@ -41,22 +41,22 @@ describe("CheckForm", () => {
   it("shows errors instead of submitting an invalid check", async () => {
     const user = userEvent.setup();
     const onSubmit = renderForm();
-    await user.type(screen.getByLabelText("Slug"), "bad slug!");
+    await user.type(screen.getByLabelText(/^Slug/), "bad slug!");
     const cron = screen.getByLabelText("Cron");
     await user.clear(cron);
     await user.type(cron, "every night");
     await user.click(screen.getByRole("button", { name: "Create check" }));
     expect(onSubmit).not.toHaveBeenCalled();
-    expect(screen.getByText(/Use 1-128 letters/)).toBeInTheDocument();
+    expect(screen.getByText(/Enter a slug/)).toBeInTheDocument();
     expect(screen.getByText(/5 or 6 fields/)).toBeInTheDocument();
-    expect(screen.getByLabelText("Slug")).toHaveAttribute("aria-invalid", "true");
-    expect(screen.getByLabelText("Slug")).toHaveFocus();
+    expect(screen.getByLabelText(/^Slug/)).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText(/^Slug/)).toHaveFocus();
   });
 
   it("submits a period schedule in seconds with the picked zone", async () => {
     const user = userEvent.setup();
     const onSubmit = renderForm();
-    await user.type(screen.getByLabelText("Slug"), "queue-worker");
+    await user.type(screen.getByLabelText(/^Slug/), "queue-worker");
     await user.click(screen.getByRole("radio", { name: "Every" }));
     const period = screen.getByLabelText("Every");
     await user.clear(period);
@@ -74,10 +74,28 @@ describe("CheckForm", () => {
     });
   });
 
+  it("makes the slug from the name until the slug is edited", async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await user.type(screen.getByLabelText("Name"), "Nightly DB backup");
+    expect(screen.getByLabelText(/^Slug/)).toHaveValue("nightly-db-backup");
+    await user.clear(screen.getByLabelText(/^Slug/));
+    await user.type(screen.getByLabelText(/^Slug/), "db-backup");
+    await user.type(screen.getByLabelText("Name"), " v2");
+    expect(screen.getByLabelText(/^Slug/)).toHaveValue("db-backup");
+    expect(screen.getByLabelText(/^Slug/)).toBeRequired();
+  });
+
+  it("shows a legacy zone of an existing check under its current name", () => {
+    renderForm({ check: aCheck({ timeZone: "Asia/Saigon" }) });
+    expect(screen.getByLabelText("Time zone")).toHaveTextContent("Asia/Ho_Chi_Minh");
+    expect(screen.getByLabelText("Time zone")).toHaveTextContent("Vietnam");
+  });
+
   it("keeps the slug of an existing check", () => {
     renderForm({ check: aCheck({ maxRuntimeSeconds: 600 }) });
-    expect(screen.getByLabelText("Slug")).toBeDisabled();
-    expect(screen.getByLabelText("Slug")).toHaveValue("nightly-backup");
+    expect(screen.getByLabelText(/^Slug/)).toBeDisabled();
+    expect(screen.getByLabelText(/^Slug/)).toHaveValue("nightly-backup");
     expect(screen.getByLabelText("Max runtime")).toHaveValue(10);
   });
 

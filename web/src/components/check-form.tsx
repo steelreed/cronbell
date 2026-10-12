@@ -20,11 +20,13 @@ import {
   type CheckFormValues,
   isCronLike,
   isValidTimeZone,
+  slugify,
   splitSeconds,
   toDefinition,
   type Unit,
   validateCheckForm,
 } from "@/lib/validation";
+import { canonicalZone } from "@/lib/zones";
 import { FormField } from "./form-field";
 import { ErrorNote } from "./page";
 import { ZonePicker } from "./zone-picker";
@@ -55,7 +57,7 @@ export function initialValues(check?: Check): CheckFormValues {
     cron: check.cron ?? "",
     period: period.value,
     periodUnit: period.unit,
-    timeZone: check.timeZone,
+    timeZone: canonicalZone(check.timeZone),
     grace: grace.value || "0",
     graceUnit: grace.unit,
     maxRuntime: maxRuntime.value,
@@ -101,6 +103,7 @@ export function CheckForm({
   const id = useId();
   const [values, setValues] = useState<CheckFormValues>(() => initialValues(check));
   const [errors, setErrors] = useState<CheckFormErrors>({});
+  const [slugEdited, setSlugEdited] = useState(false);
   const set = <K extends keyof CheckFormValues>(key: K, value: CheckFormValues[K]) =>
     setValues((current) => ({ ...current, [key]: value }));
 
@@ -127,24 +130,6 @@ export function CheckForm({
       <div className="divide-y">
         <Section title={t.form.sections.identity}>
           <FormField
-            id={`${id}-slug`}
-            label={t.form.slug}
-            hint={t.form.slugHint}
-            error={errors.slug}
-          >
-            <Input
-              {...field("slug")}
-              value={values.slug}
-              onChange={(event) => set("slug", event.target.value)}
-              disabled={Boolean(check)}
-              className="font-mono"
-              placeholder="nightly-backup"
-              autoFocus={!check}
-              spellCheck={false}
-              autoCapitalize="off"
-            />
-          </FormField>
-          <FormField
             id={`${id}-name`}
             label={t.form.name}
             hint={t.form.nameHint}
@@ -153,7 +138,38 @@ export function CheckForm({
             <Input
               {...field("name")}
               value={values.name}
-              onChange={(event) => set("name", event.target.value)}
+              onChange={(event) => {
+                const name = event.target.value;
+                setValues((current) => ({
+                  ...current,
+                  name,
+                  // The slug follows the name until someone edits it.
+                  slug: check || slugEdited ? current.slug : slugify(name),
+                }));
+              }}
+              autoFocus={!check}
+            />
+          </FormField>
+          <FormField
+            id={`${id}-slug`}
+            label={t.form.slug}
+            required
+            hint={check ? t.form.slugFixedHint : t.form.slugHint}
+            error={errors.slug}
+          >
+            <Input
+              {...field("slug")}
+              value={values.slug}
+              onChange={(event) => {
+                setSlugEdited(true);
+                set("slug", event.target.value);
+              }}
+              disabled={Boolean(check)}
+              required
+              aria-required="true"
+              className="font-mono"
+              spellCheck={false}
+              autoCapitalize="off"
             />
           </FormField>
         </Section>

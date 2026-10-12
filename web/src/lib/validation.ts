@@ -13,6 +13,23 @@ const CRON_MACROS = new Set([
   "@hourly",
 ]);
 
+/**
+ * A slug from a check name: ASCII kebab-case ("Sao lưu đêm" -> "sao-luu-dem"), at most 128
+ * characters, starting with a letter or digit, so it passes SLUG.
+ */
+export function slugify(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[đĐ]/g, "d")
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^[^a-z0-9]+/, "")
+    .slice(0, 128)
+    .replace(/[-._]+$/, "");
+}
+
 export type Unit = "s" | "m" | "h" | "d";
 export const UNIT_SECONDS: Record<Unit, number> = { s: 1, m: 60, h: 3600, d: 86400 };
 

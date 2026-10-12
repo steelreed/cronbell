@@ -11,7 +11,15 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { t } from "@/lib/strings";
 import { cn } from "@/lib/utils";
-import { allZones, COMMON_ZONES, offsetText, zoneMatches, zoneOffset } from "@/lib/zones";
+import {
+  allZones,
+  COMMON_ZONES,
+  canonicalZone,
+  offsetText,
+  ZONE_LABELS,
+  zoneMatches,
+  zoneOffset,
+} from "@/lib/zones";
 
 /**
  * Time zone combobox, as on steelreed.com's cron tool: common zones first, then every zone the
@@ -71,7 +79,12 @@ export function ZonePicker({
           className="flex h-10 w-full items-center gap-2 whitespace-nowrap rounded-lg border border-input bg-card px-3 text-left text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-expanded:border-ring aria-invalid:border-destructive md:text-sm dark:bg-white/[0.03]"
         >
           <span className={cn("min-w-0 flex-1 truncate", !value && "text-muted-foreground")}>
-            {value || t.form.timeZone}
+            {value ? canonicalZone(value) : t.form.timeZone}
+            {value && ZONE_LABELS[canonicalZone(value)] && (
+              <span className="ml-2 text-muted-foreground">
+                {ZONE_LABELS[canonicalZone(value)]}
+              </span>
+            )}
           </span>
           {value && (
             <span className="font-mono text-muted-foreground text-xs tabular-nums">
@@ -106,6 +119,11 @@ export function ZonePicker({
                       className={cn("min-w-0 flex-1 truncate", zone === value && "font-medium")}
                     >
                       {zone}
+                      {ZONE_LABELS[zone] && (
+                        <span className="ml-2 font-normal text-muted-foreground">
+                          {ZONE_LABELS[zone]}
+                        </span>
+                      )}
                     </span>
                     <span className="font-mono text-muted-foreground text-xs tabular-nums">
                       {offsetText(zoneOffset(zone, now))}

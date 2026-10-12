@@ -7,6 +7,7 @@ import { runTicks } from "@/lib/runs";
 import { t } from "@/lib/strings";
 import type { Check, RecentRuns } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { canonicalZone } from "@/lib/zones";
 import { NextDue } from "../next-due";
 import { Bar } from "../page";
 import { RunBar } from "../run-bar";
@@ -74,7 +75,9 @@ function Schedule({ check }: { check: Check }) {
   return (
     <>
       <span className="block truncate font-mono text-[13px]">{formatSchedule(check)}</span>
-      <span className="block truncate text-muted-foreground text-xs">{check.timeZone}</span>
+      <span className="block truncate text-muted-foreground text-xs">
+        {canonicalZone(check.timeZone)}
+      </span>
     </>
   );
 }
@@ -198,7 +201,7 @@ export function ChecksTable({
               <StatusText check={check} now={now} className="max-w-full" />
               <span className="flex items-center justify-between gap-3 text-muted-foreground text-xs">
                 <span className="truncate font-mono">
-                  {formatSchedule(check)} · {check.timeZone}
+                  {formatSchedule(check)} · {canonicalZone(check.timeZone)}
                 </span>
                 <span className="shrink-0">
                   <Time iso={check.lastPingAt} now={now} />

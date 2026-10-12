@@ -20,6 +20,7 @@ import { attention } from "@/lib/status";
 import { t } from "@/lib/strings";
 import type { Check } from "@/lib/types";
 import { useNow } from "@/lib/use-now";
+import { canonicalZone } from "@/lib/zones";
 
 export const Route = createFileRoute("/_app/checks/$slug/")({
   component: CheckPage,
@@ -82,7 +83,7 @@ function CheckView({ check, now }: { check: Check; now: number }) {
                     label: t.check.schedule,
                     value: <span className="font-mono text-[13px]">{formatSchedule(check)}</span>,
                   },
-                  { label: t.check.timeZone, value: check.timeZone },
+                  { label: t.check.timeZone, value: canonicalZone(check.timeZone) },
                   { label: t.check.grace, value: formatSeconds(check.graceSeconds) },
                   {
                     label: t.check.maxRuntime,

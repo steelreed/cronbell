@@ -239,9 +239,11 @@ export const en = {
     newTitle: "New check",
     editTitle: (name: string) => `Edit ${name}`,
     slug: "Slug",
-    slugHint: "Letters, digits, '.', '_' or '-'. Used in the API and alerts; cannot be changed.",
+    slugHint:
+      "Made from the name; edit it if you like. Used in the API and alerts; cannot be changed later.",
+    slugFixedHint: "Used in the API and alerts; cannot be changed.",
     name: "Name",
-    nameHint: "Optional. Defaults to the slug.",
+    nameHint: "What the job does, as people call it.",
     schedule: "Schedule",
     scheduleKind: "Schedule type",
     cron: "Cron",
@@ -264,7 +266,7 @@ export const en = {
     create: "Create check",
     sections: { identity: "Check", schedule: "Schedule", alerts: "Tolerance" },
     errors: {
-      slug: "Use 1-128 letters, digits, '.', '_' or '-', starting with a letter or digit.",
+      slug: "Enter a slug: 1-128 letters, digits, '.', '_' or '-', starting with a letter or digit.",
       cron: "A cron expression has 5 or 6 fields, or is a macro like @daily.",
       period: "The period must be at least 60 seconds.",
       timeZone: "Pick a time zone from the list.",
