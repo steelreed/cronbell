@@ -1,5 +1,6 @@
 package com.steelreed.cronbell.server.api;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -43,14 +44,21 @@ class ChecksController {
 
 	private final PingRepository pings;
 
-	ChecksController(CheckService checks, PingRepository pings) {
+	private final Clock clock;
+
+	ChecksController(CheckService checks, PingRepository pings, Clock clock) {
 		this.checks = checks;
 		this.pings = pings;
+		this.clock = clock;
+	}
+
+	private CheckResponse response(Check check) {
+		return CheckResponse.of(check, this.clock.instant());
 	}
 
 	@GetMapping
 	List<CheckResponse> list(@AuthenticationPrincipal ProjectPrincipal project) {
-		return this.checks.list(project.projectId()).stream().map(CheckResponse::of).toList();
+		return this.checks.list(project.projectId()).stream().map(this::response).toList();
 	}
 
 	/**
@@ -61,12 +69,12 @@ class ChecksController {
 			@RequestBody CheckRequest request) {
 		CheckService.Saved saved = this.checks.upsert(project.projectId(), slug, request.toDefinition());
 		return ResponseEntity.status(saved.created() ? HttpStatus.CREATED : HttpStatus.OK)
-			.body(CheckResponse.of(saved.check()));
+			.body(response(saved.check()));
 	}
 
 	@GetMapping("/{slug}")
 	CheckResponse get(@AuthenticationPrincipal ProjectPrincipal project, @PathVariable String slug) {
-		return CheckResponse.of(this.checks.get(project.projectId(), slug));
+		return response(this.checks.get(project.projectId(), slug));
 	}
 
 	@DeleteMapping("/{slug}")
@@ -88,12 +96,12 @@ class ChecksController {
 
 	@PostMapping("/{slug}/resume")
 	CheckResponse resume(@AuthenticationPrincipal ProjectPrincipal project, @PathVariable String slug) {
-		return CheckResponse.of(this.checks.resume(project.projectId(), slug));
+		return response(this.checks.resume(project.projectId(), slug));
 	}
 
 	@PostMapping("/{slug}/pause")
 	CheckResponse pause(@AuthenticationPrincipal ProjectPrincipal project, @PathVariable String slug) {
-		return CheckResponse.of(this.checks.pause(project.projectId(), slug));
+		return response(this.checks.pause(project.projectId(), slug));
 	}
 
 	record CheckRequest(String name, String cron, String timeZone, Long periodSeconds, Long graceSeconds,
@@ -109,9 +117,9 @@ class ChecksController {
 	record CheckResponse(String slug, String name, UUID pingKey, String pingUrl, ScheduleKind scheduleKind, String cron,
 			String timeZone, Long periodSeconds, long graceSeconds, Long maxRuntimeSeconds, CheckStatus status,
 			DownReason downReason, Instant lastPingAt, Instant lastStartAt, Instant lastSuccessAt, Instant nextDueAt,
-			Instant createdAt) {
+			Instant nextRunAt, Instant createdAt) {
 
-		static CheckResponse of(Check c) {
+		static CheckResponse of(Check c, Instant now) {
 			String pingUrl = ServletUriComponentsBuilder.fromCurrentContextPath()
 				.path("/ping/{key}")
 				.buildAndExpand(c.pingKey())
@@ -119,7 +127,25 @@ class ChecksController {
 			var s = c.state();
 			return new CheckResponse(c.slug(), c.name(), c.pingKey(), pingUrl, c.scheduleKind(), c.cronExpression(),
 					c.timeZone().getId(), c.periodSeconds(), c.graceSeconds(), c.maxRuntimeSeconds(), s.status(),
-					s.downReason(), s.lastPingAt(), s.lastStartAt(), s.lastSuccessAt(), s.nextDueAt(), c.createdAt());
+					s.downReason(), s.lastPingAt(), s.lastStartAt(), s.lastSuccessAt(), s.nextDueAt(),
+					nextRunAt(c, now), c.createdAt());
+		}
+
+		/**
+		 * When the schedule next expects a run, seen from {@code now}: {@code nextDueAt}
+		 * while it is ahead; once it has passed (a late or missed run), the next cron
+		 * time after now. A period schedule only moves on when a run arrives, so an
+		 * overdue one has none. Null when paused or never pinged.
+		 */
+		static Instant nextRunAt(Check c, Instant now) {
+			Instant due = c.state().nextDueAt();
+			if (due == null || c.state().status() == CheckStatus.PAUSED) {
+				return null;
+			}
+			if (!due.isBefore(now)) {
+				return due;
+			}
+			return (c.scheduleKind() == ScheduleKind.CRON) ? c.schedule().next(now) : null;
 		}
 
 	}

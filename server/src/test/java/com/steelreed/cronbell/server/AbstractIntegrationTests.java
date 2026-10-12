@@ -310,6 +310,31 @@ abstract class AbstractIntegrationTests {
 	}
 
 	@Test
+	void nextRunAtLooksPastAMissedRun() {
+		String cron = uniqueSlug();
+		String key = createCheck(cron, "{\"cron\":\"0 * * * *\",\"graceSeconds\":60}");
+		assertThat(field(cron, "nextRunAt")).isNull();
+		CLOCK.set("2026-01-05T10:00:05Z");
+		get("/ping/" + key);
+		assertThat(field(cron, "nextRunAt")).isEqualTo("2026-01-05T11:00:00Z");
+		CLOCK.set("2026-01-05T12:30:00Z");
+		this.detector.runOnce();
+		assertThat(field(cron, "status")).isEqualTo("DOWN");
+		// nextDueAt keeps the missed run; nextRunAt is the next one the schedule expects.
+		assertThat(field(cron, "nextDueAt")).isEqualTo("2026-01-05T11:00:00Z");
+		assertThat(field(cron, "nextRunAt")).isEqualTo("2026-01-05T13:00:00Z");
+		exchange(HttpMethod.POST, "/api/v1/checks/" + cron + "/pause", null, API_KEY);
+		assertThat(field(cron, "nextRunAt")).isNull();
+
+		String period = uniqueSlug();
+		String periodKey = createCheck(period, "{\"periodSeconds\":600,\"graceSeconds\":60}");
+		get("/ping/" + periodKey);
+		assertThat(field(period, "nextRunAt")).isEqualTo("2026-01-05T12:40:00Z");
+		CLOCK.set("2026-01-05T12:45:00Z");
+		assertThat(field(period, "nextRunAt")).isNull();
+	}
+
+	@Test
 	void detectorMarksRunsThatRunTooLong() {
 		String slug = uniqueSlug();
 		String key = createCheck(slug, "{\"cron\":\"0 * * * *\",\"maxRuntimeSeconds\":600}");
