@@ -446,15 +446,22 @@ red, warnings and PAUSED amber; system fonts; status is coloured text with a sma
 badges). Dense and calm, data first. English in v0.1; strings live in one module so Vietnamese
 can follow.
 
+The shell is a collapsible left sidebar (Overview, Checks, Alert channels, API keys; theme and
+account at the bottom; a sheet on phones) and a header with the page title, or the parent pages as a
+breadcrumb, and a command menu (⌘K, Ctrl+K or `/`: jump to a check by name or slug, go to a page,
+create a check, switch theme). The active page is marked with a grey fill and the product's amber on
+its icon. Theme: dark (default), light or system.
+
 | Screen | Path | Content |
 |---|---|---|
 | Setup | `/setup` | first run only: admin email and password |
 | Sign in | `/signin` | email and password; shows the rate-limit wait |
-| Checks | `/` | name, schedule and time zone, status with reason, last ping (relative, exact on hover), next due (a missed run by its time, with the next run); filter by status; refreshed every 15 s; empty state with a ready `curl` to create and ping the first check |
-| Check | `/checks/{slug}` | status, schedule, grace, max runtime, ping URL with copy, snippets (crontab line, shell wrapper, Kubernetes CronJob); latest pings with duration, exit code and output (expand to read; cards on phones); pause/resume, edit, delete (confirmed in the page) |
-| New / edit check | `/checks/new`, `/checks/{slug}/edit` | slug, name, cron or period, time zone (from the browser's list), grace, max runtime |
-| Channels | `/channels` | channels with last delivery and last error; add and edit per type (secrets shown masked, kept unless replaced); send test |
-| API keys | `/keys` | keys by name and prefix; a new key is shown once; revoke |
+| Overview | `/` | counts (checks, down, late, up; each opens the filtered list); what needs attention (DOWN first, then late, then never pinged) with the reason and since when, from the check's state; runs and failures per day for 14 days in the browser's zone; a first-check guide when there is no check |
+| Checks | `/checks` | table: name and slug, schedule and time zone, status with reason (late = overdue within grace), the last 20 runs as ticks, last ping (relative, exact on hover), next run (a missed run by its time, with the next run); search, status filter with counts, sortable columns, problems first by default, 25 per page, all in the URL; row menu (open, pause or resume, copy ping URL, delete with confirmation); a list on phones; refreshed every 15 s; empty state with a ready `curl` to create and ping the first check |
+| Check | `/checks/{slug}` | status and since when; the latest runs as ticks (90, 40 on phones) and run durations with the max runtime line; recent pings with exit code, duration and output (expand to read; cards on phones); details; ping URL with copy and snippets (crontab, shell, Kubernetes CronJob, Spring Boot starter); pause/resume, edit, delete (confirmed) |
+| New / edit check | `/checks/new`, `/checks/{slug}/edit` | slug, name, cron or period, time zone (searchable, common zones first, UTC offsets), the next five runs of a cron schedule (`/schedules/next`), grace, max runtime |
+| Channels | `/channels` | channels with type, target, last delivery or last error; add and edit in a dialog per type (secrets shown masked, kept unless replaced); send test; delete (confirmed) |
+| API keys | `/keys` | keys by name and prefix; create in a dialog that shows the key once with copy; revoke (confirmed) |
 
 Any page needs a session: the app asks `GET /api/v1/setup` and `GET /api/v1/session` first and
 sends the visitor to `/setup` or `/signin` (then back).
