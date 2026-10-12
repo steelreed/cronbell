@@ -1,0 +1,37 @@
+@startuml
+title <size:24>History</size>
+
+set separator none
+top to bottom direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Component>
+
+System_Boundary("Cronbell_boundary", "Cronbell", $tags="") {
+  Container_Boundary("Cronbell.Cronbell_boundary", "Cronbell", $tags="") {
+    Component(Cronbell.Cronbell.Shared, "Shared", $techn="Module", $descr="", $tags="", $link="")
+    Component(Cronbell.Cronbell.Pings, "Pings", $techn="Module", $descr="", $tags="", $link="")
+    Component(Cronbell.Cronbell.Alerts, "Alerts", $techn="Module", $descr="", $tags="", $link="")
+    Component(Cronbell.Cronbell.History, "History", $techn="Module", $descr="", $tags="", $link="")
+  }
+
+}
+
+Rel(Cronbell.Cronbell.Pings, Cronbell.Cronbell.Shared, "depends on", $techn="", $tags="", $link="")
+Rel(Cronbell.Cronbell.Alerts, Cronbell.Cronbell.Pings, "uses", $techn="", $tags="", $link="")
+Rel(Cronbell.Cronbell.Alerts, Cronbell.Cronbell.Shared, "uses", $techn="", $tags="", $link="")
+Rel(Cronbell.Cronbell.History, Cronbell.Cronbell.Pings, "uses", $techn="", $tags="", $link="")
+Rel(Cronbell.Cronbell.History, Cronbell.Cronbell.Alerts, "uses", $techn="", $tags="", $link="")
+Rel(Cronbell.Cronbell.History, Cronbell.Cronbell.Shared, "uses", $techn="", $tags="", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

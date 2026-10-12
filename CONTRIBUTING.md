@@ -23,6 +23,8 @@ cd web && npm ci && npm run lint && npm run typecheck && npm test
 
 - Work on a branch and open a pull request against `main`.
 - Behaviour changes start in [DESIGN.md](DESIGN.md): update the spec, then the code and its tests.
+- Server code follows [ARCHITECTURE.md](ARCHITECTURE.md): which module a change belongs in, its
+  public API and `internal` packages. `ModularityTests` and `ArchitectureTests` enforce it.
 - One change per pull request, with tests that fail without it.
 - Add a line to [CHANGELOG.md](CHANGELOG.md) when users will notice the change.
 - CI must pass before review.

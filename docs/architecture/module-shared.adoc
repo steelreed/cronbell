@@ -1,0 +1,21 @@
+[%autowidth.stretch, cols="h,a"]
+|===
+|Description
+|Shared: support every module uses and that depends on no module. Exposes two named interfaces, `database` and `web`; the datasource set-up in `shared.internal` is used by nobody directly.
+|Base package
+|`com.steelreed.cronbell.server.shared`
+|Spring components
+|_Controllers_
+
+* `c.s.c.s.s.web.WebAppController` -- Serves the dashboard. The web app is built into `static/` of the image, and its client-side routes (for example `/checks/backup`) all load `index.html`. Paths with a dot are files and are left to the static resource handler, as is everything under `/assets`, where Vite puts the bundles.
+
+_Repositories_
+
+* `c.s.c.s.s.database.JobLocks` -- Leases on rows of `job_locks`, so that one instance at a time runs a housekeeping job. Each call is a single conditional update, atomic on SQLite and PostgreSQL alike. The job's row must exist (see the migrations).
+
+_Others_
+
+* `c.s.c.s.s.database.Database` -- Which database we run on, and the SQL that differs between them.
+* `c.s.c.s.s.internal.SqliteDataSourcePostProcessor` -- Settings SQLite needs, whatever the configured URL: the data directory must exist, there is exactly one connection (SQLite has one writer, so a pool only adds lock contention), WAL journal, foreign keys on, and a busy timeout.
+* `c.s.c.s.s.web.ApiExceptionHandler` -- Errors every module of the management API shares, as RFC 9457 problem details. Errors specific to one module are handled by that module's own advice.
+|===

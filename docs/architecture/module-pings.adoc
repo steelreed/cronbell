@@ -1,0 +1,33 @@
+[%autowidth.stretch, cols="h,a"]
+|===
+|Description
+|Pings: the `/ping` endpoint compatible with Healthchecks.io, its rate limit, ping storage and the recent pings of a check in the management API. Each ping is applied to its check through `c.s.c.s.c.CheckService`. 
++
+API: `c.s.c.s.p.Ping` and `c.s.c.s.p.PingHistory`.
+|Base package
+|`com.steelreed.cronbell.server.pings`
+|Spring components
+|_Controllers_
+
+* `c.s.c.s.p.web.PingController` -- The ping API of DESIGN.md §5, in the Healthchecks.io URL shape. No authentication: the ping key is the secret.  
++
+The body is read straight from the request stream and `rid` from the raw query string, so a form-encoded body (`curl -d`) is stored as text and not parsed as parameters.
+* `c.s.c.s.p.web.PingsController` -- Recent pings of a check in the management API (DESIGN.md §6).
+
+_Services_
+
+* `c.s.c.s.p.internal.PingService` -- Records a ping and applies it to its check: one insert plus one update.
+
+_Repositories_
+
+* `c.s.c.s.p.internal.PingRepository`
+
+_Others_
+
+* `c.s.c.s.p.PingHistory` -- The stored pings, as other modules read and prune them.
+* `c.s.c.s.p.internal.PingRateLimiter` -- Token bucket per check: up to `rate` pings per second, bursts of `rate`.  
++
+In memory, so the limit is per server instance: with N instances behind a load balancer a check can get up to N times the rate.
+|Bean references
+|* `c.s.c.s.c.CheckService` (in Checks) -- The checks module's API: creates, updates and pauses checks of a project, and applies the pings recorded by the pings module to the state of their check.
+|===

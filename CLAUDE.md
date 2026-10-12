@@ -1,7 +1,7 @@
 # CLAUDE.md — Cronbell
 
 Monitoring for scheduled and background jobs, a Steelreed product. Read `DESIGN.md` first: it is the
-specification, and behaviour changes start there.
+specification, and behaviour changes start there. `ARCHITECTURE.md` explains how the server is built.
 
 ## Layout
 
@@ -26,6 +26,20 @@ the maintainer pushes a `v*` tag: never create tags yourself.
 ## Conventions
 
 - Maven groupId `com.steelreed`, packages `com.steelreed.cronbell.*`.
+- The server is a modular monolith (`ARCHITECTURE.md`). Each package under
+  `com.steelreed.cronbell.server` is a Spring Modulith module: `checks`, `pings`, `alerts`,
+  `accounts`, `history`, `shared`, with a `package-info.java` listing its allowed dependencies. Only
+  public types in the module package are its API; the rest goes in `<module>/internal`
+  (package-private where possible), controllers in `<module>/web` with `@ManagementApi`. Other
+  modules use the API or listen to its events, never its `internal` types or its tables.
+- `ModularityTests` (Spring Modulith `verify()`, documentation in `target/spring-modulith-docs`) and
+  `ArchitectureTests` (ArchUnit: pure `checks.internal.domain`, controllers in `web`, no field
+  injection, no `Date`/`Calendar`) must pass. After a structural change, copy the generated
+  diagrams to `docs/architecture` and update the Mermaid graph in `ARCHITECTURE.md`.
+- Latest stable versions of every dependency and plugin (no milestones), Java 25 idioms: records
+  for value types and DTOs, sealed types with pattern-matching `switch` for closed sets, text blocks
+  for SQL, constructor injection, `final` fields, `Optional` only as a return type, no deprecated
+  APIs (the build reports them).
 - Licence: AGPL-3.0 for `server/` and `web/`; Apache-2.0 for `starter/`.
 - English in code, comments, docs and commits. Talk to the maintainer in Vietnamese.
 - Never add AI attribution (Co-Authored-By, "Generated with") to commits or PRs.

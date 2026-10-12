@@ -1,0 +1,19 @@
+[%autowidth.stretch, cols="h,a"]
+|===
+|Description
+|History: daily pruning of pings and finished deliveries older than the retention, under a lease so one instance does the work. Has no API.
+|Base package
+|`com.steelreed.cronbell.server.history`
+|Spring components
+|_Configuration properties_
+
+* `c.s.c.s.h.internal.HistoryProperties` -- History settings (`cronbell.history.*`, DESIGN.md §9).
+
+_Others_
+
+* `c.s.c.s.h.internal.HistoryPruner` -- Deletes pings and finished deliveries older than the retention (DESIGN.md §9, History). Runs once a day and a minute after start. Rows go in batches, one short transaction each. With several instances, the one holding the `history-pruning` lease does the work and the others skip the run.
+|Bean references
+|* `c.s.c.s.p.PingHistory` (in Pings) -- The stored pings, as other modules read and prune them.
+* `c.s.c.s.a.DeliveryHistory` (in Alerts) -- The stored alert deliveries, as history pruning deletes them.
+* `c.s.c.s.s.database.JobLocks` (in Shared) -- Leases on rows of `job_locks`, so that one instance at a time runs a housekeeping job. Each call is a single conditional update, atomic on SQLite and PostgreSQL alike. The job's row must exist (see the migrations).
+|===

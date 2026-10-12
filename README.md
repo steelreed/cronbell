@@ -56,6 +56,7 @@ every setting.
 | [`server/`](server) | Spring Boot 4.1 service on Java 25: ping endpoint, management API, detector |
 | [`web/`](web) | Dashboard: Vite, React 19, TypeScript, TanStack, Tailwind, shadcn/ui |
 | [`DESIGN.md`](DESIGN.md) | The specification. Behaviour changes start here |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | How the server is built: modules, flows, data, rules |
 
 ## Develop
 
