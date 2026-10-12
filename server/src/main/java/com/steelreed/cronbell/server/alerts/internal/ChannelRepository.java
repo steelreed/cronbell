@@ -1,0 +1,71 @@
+package com.steelreed.cronbell.server.alerts.internal;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.json.JsonMapper;
+
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public class ChannelRepository {
+
+	private static final String COLUMNS = "id, project_id, type, name, config, created_at, updated_at";
+
+	private static final TypeReference<LinkedHashMap<String, String>> CONFIG = new TypeReference<>() {
+	};
+
+	private final JdbcClient jdbc;
+
+	private final JsonMapper json;
+
+	public ChannelRepository(JdbcClient jdbc, JsonMapper json) {
+		this.jdbc = jdbc;
+		this.json = json;
+	}
+
+	public List<Channel> findAllByProject(String projectId) {
+		return this.jdbc.sql("SELECT " + COLUMNS + " FROM channels WHERE project_id = ? ORDER BY created_at, id")
+			.param(projectId)
+			.query(this::map)
+			.list();
+	}
+
+	public Optional<Channel> findById(String id) {
+		return this.jdbc.sql("SELECT " + COLUMNS + " FROM channels WHERE id = ?").param(id).query(this::map).optional();
+	}
+
+	public void insert(Channel channel) {
+		this.jdbc.sql("INSERT INTO channels (" + COLUMNS + ") VALUES (?, ?, ?, ?, ?, ?, ?)")
+			.params(channel.id(), channel.projectId(), channel.type().name(), channel.name(),
+					this.json.writeValueAsString(channel.config()), channel.createdAt().toEpochMilli(),
+					channel.updatedAt().toEpochMilli())
+			.update();
+	}
+
+	public void update(Channel channel) {
+		this.jdbc.sql("UPDATE channels SET name = ?, config = ?, updated_at = ? WHERE id = ?")
+			.params(channel.name(), this.json.writeValueAsString(channel.config()), channel.updatedAt().toEpochMilli(),
+					channel.id())
+			.update();
+	}
+
+	public boolean delete(String projectId, String id) {
+		return this.jdbc.sql("DELETE FROM channels WHERE project_id = ? AND id = ?").params(projectId, id).update() > 0;
+	}
+
+	private Channel map(ResultSet rs, int row) throws SQLException {
+		Map<String, String> config = this.json.readValue(rs.getString("config"), CONFIG);
+		return new Channel(rs.getString("id"), rs.getString("project_id"), ChannelType.valueOf(rs.getString("type")),
+				rs.getString("name"), Map.copyOf(config), Instant.ofEpochMilli(rs.getLong("created_at")),
+				Instant.ofEpochMilli(rs.getLong("updated_at")));
+	}
+
+}

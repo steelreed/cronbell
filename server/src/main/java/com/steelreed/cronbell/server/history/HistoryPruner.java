@@ -6,7 +6,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.function.IntSupplier;
 
-import com.steelreed.cronbell.server.notify.DeliveryRepository;
+import com.steelreed.cronbell.server.alerts.DeliveryHistory;
 import com.steelreed.cronbell.server.pings.PingHistory;
 import com.steelreed.cronbell.server.shared.database.Ids;
 import com.steelreed.cronbell.server.shared.database.JobLocks;
@@ -38,7 +38,7 @@ public class HistoryPruner {
 
 	private final PingHistory pings;
 
-	private final DeliveryRepository deliveries;
+	private final DeliveryHistory deliveries;
 
 	private final JobLocks locks;
 
@@ -46,7 +46,7 @@ public class HistoryPruner {
 
 	private final Clock clock;
 
-	public HistoryPruner(PingHistory pings, DeliveryRepository deliveries, JobLocks locks, HistoryProperties properties,
+	public HistoryPruner(PingHistory pings, DeliveryHistory deliveries, JobLocks locks, HistoryProperties properties,
 			Clock clock) {
 		this.pings = pings;
 		this.deliveries = deliveries;
