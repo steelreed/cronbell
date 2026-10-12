@@ -33,6 +33,9 @@ All notable changes to Cronbell are listed here. The format follows
   guide in `docs/self-hosting.md` (Ubuntu, DNS, first check, backups and restore, upgrades,
   PostgreSQL). CI validates the compose file and shellchecks the script.
 - API: checks carry `nextRunAt`, the next run the schedule expects, also after a missed run.
+- History retention: pings and finished alert deliveries older than `CRONBELL_HISTORY_RETENTION`
+  (default 90 days) are pruned daily in batches; each check keeps its latest ping, its latest log
+  and the pings of a run in progress. Several PostgreSQL instances take turns through a lease.
 
 ### Fixed
 

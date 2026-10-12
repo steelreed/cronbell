@@ -17,9 +17,9 @@ a Let's Encrypt certificate for your domain on its own.
 
 - A server with a public IP address: Ubuntu 22.04 or 24.04, 1 vCPU and 1 GB of RAM are enough.
   Cronbell uses about 250 MB of RAM (its container is capped at 512 MB) and Caddy about 15 MB.
-  Disk: the database grows with pings, which are not pruned yet. A ping takes a few hundred bytes
-  plus its output (at most 10 KB), so a check pinging every minute with short output adds roughly
-  10 to 20 MB a month. Keep a few GB free and watch it with `du -sh` on the volume.
+  Disk: pings older than 90 days are pruned daily (`CRONBELL_HISTORY_RETENTION`). A ping takes a few
+  hundred bytes plus its output (at most 10 KB), so an hourly check needs about 1.3 MB for 90 days
+  and a check every 5 minutes about 8 MB. A few GB free is plenty.
 - A domain name you control, for example `cron.example.com`.
 - SSH access with `sudo`.
 

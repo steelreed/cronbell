@@ -44,4 +44,27 @@ public class PingRepository {
 			.list();
 	}
 
+	/**
+	 * Deletes up to {@code limit} pings received before {@code cutoff}, except what the
+	 * state machine and alerts still read (DESIGN.md §9, History): the latest ping of
+	 * each check, its latest ping with a body, and the pings of its open run. A ping is
+	 * deletable only if a newer ping of the same check exists, and, when it has a body, a
+	 * newer one with a body. Returns how many were deleted.
+	 */
+	public int deleteBefore(Instant cutoff, int limit) {
+		return this.jdbc.sql("""
+				DELETE FROM pings WHERE id IN (
+				  SELECT p.id FROM pings p
+				   WHERE p.received_at < :cutoff
+				     AND EXISTS (SELECT 1 FROM pings n
+				                  WHERE n.check_id = p.check_id
+				                    AND n.received_at >= p.received_at
+				                    AND (n.received_at > p.received_at OR n.id > p.id)
+				                    AND (p.body IS NULL OR n.body IS NOT NULL))
+				     AND NOT EXISTS (SELECT 1 FROM checks c
+				                      WHERE c.id = p.check_id AND c.run_started_at IS NOT NULL
+				                        AND p.received_at >= c.run_started_at)
+				   LIMIT :limit)""").param("cutoff", cutoff.toEpochMilli()).param("limit", limit).update();
+	}
+
 }
