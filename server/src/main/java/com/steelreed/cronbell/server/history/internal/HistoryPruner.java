@@ -1,4 +1,4 @@
-package com.steelreed.cronbell.server.history;
+package com.steelreed.cronbell.server.history.internal;
 
 import java.time.Clock;
 import java.time.Duration;

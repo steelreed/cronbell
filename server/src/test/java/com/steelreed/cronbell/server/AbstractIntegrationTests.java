@@ -27,7 +27,7 @@ import com.steelreed.cronbell.server.alerts.internal.DeliveryDispatcher;
 import com.steelreed.cronbell.server.alerts.internal.WebhookSigner;
 import com.steelreed.cronbell.server.checks.CheckEvent;
 import com.steelreed.cronbell.server.checks.internal.Detector;
-import com.steelreed.cronbell.server.history.HistoryPruner;
+import com.steelreed.cronbell.server.history.internal.HistoryPruner;
 import jakarta.mail.Message;
 import jakarta.mail.internet.MimeMessage;
 import org.junit.jupiter.api.BeforeEach;
