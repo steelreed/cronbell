@@ -101,7 +101,6 @@ export const en = {
     sameAsGrace: "same as grace",
     showOutput: "Show output",
     hideOutput: "Hide output",
-    noOutput: "no output",
   },
   due: {
     missed: (time: string) => `Missed ${time} run`,

@@ -266,7 +266,7 @@ function OutputToggle({
   open: boolean;
   onToggle: () => void;
 }) {
-  if (!ping.body) return <span className="text-muted-foreground text-xs">{t.check.noOutput}</span>;
+  if (!ping.body) return null;
   return (
     <button
       type="button"
