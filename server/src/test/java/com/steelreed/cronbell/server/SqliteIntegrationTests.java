@@ -48,7 +48,8 @@ class SqliteIntegrationTests extends AbstractProjectsIntegrationTests {
 
 	@Test
 	void dashboardRoutesLoadTheWebApp() {
-		for (String path : new String[] { "/", "/checks", "/checks/nightly-backup" }) {
+		for (String path : new String[] { "/", "/checks", "/checks/nightly-backup", "/members",
+				"/invite/Ab-_0123456789abcdefghijklmnopqrstuvwxyzABCD" }) {
 			ResponseEntity<String> response = this.http.get().uri(path).retrieve().toEntity(String.class);
 			assertThat(response.getStatusCode().value()).as(path).isEqualTo(200);
 			assertThat(response.getBody()).as(path).contains("Cronbell test dashboard");
