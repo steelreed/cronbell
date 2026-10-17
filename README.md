@@ -7,8 +7,8 @@
 scheduled tasks and background workers, in any language. Each job reports its runs; Cronbell knows
 when the next run is due and alerts you when a run is missed, late, failing or unusually slow.
 
-> **Status: in development.** The first release is planned for December 2026. Join the early-access
-> list at [steelreed.com/cronbell](https://steelreed.com/cronbell/).
+> **Status: beta.** `0.1.0-beta.2` is out and runs real jobs; `0.1.0` is planned for October 27,
+> 2026. Releases and notes: [CHANGELOG.md](CHANGELOG.md).
 
 ## Why
 
@@ -26,24 +26,24 @@ usually hear about them from a customer. Cronbell turns "nothing happened" into 
    ```
 
 3. When a run is missed, fails or takes too long, Cronbell alerts you by email, Telegram, Slack or
-   webhook (in progress).
+   webhook.
 
 The ping API is compatible with Healthchecks.io (`/ping/<key>`, `/start`, `/fail`, exit codes), so
 existing scripts keep working.
 
-**Spring Boot teams** will get `cronbell-spring-boot-starter`: it finds every `@Scheduled`, Quartz
-and ShedLock job and reports each run without code changes (planned).
+**Spring Boot teams** can use
+[`cronbell-spring-boot-starter`](https://github.com/steelreed/cronbell-spring-boot-starter) (beta):
+it finds every `@Scheduled`, Quartz and ShedLock job and reports each run without code changes.
 
 ## Self-host
 
 One container, SQLite by default, PostgreSQL optional:
 
 ```bash
-docker run -d -p 8080:8080 -v cronbell-data:/data ghcr.io/steelreed/cronbell:0.1.0-beta.1
+docker run -d -p 8080:8080 -v cronbell-data:/data ghcr.io/steelreed/cronbell:0.1.0-beta.2
 ```
 
-(The image is published with the first release. Until then, build it from this repository:
-`make docker`.)
+Open `http://localhost:8080` and create the admin account.
 
 For a server with your own domain and HTTPS (Docker Compose with Caddy, backups, upgrades), follow
 [`docs/self-hosting.md`](docs/self-hosting.md). See [`server/README.md`](server/README.md) for
@@ -70,8 +70,8 @@ Requirements: JDK 25, Node 24 or newer, Docker. See [CONTRIBUTING.md](CONTRIBUTI
 
 ## License
 
-Cronbell server and web are licensed under the [GNU AGPL-3.0-only](LICENSE). Client libraries and the
-Spring Boot starter will be Apache-2.0.
+Cronbell server and web are licensed under the [GNU AGPL-3.0-only](LICENSE). The
+[Spring Boot starter](https://github.com/steelreed/cronbell-spring-boot-starter) is Apache-2.0.
 
 Cronbell is made by [Steelreed](https://steelreed.com), open-source tools for the parts of your
 backend nobody is watching.
