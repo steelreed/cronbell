@@ -6,6 +6,8 @@ All notable changes to Cronbell are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0-beta.2] - 2026-10-17
+
 ### Added
 
 - Invites instead of open registration. The setup account is the instance admin (existing

@@ -289,5 +289,5 @@ with `POSTGRES_PASSWORD` in `.env` and
 
 With `CRONBELL_DOMAIN=localhost`, Caddy uses a certificate from its own local authority instead of
 Let's Encrypt; `curl -k https://localhost` or accept the browser warning. Without HTTPS at all,
-`docker run -p 8080:8080 -v cronbell-data:/data ghcr.io/steelreed/cronbell:0.1.0-beta.1` is enough; see
+`docker run -p 8080:8080 -v cronbell-data:/data ghcr.io/steelreed/cronbell:0.1.0-beta.2` is enough; see
 [`server/README.md`](../server/README.md) for every setting.
