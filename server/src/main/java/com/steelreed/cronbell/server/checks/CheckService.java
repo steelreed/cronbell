@@ -12,6 +12,7 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 import com.steelreed.cronbell.server.checks.internal.CheckRepository;
+import com.steelreed.cronbell.server.checks.internal.ChecksProperties;
 import com.steelreed.cronbell.server.checks.internal.domain.CheckStateMachine;
 import com.steelreed.cronbell.server.checks.internal.domain.CronSchedule;
 import com.steelreed.cronbell.server.checks.internal.domain.Schedule;
@@ -51,11 +52,15 @@ public class CheckService {
 
 	private final ApplicationEventPublisher events;
 
+	private final ChecksProperties properties;
+
 	private final Clock clock;
 
-	public CheckService(CheckRepository checks, ApplicationEventPublisher events, Clock clock) {
+	public CheckService(CheckRepository checks, ApplicationEventPublisher events, ChecksProperties properties,
+			Clock clock) {
 		this.checks = checks;
 		this.events = events;
+		this.properties = properties;
 		this.clock = clock;
 	}
 
@@ -97,6 +102,7 @@ public class CheckService {
 	 * The ping key never changes. A changed schedule recomputes the next due time from
 	 * now.
 	 * @throws IllegalArgumentException if the definition is invalid
+	 * @throws CheckLimitReachedException if a new check would pass the project's limit
 	 */
 	@Transactional
 	public Saved upsert(String projectId, String slug, Definition definition) {
@@ -108,6 +114,10 @@ public class CheckService {
 		Check defined = validate(projectId, slug, definition, now);
 		var existing = this.checks.findBySlug(projectId, slug);
 		if (existing.isEmpty()) {
+			Integer limit = this.properties.maxPerProject();
+			if (limit != null && this.checks.countByProject(projectId) >= limit) {
+				throw new CheckLimitReachedException(limit);
+			}
 			this.checks.insert(defined, now);
 			return new Saved(defined, true);
 		}

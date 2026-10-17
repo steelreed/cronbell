@@ -8,12 +8,15 @@ import java.util.UUID;
 import javax.sql.DataSource;
 
 import com.steelreed.cronbell.server.shared.database.Database;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -21,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /** The same tests on PostgreSQL, plus multi-instance detector claims. */
 @Testcontainers
-class PostgresIntegrationTests extends AbstractIntegrationTests {
+class PostgresIntegrationTests extends AbstractProjectsIntegrationTests {
 
 	@Container
 	static final PostgreSQLContainer postgres = new PostgreSQLContainer(TestcontainersConfiguration.POSTGRES_IMAGE);
@@ -42,6 +45,24 @@ class PostgresIntegrationTests extends AbstractIntegrationTests {
 	@Test
 	void runsOnPostgres() {
 		assertThat(this.database.kind()).isEqualTo(Database.Kind.POSTGRESQL);
+	}
+
+	@Test
+	void upgradesABeta1Database() {
+		String schema = "upgrade_" + UUID.randomUUID().toString().substring(0, 8);
+		String url = postgres.getJdbcUrl() + (postgres.getJdbcUrl().contains("?") ? "&" : "?") + "currentSchema="
+				+ schema;
+		upgradeFromBeta1MakesTheSetupAccountInstanceAdmin(
+				Flyway.configure()
+					.dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
+					.schemas(schema)
+					.target("4")
+					.load(),
+				Flyway.configure()
+					.dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
+					.schemas(schema)
+					.load(),
+				JdbcClient.create(new DriverManagerDataSource(url, postgres.getUsername(), postgres.getPassword())));
 	}
 
 	@Test

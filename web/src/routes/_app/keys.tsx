@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
-import { keysQuery } from "@/lib/queries";
+import { keysQuery, useIsOwner } from "@/lib/queries";
 import { t } from "@/lib/strings";
 import type { ApiKey, NewApiKey } from "@/lib/types";
 import { useNow } from "@/lib/use-now";
@@ -38,14 +38,20 @@ function KeysPage() {
   const keys = useQuery(keysQuery);
   const now = useNow();
   const [creating, setCreating] = useState(false);
+  const owner = useIsOwner();
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="max-w-[65ch] text-muted-foreground text-sm text-pretty">{t.keys.lead}</p>
-        <Button onClick={() => setCreating(true)} className="shrink-0 self-start sm:self-auto">
-          <PlusIcon aria-hidden />
-          {t.keys.create}
-        </Button>
+        <div className="max-w-[65ch] text-muted-foreground text-sm text-pretty">
+          <p>{t.keys.lead}</p>
+          {!owner && <p className="mt-1">{t.keys.ownersOnly}</p>}
+        </div>
+        {owner && (
+          <Button onClick={() => setCreating(true)} className="shrink-0 self-start sm:self-auto">
+            <PlusIcon aria-hidden />
+            {t.keys.create}
+          </Button>
+        )}
       </div>
       <section className="overflow-hidden rounded-xl border bg-card">
         {keys.isPending ? (
@@ -74,7 +80,7 @@ function KeysPage() {
             </thead>
             <tbody className="divide-y">
               {keys.data.map((key) => (
-                <KeyRow key={key.id} apiKey={key} now={now} />
+                <KeyRow key={key.id} apiKey={key} now={now} canRevoke={owner} />
               ))}
             </tbody>
           </table>
@@ -92,7 +98,7 @@ function KeysPage() {
   );
 }
 
-function KeyRow({ apiKey, now }: { apiKey: ApiKey; now: number }) {
+function KeyRow({ apiKey, now, canRevoke }: { apiKey: ApiKey; now: number; canRevoke: boolean }) {
   const queryClient = useQueryClient();
   const [confirming, setConfirming] = useState(false);
   const revoke = useMutation({
@@ -116,37 +122,42 @@ function KeyRow({ apiKey, now }: { apiKey: ApiKey; now: number }) {
         <Time iso={apiKey.createdAt} now={now} />
       </td>
       <td className="py-3 pr-3 text-right">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={`${t.common.actions}: ${apiKey.name}`}
-            >
-              <EllipsisIcon aria-hidden />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-auto min-w-40">
-            <DropdownMenuItem variant="destructive" onSelect={() => setConfirming(true)}>
-              <KeyRoundIcon aria-hidden />
-              {t.keys.revokeButton}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <ConfirmDialog
-          open={confirming}
-          onOpenChange={setConfirming}
-          title={t.keys.revokeTitle}
-          description={
-            <>
-              <span className="font-medium text-foreground">{apiKey.name}</span> {t.keys.revokeRest}
-            </>
-          }
-          confirmLabel={t.keys.revokeButton}
-          pending={revoke.isPending}
-          error={revoke.error}
-          onConfirm={() => revoke.mutate()}
-        />
+        {canRevoke && (
+          <>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`${t.common.actions}: ${apiKey.name}`}
+                >
+                  <EllipsisIcon aria-hidden />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-auto min-w-40">
+                <DropdownMenuItem variant="destructive" onSelect={() => setConfirming(true)}>
+                  <KeyRoundIcon aria-hidden />
+                  {t.keys.revokeButton}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <ConfirmDialog
+              open={confirming}
+              onOpenChange={setConfirming}
+              title={t.keys.revokeTitle}
+              description={
+                <>
+                  <span className="font-medium text-foreground">{apiKey.name}</span>{" "}
+                  {t.keys.revokeRest}
+                </>
+              }
+              confirmLabel={t.keys.revokeButton}
+              pending={revoke.isPending}
+              error={revoke.error}
+              onConfirm={() => revoke.mutate()}
+            />
+          </>
+        )}
       </td>
     </tr>
   );

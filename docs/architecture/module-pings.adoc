@@ -13,6 +13,7 @@ API: `c.s.c.s.p.Ping` and `c.s.c.s.p.PingHistory`.
 +
 The body is read straight from the request stream and `rid` from the raw query string, so a form-encoded body (`curl -d`) is stored as text and not parsed as parameters.
 * `c.s.c.s.p.web.PingsController` -- Recent pings of a check in the management API (DESIGN.md §6).
+* `c.s.c.s.p.web.RunsController` -- Finished runs as the dashboard summarises them (DESIGN.md §6): the latest outcomes of every check, for the run bars of the checks list, and runs and failures per day, for the overview. A run is a `success` or `fail` ping; a missed run leaves no ping, so it is not counted here (the check's status says when the latest one was missed).
 
 _Services_
 

@@ -27,8 +27,20 @@ export function aCheck(overrides: Partial<Check> = {}): Check {
 }
 
 export const SESSION: Session = {
-  account: { id: "a1", email: "admin@example.com" },
-  project: { id: "p1", name: "Default" },
+  account: { id: "a1", email: "admin@example.com", instanceAdmin: true },
+  project: { id: "p1", name: "Default", role: "OWNER" },
+  projects: [{ id: "p1", name: "Default", role: "OWNER" }],
+  pingBaseUrl: "http://localhost/ping/",
+};
+
+/** A tester: member of someone else's project and owner of their own. */
+export const MEMBER_SESSION: Session = {
+  account: { id: "a2", email: "lan@example.com", instanceAdmin: false },
+  project: { id: "p2", name: "Team jobs", role: "MEMBER" },
+  projects: [
+    { id: "p3", name: "lan's project", role: "OWNER" },
+    { id: "p2", name: "Team jobs", role: "MEMBER" },
+  ],
   pingBaseUrl: "http://localhost/ping/",
 };
 

@@ -1,16 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import {
-  BellRingIcon,
-  KeyRoundIcon,
-  LayoutDashboardIcon,
-  ListChecksIcon,
-  MonitorIcon,
-  MoonIcon,
-  PlusIcon,
-  SunIcon,
-} from "lucide-react";
-import { type ReactNode, useEffect } from "react";
+import { MonitorIcon, MoonIcon, PlusIcon, SunIcon } from "lucide-react";
+import { useEffect } from "react";
 import {
   Command,
   CommandDialog,
@@ -20,19 +11,13 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { NAV, type NavTo } from "@/lib/nav";
+import { NAV, type NavItem } from "@/lib/nav";
 import { checksQuery } from "@/lib/queries";
 import { statusView } from "@/lib/status";
 import { t } from "@/lib/strings";
 import { type Theme, useTheme } from "@/lib/theme";
+import { NAV_ICONS } from "./nav-icon";
 import { StatusDot } from "./status-text";
-
-const PAGE_ICONS: Record<NavTo, ReactNode> = {
-  "/": <LayoutDashboardIcon aria-hidden />,
-  "/checks": <ListChecksIcon aria-hidden />,
-  "/channels": <BellRingIcon aria-hidden />,
-  "/keys": <KeyRoundIcon aria-hidden />,
-};
 
 const NEXT_THEME: Record<Theme, Theme> = { dark: "light", light: "system", system: "dark" };
 
@@ -64,9 +49,12 @@ export function useCommandShortcut(onOpen: () => void) {
 export function CommandMenu({
   open,
   onOpenChange,
+  pages = NAV.filter((item) => !item.adminOnly),
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** The pages this account can open. */
+  pages?: NavItem[];
 }) {
   const navigate = useNavigate();
   const checks = useQuery({ ...checksQuery, enabled: open });
@@ -114,14 +102,14 @@ export function CommandMenu({
             </CommandGroup>
           )}
           <CommandGroup heading={t.search.pages}>
-            {NAV.map((item) => (
+            {pages.map((item) => (
               <CommandItem
                 key={item.to}
                 value={`page ${item.label}`}
                 keywords={[item.label]}
                 onSelect={() => run(() => navigate({ to: item.to }))}
               >
-                {PAGE_ICONS[item.to]}
+                {NAV_ICONS[item.to]}
                 {item.label}
               </CommandItem>
             ))}

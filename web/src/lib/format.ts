@@ -24,6 +24,17 @@ export function formatRelative(iso: string | null, now: number = Date.now()): st
   return iso;
 }
 
+/** A local date and time to the minute: "12 Jan 2026, 17:00". */
+export function formatDate(iso: string): string {
+  return new Date(iso).toLocaleString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 /** Exact local time with the offset, for tooltips. */
 export function formatExact(iso: string | null): string {
   if (!iso) return t.common.never;

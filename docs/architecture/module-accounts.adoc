@@ -9,14 +9,24 @@ API: `c.s.c.s.a.ProjectPrincipal`, the caller every controller acts for.
 |Spring components
 |_Controllers_
 
+* `c.s.c.s.a.web.AccountController` -- The signed-in account's own settings and projects (DESIGN.md §6): its projects with its role, and its password. Sessions only.
+* `c.s.c.s.a.web.AdminInvitesController` -- Project invites of the instance (DESIGN.md §6, Projects and invites): each gives the invitee a new project of their own. Instance admin only, enforced by the security rules.
+* `c.s.c.s.a.web.InviteAcceptController` -- The public side of an invite link (DESIGN.md §6, Projects and invites): what it offers, and accepting it with a new account or the signed-in one. Unknown links count against the client address like failed sign-ins.
+* `c.s.c.s.a.web.InvitesController` -- Member invites of the current project (DESIGN.md §6, Projects and invites). Owners only, enforced by the security rules.
 * `c.s.c.s.a.web.KeysController` -- API keys of the signed-in account's project (DESIGN.md §6). Session only: an API key cannot manage keys. A new key is returned once; only its hash is stored.
-* `c.s.c.s.a.web.SessionController` -- Browser sign-in and sign-out (DESIGN.md §6, Accounts and sessions).
+* `c.s.c.s.a.web.MembersController` -- Members of the current project (DESIGN.md §6, Roles): every member can list them; an owner removes anyone but the last owner, a member only themself (leaving).
+* `c.s.c.s.a.web.SessionController` -- Browser sign-in and sign-out, and the session's current project (DESIGN.md §6, Accounts and sessions; Projects and invites).
 * `c.s.c.s.a.web.SetupController` -- One-time setup (DESIGN.md §6): while no account exists, anyone who reaches the server can create the admin account. Afterwards it answers 409.
 
 _Services_
 
-* `c.s.c.s.a.internal.AccountService` -- Accounts and their passwords (DESIGN.md §6). v0.1 has one admin account, created by the first-run setup, which owns the oldest project.
-* `c.s.c.s.a.internal.ProjectService` -- Projects and their API keys. Only a SHA-256 hash of each key is stored.
+* `c.s.c.s.a.internal.AccountService` -- Accounts and their passwords (DESIGN.md §6). The first account is made by the setup: it is the instance admin and owns the oldest project. Every other account comes from an invite.
+* `c.s.c.s.a.internal.InviteService` -- Single-use invite links (DESIGN.md §6, Projects and invites). A project invite gives the invitee a new project of their own; a member invite adds them to an existing project. Only the SHA-256 of a token is stored.
+* `c.s.c.s.a.internal.ProjectService` -- Projects, their members and their API keys. Only a SHA-256 hash of each key is stored.
+
+_Configuration properties_
+
+* `c.s.c.s.a.internal.InviteProperties` -- Invite settings (`cronbell.invites.*`, DESIGN.md §6, Projects and invites).
 
 _Others_
 
@@ -25,11 +35,16 @@ _Others_
 +
 The key comes from `CRONBELL_API_KEY` when set; otherwise one is generated and printed to the log once. Only its hash is stored, so it cannot be shown again. Runs before the admin account is created, which owns this project.
 * `c.s.c.s.a.internal.security.LoginRateLimiter` -- Slows down password guessing (DESIGN.md §6): failures are counted per client address and email. After {@value #FREE_FAILURES} failures in a row, attempts are refused for 30 s, doubling with each further failure up to 15 minutes. Kept in memory, so per server instance.
-* `c.s.c.s.a.internal.security.SecurityConfig` -- Two ways in (DESIGN.md §6). Scripts and the starter send a project API key as a bearer token: stateless, no CSRF. The dashboard signs in and uses a session cookie, so its unsafe requests to /api need the CSRF header (single-page-app pattern: the token is in the readable `XSRF-TOKEN` cookie and comes back as `X-XSRF-TOKEN`). Both resolve to a `c.s.c.s.a.ProjectPrincipal`. Pings are open: the ping key is the secret.
-* `c.s.c.s.a.internal.security.SessionSignIn` -- Starts and ends browser sessions (DESIGN.md §6). Sign-in changes the session id and rotates the CSRF token; sign-out invalidates the session and clears both cookies.
-* `c.s.c.s.a.web.AccountsExceptionHandler` -- Sign-in and setup errors of the management API, as RFC 9457 problem details.
+* `c.s.c.s.a.internal.security.SecurityConfig` -- Two ways in (DESIGN.md §6). Scripts and the starter send a project API key as a bearer token: stateless, no CSRF. The dashboard signs in and uses a session cookie, so its unsafe requests to /api need the CSRF header (single-page-app pattern: the token is in the readable `XSRF-TOKEN` cookie and comes back as `X-XSRF-TOKEN`). Both resolve to a `c.s.c.s.a.ProjectPrincipal`. Pings are open: the ping key is the secret.  
++
+Authorities (DESIGN.md §6, Roles): `PROJECT` acts on a project (an API key, or a session whose account is a member of its current project); `ACCOUNT` is any signed-in session; `MEMBER` and `OWNER` are the session's role in its current project; `ADMIN` is the instance admin. `c.s.c.s.a.internal.security.AccountSessionFilter` recomputes a session's authorities on every request.
+* `c.s.c.s.a.internal.security.SessionSignIn` -- Starts, changes and ends browser sessions (DESIGN.md §6). Sign-in changes the session id, rotates the CSRF token and records the account's session version; sign-out invalidates the session and clears both cookies.
+* `c.s.c.s.a.web.AccountsExceptionHandler` -- Errors of sign-in, setup, invites and memberships in the management API, as RFC 9457 problem details.
+* `c.s.c.s.a.web.InviteViews` -- Invites as the API returns them, and their links: `<CRONBELL_BASE_URL>/invite/<token>`, or the request's own address when the base URL is unset (DESIGN.md §6, Projects and invites).
 * `o.s.s.c.u.UserDetailsService`
 * `o.s.s.w.SecurityFilterChain`
 * `o.s.s.w.c.SecurityContextRepository`
 * `o.s.s.w.c.CsrfTokenRepository`
+|Bean references
+|* `c.s.c.s.s.database.Database` (in Shared) -- Which database we run on, and the SQL that differs between them.
 |===
