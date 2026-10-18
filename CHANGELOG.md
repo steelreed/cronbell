@@ -19,6 +19,8 @@ All notable changes to Cronbell are listed here. The format follows
 - The Up tile of the overview said "38% of checks"; it now says "on schedule".
 - The light theme had white cards on a grey page. As in the Steelreed design system, the page is
   now white and cards, tables and code use the `#F7F7F7` surface.
+- On phones the status filter cut "New" in half and hid "Paused". The row still scrolls, now
+  with a fade on the side that has more, and the chosen filter is scrolled into view.
 
 ## [0.1.0-beta.2] - 2026-10-17
 
