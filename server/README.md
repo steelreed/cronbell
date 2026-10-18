@@ -39,7 +39,7 @@ and is the instance admin.
 There is no open registration. Other people get in through single-use invite links: the instance
 admin's **project invites** give someone an account and a project of their own (the admin gets no
 access to it), and an owner's **member invites** add someone to that owner's project as a member.
-Links are made on the dashboard's Invites and Members pages, last `CRONBELL_INVITE_TTL` (7 days) and
+Links are made on the dashboard's Instance invites and Members pages, last `CRONBELL_INVITE_TTL` (7 days) and
 are not emailed: copy the link and send it. An account can be in several projects and switches
 between them in the sidebar. Roles: owners manage members, invites and API keys; members manage
 checks and alert channels and see the keys. See DESIGN.md §6 (Roles, Projects and invites).

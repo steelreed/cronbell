@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { NOW } from "@/test/fixtures";
 import {
+  formatAddress,
   formatClock,
   formatDuration,
   formatPercent,
@@ -44,6 +45,19 @@ describe("format", () => {
     expect(formatPercent(0.9999)).toBe("99.9%");
     expect(formatPercent(23 / 24)).toBe("95.8%");
     expect(formatPercent(0)).toBe("0%");
+  });
+
+  it("writes IPv6 addresses compressed and IPv4-mapped ones as IPv4", () => {
+    expect(formatAddress("0:0:0:0:0:0:0:1")).toBe("::1");
+    expect(formatAddress("2001:db8:0:0:1:0:0:1")).toBe("2001:db8::1:0:0:1");
+    expect(formatAddress("fe80:0:0:0:1c2b:3dff:fe4a:5b6c%en0")).toBe(
+      "fe80::1c2b:3dff:fe4a:5b6c%en0",
+    );
+    expect(formatAddress("2001:db8:1:2:3:4:5:6")).toBe("2001:db8:1:2:3:4:5:6");
+    expect(formatAddress("0:0:0:0:0:ffff:a00:7")).toBe("10.0.0.7");
+    expect(formatAddress("::ffff:192.168.1.20")).toBe("192.168.1.20");
+    expect(formatAddress("10.0.4.12")).toBe("10.0.4.12");
+    expect(formatAddress("not:an:address")).toBe("not:an:address");
   });
 
   it("writes schedules", () => {

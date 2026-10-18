@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { EmptyChecks } from "@/components/empty-checks";
 import { AttentionList } from "@/components/overview/attention-list";
+import { FirstSteps } from "@/components/overview/first-steps";
 import { RecentEvents } from "@/components/overview/recent-events";
 import { StatTiles } from "@/components/overview/stat-tiles";
 import { StatusStrip } from "@/components/overview/status-strip";
@@ -21,8 +21,8 @@ const EVENTS = 30;
 
 /**
  * The overview: counts, what needs attention now, the latest status changes and how every
- * check spent the last 30 days. A brand-new install shows how to add the first check instead
- * of empty widgets.
+ * check spent the last 30 days, under the setup steps while the project is young. A project
+ * without checks shows only the steps.
  */
 function OverviewPage() {
   const { session } = Route.useRouteContext();
@@ -36,9 +36,10 @@ function OverviewPage() {
       </Panel>
     );
   }
-  if (checks.data.length === 0) return <EmptyChecks session={session} />;
+  if (checks.data.length === 0) return <FirstSteps checks={checks.data} session={session} />;
   return (
     <div className="space-y-4">
+      <FirstSteps checks={checks.data} session={session} />
       <StatTiles counts={countByHealth(checks.data, now)} />
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem] xl:grid-rows-[auto_1fr]">
         <div className="min-w-0 xl:col-start-2">

@@ -13,12 +13,13 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as SigninRouteImport } from './routes/signin'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppSplatRouteImport } from './routes/_app/$'
 import { Route as AppAccountRouteImport } from './routes/_app/account'
 import { Route as AppChannelsRouteImport } from './routes/_app/channels'
-import { Route as AppInvitesRouteImport } from './routes/_app/invites'
 import { Route as AppKeysRouteImport } from './routes/_app/keys'
 import { Route as AppMembersRouteImport } from './routes/_app/members'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token'
+import { Route as AppAdminInvitesRouteImport } from './routes/_app/admin/invites'
 import { Route as AppChecksIndexRouteImport } from './routes/_app/checks/index'
 import { Route as AppChecksNewRouteImport } from './routes/_app/checks/new'
 import { Route as AppChecksSlugIndexRouteImport } from './routes/_app/checks/$slug/index'
@@ -43,6 +44,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppSplatRoute = AppSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAccountRoute = AppAccountRouteImport.update({
   id: '/account',
   path: '/account',
@@ -51,11 +57,6 @@ const AppAccountRoute = AppAccountRouteImport.update({
 const AppChannelsRoute = AppChannelsRouteImport.update({
   id: '/channels',
   path: '/channels',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppInvitesRoute = AppInvitesRouteImport.update({
-  id: '/invites',
-  path: '/invites',
   getParentRoute: () => AppRoute,
 } as any)
 const AppKeysRoute = AppKeysRouteImport.update({
@@ -72,6 +73,11 @@ const InviteTokenRoute = InviteTokenRouteImport.update({
   id: '/invite/$token',
   path: '/invite/$token',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AppAdminInvitesRoute = AppAdminInvitesRouteImport.update({
+  id: '/admin/invites',
+  path: '/admin/invites',
+  getParentRoute: () => AppRoute,
 } as any)
 const AppChecksIndexRoute = AppChecksIndexRouteImport.update({
   id: '/checks/',
@@ -98,12 +104,13 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/setup': typeof SetupRoute
   '/signin': typeof SigninRoute
+  '/$': typeof AppSplatRoute
   '/account': typeof AppAccountRoute
   '/channels': typeof AppChannelsRoute
-  '/invites': typeof AppInvitesRoute
   '/keys': typeof AppKeysRoute
   '/members': typeof AppMembersRoute
   '/invite/$token': typeof InviteTokenRoute
+  '/admin/invites': typeof AppAdminInvitesRoute
   '/checks/new': typeof AppChecksNewRoute
   '/checks/': typeof AppChecksIndexRoute
   '/checks/$slug/edit': typeof AppChecksSlugEditRoute
@@ -112,13 +119,14 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/setup': typeof SetupRoute
   '/signin': typeof SigninRoute
+  '/$': typeof AppSplatRoute
   '/account': typeof AppAccountRoute
   '/channels': typeof AppChannelsRoute
-  '/invites': typeof AppInvitesRoute
   '/keys': typeof AppKeysRoute
   '/members': typeof AppMembersRoute
   '/invite/$token': typeof InviteTokenRoute
   '/': typeof AppIndexRoute
+  '/admin/invites': typeof AppAdminInvitesRoute
   '/checks/new': typeof AppChecksNewRoute
   '/checks': typeof AppChecksIndexRoute
   '/checks/$slug/edit': typeof AppChecksSlugEditRoute
@@ -129,13 +137,14 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/setup': typeof SetupRoute
   '/signin': typeof SigninRoute
+  '/_app/$': typeof AppSplatRoute
   '/_app/account': typeof AppAccountRoute
   '/_app/channels': typeof AppChannelsRoute
-  '/_app/invites': typeof AppInvitesRoute
   '/_app/keys': typeof AppKeysRoute
   '/_app/members': typeof AppMembersRoute
   '/invite/$token': typeof InviteTokenRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/admin/invites': typeof AppAdminInvitesRoute
   '/_app/checks/new': typeof AppChecksNewRoute
   '/_app/checks/': typeof AppChecksIndexRoute
   '/_app/checks/$slug/edit': typeof AppChecksSlugEditRoute
@@ -147,12 +156,13 @@ export interface FileRouteTypes {
     | '/'
     | '/setup'
     | '/signin'
+    | '/$'
     | '/account'
     | '/channels'
-    | '/invites'
     | '/keys'
     | '/members'
     | '/invite/$token'
+    | '/admin/invites'
     | '/checks/new'
     | '/checks/'
     | '/checks/$slug/edit'
@@ -161,13 +171,14 @@ export interface FileRouteTypes {
   to:
     | '/setup'
     | '/signin'
+    | '/$'
     | '/account'
     | '/channels'
-    | '/invites'
     | '/keys'
     | '/members'
     | '/invite/$token'
     | '/'
+    | '/admin/invites'
     | '/checks/new'
     | '/checks'
     | '/checks/$slug/edit'
@@ -177,13 +188,14 @@ export interface FileRouteTypes {
     | '/_app'
     | '/setup'
     | '/signin'
+    | '/_app/$'
     | '/_app/account'
     | '/_app/channels'
-    | '/_app/invites'
     | '/_app/keys'
     | '/_app/members'
     | '/invite/$token'
     | '/_app/'
+    | '/_app/admin/invites'
     | '/_app/checks/new'
     | '/_app/checks/'
     | '/_app/checks/$slug/edit'
@@ -227,6 +239,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/$': {
+      id: '/_app/$'
+      path: '/$'
+      fullPath: '/$'
+      preLoaderRoute: typeof AppSplatRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/account': {
       id: '/_app/account'
       path: '/account'
@@ -239,13 +258,6 @@ declare module '@tanstack/react-router' {
       path: '/channels'
       fullPath: '/channels'
       preLoaderRoute: typeof AppChannelsRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/invites': {
-      id: '/_app/invites'
-      path: '/invites'
-      fullPath: '/invites'
-      preLoaderRoute: typeof AppInvitesRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/keys': {
@@ -268,6 +280,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/invite/$token'
       preLoaderRoute: typeof InviteTokenRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_app/admin/invites': {
+      id: '/_app/admin/invites'
+      path: '/admin/invites'
+      fullPath: '/admin/invites'
+      preLoaderRoute: typeof AppAdminInvitesRouteImport
+      parentRoute: typeof AppRoute
     }
     '/_app/checks/': {
       id: '/_app/checks/'
@@ -301,12 +320,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteChildren {
+  AppSplatRoute: typeof AppSplatRoute
   AppAccountRoute: typeof AppAccountRoute
   AppChannelsRoute: typeof AppChannelsRoute
-  AppInvitesRoute: typeof AppInvitesRoute
   AppKeysRoute: typeof AppKeysRoute
   AppMembersRoute: typeof AppMembersRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppAdminInvitesRoute: typeof AppAdminInvitesRoute
   AppChecksNewRoute: typeof AppChecksNewRoute
   AppChecksIndexRoute: typeof AppChecksIndexRoute
   AppChecksSlugEditRoute: typeof AppChecksSlugEditRoute
@@ -314,12 +334,13 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppSplatRoute: AppSplatRoute,
   AppAccountRoute: AppAccountRoute,
   AppChannelsRoute: AppChannelsRoute,
-  AppInvitesRoute: AppInvitesRoute,
   AppKeysRoute: AppKeysRoute,
   AppMembersRoute: AppMembersRoute,
   AppIndexRoute: AppIndexRoute,
+  AppAdminInvitesRoute: AppAdminInvitesRoute,
   AppChecksNewRoute: AppChecksNewRoute,
   AppChecksIndexRoute: AppChecksIndexRoute,
   AppChecksSlugEditRoute: AppChecksSlugEditRoute,

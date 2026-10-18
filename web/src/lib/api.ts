@@ -18,6 +18,10 @@ export class ApiError extends Error {
   }
 }
 
+export function isNotFound(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 404;
+}
+
 export function readCookie(name: string, cookies: string = document.cookie): string | null {
   for (const part of cookies.split(";")) {
     const [key, ...rest] = part.trim().split("=");

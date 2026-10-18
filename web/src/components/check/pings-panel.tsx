@@ -2,7 +2,7 @@ import { ChevronRightIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
-import { formatDuration } from "@/lib/format";
+import { formatAddress, formatDuration } from "@/lib/format";
 import { groupRuns, type RunGroup, type RunResult } from "@/lib/runs";
 import { t } from "@/lib/strings";
 import type { Ping, PingKind } from "@/lib/types";
@@ -263,7 +263,9 @@ function Output({ body }: { body: string }) {
 }
 
 function source(ping: Ping) {
-  return [ping.remoteAddr, ping.userAgent].filter(Boolean).join(" · ");
+  return [ping.remoteAddr && formatAddress(ping.remoteAddr), ping.userAgent]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function PingRow({ ping, now }: { ping: Ping; now: number }) {

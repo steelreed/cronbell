@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { PauseIcon, PencilIcon, PlayIcon } from "lucide-react";
+import { useState } from "react";
+import { FirstPingPanel } from "@/components/check/first-ping";
 import { HistoryPanel } from "@/components/check/history-panel";
 import { IntegratePanel } from "@/components/check/integrate-panel";
 import { PingsPanel } from "@/components/check/pings-panel";
@@ -8,15 +10,23 @@ import { RunsPanel } from "@/components/check/runs-panel";
 import { CheckActionsMenu } from "@/components/checks/row-actions";
 import { Dash, DescriptionList } from "@/components/description-list";
 import { NextDue } from "@/components/next-due";
+import { CheckNotFound } from "@/components/not-found";
 import { Bar, ErrorNote, ErrorState, LoadingList, PageHeader, Panel } from "@/components/page";
 import { StatusText } from "@/components/status-text";
 import { Time } from "@/components/time";
 import { Button } from "@/components/ui/button";
-import { ApiError } from "@/lib/api";
+import { isNotFound } from "@/lib/api";
 import { useCheckActions } from "@/lib/check-actions";
 import { formatSchedule, formatSeconds } from "@/lib/format";
 import { missedRuns } from "@/lib/history";
-import { checkAlertsQuery, checkEventsQuery, checkQuery, pingsQuery } from "@/lib/queries";
+import {
+  checkAlertsQuery,
+  checkEventsQuery,
+  checkQuery,
+  FIRST_PING_POLL_MS,
+  POLL_MS,
+  pingsQuery,
+} from "@/lib/queries";
 import { runsFromPings } from "@/lib/runs";
 import { attention } from "@/lib/status";
 import { t } from "@/lib/strings";
@@ -34,35 +44,37 @@ function CheckPage() {
   const now = useNow();
   if (check.isPending) return <CheckSkeleton />;
   if (check.isError) {
-    const missing = check.error instanceof ApiError && check.error.status === 404;
-    return missing ? (
-      <div className="mx-auto max-w-md py-16 text-center">
-        <h1 className="font-semibold text-xl">{t.check.notFound}</h1>
-        <Button asChild className="mt-6">
-          <Link to="/checks">{t.check.backToChecks}</Link>
-        </Button>
-      </div>
+    return isNotFound(check.error) ? (
+      <CheckNotFound slug={slug} />
     ) : (
       <Panel>
         <ErrorState error={check.error} onRetry={() => check.refetch()} />
       </Panel>
     );
   }
-  return <CheckView check={check.data} now={now} />;
+  return <CheckView key={check.data.slug} check={check.data} now={now} />;
 }
 
 function CheckView({ check, now }: { check: Check; now: number }) {
-  const pings = useQuery(pingsQuery(check.slug));
+  // Fixed when the page opens, so the panels stay in place as the first ping lands.
+  const [firstRun] = useState(check.lastPingAt === null);
+  const pings = useQuery({
+    ...pingsQuery(check.slug),
+    refetchInterval: (query) =>
+      firstRun && !query.state.data?.length ? FIRST_PING_POLL_MS : POLL_MS,
+  });
   const events = useQuery(checkEventsQuery(check.slug));
   const runs = pings.data ? runsFromPings(pings.data) : [];
   const missed = events.data ? missedRuns(events.data) : [];
+  const showRuns = !firstRun || pings.isError || (pings.data?.length ?? 0) > 0;
   return (
     <>
       <CheckHeader check={check} now={now} />
       <div className="@container">
         <div className="grid gap-4 @[64rem]:grid-cols-[minmax(0,1fr)_20rem]">
           <div className="min-w-0 space-y-4">
-            {pings.isPending ? (
+            {firstRun && <FirstPingPanel check={check} now={now} />}
+            {!showRuns ? null : pings.isPending ? (
               <Panel title={t.check.runs}>
                 <Bar className="h-9 w-full" />
                 <Bar className="mt-8 h-32 w-full" />
@@ -74,9 +86,9 @@ function CheckView({ check, now }: { check: Check; now: number }) {
             ) : (
               <RunsPanel check={check} runs={runs} missed={missed} />
             )}
-            <History slug={check.slug} now={now} />
-            {pings.data && <PingsPanel pings={pings.data} now={now} />}
-            <IntegratePanel check={check} />
+            {showRuns && <History slug={check.slug} now={now} />}
+            {showRuns && pings.data && <PingsPanel pings={pings.data} now={now} />}
+            {!firstRun && <IntegratePanel check={check} />}
           </div>
           <div className="min-w-0 space-y-4 @[64rem]:order-none">
             <Panel title={t.check.details}>
