@@ -76,7 +76,7 @@ class InviteAcceptController {
 			if (principal != null && principal.isAccount()) {
 				Account account = this.accounts.findById(principal.accountId()).orElseThrow();
 				String projectId = this.invites.acceptWithAccount(token, account, accept.projectName());
-				var signedIn = this.sessions.signIn(account, projectId, request, response);
+				var signedIn = this.sessions.signInAgain(account, projectId, request, response);
 				return ResponseEntity.ok(this.sessionController.response(signedIn));
 			}
 			var accepted = this.invites.acceptWithNewAccount(token, accept.email(), accept.password(),

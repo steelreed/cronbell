@@ -9,16 +9,21 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.jayway.jsonpath.JsonPath;
+import com.steelreed.cronbell.server.accounts.internal.AccountService;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doAnswer;
 
 /**
  * Accounts, projects, invites and tenant isolation (DESIGN.md §6, Roles; Projects and
@@ -34,6 +39,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 abstract class AbstractProjectsIntegrationTests extends AbstractIntegrationTests {
 
 	static final String PASSWORD = "tenant password 1";
+
+	/** Lets a test run a concurrent request at an exact point of another one. */
+	@MockitoSpyBean
+	AccountService accountsSpy;
 
 	// --- Invites ---
 
@@ -373,6 +382,63 @@ abstract class AbstractProjectsIntegrationTests extends AbstractIntegrationTests
 			.isEqualTo(403);
 	}
 
+	@Test
+	void ofTwoConcurrentPasswordChangesTheSecondIsRefused() {
+		String email = uniqueEmail();
+		Browser first = tenant(email);
+		Browser second = signedInAs(email, PASSWORD);
+		String accountId = json(first.get("/api/v1/session"), "$.account.id", String.class);
+		AtomicBoolean interleaved = new AtomicBoolean();
+		AtomicInteger firstStatus = new AtomicInteger();
+		// The second change checks the old password, then the first one completes before
+		// the second stores its own.
+		doAnswer((call) -> {
+			Object checked = call.callRealMethod();
+			if (interleaved.compareAndSet(false, true)) {
+				firstStatus
+					.set(first.call("POST", "/api/v1/account/password", passwordChange(PASSWORD, "first new one"))
+						.statusCode());
+			}
+			return checked;
+		}).when(this.accountsSpy).authenticateById(accountId, PASSWORD);
+
+		HttpResponse<String> late = second.call("POST", "/api/v1/account/password",
+				passwordChange(PASSWORD, "second new one"));
+		assertThat(firstStatus.get()).isEqualTo(204);
+		assertThat(late.statusCode()).as(late.body()).isEqualTo(409);
+		assertThat(signIn(email, "first new one").statusCode()).isEqualTo(200);
+		assertThat(signIn(email, "second new one").statusCode()).isEqualTo(401);
+		assertThat(first.get("/api/v1/session").statusCode()).isEqualTo(200);
+		assertThat(second.get("/api/v1/session").statusCode()).isEqualTo(401);
+	}
+
+	@Test
+	void aPasswordChangeDuringASignedInAcceptStillEndsThatSession() {
+		String email = uniqueEmail();
+		Browser accepting = tenant(email);
+		Browser changing = signedInAs(email, PASSWORD);
+		String accountId = json(accepting.get("/api/v1/session"), "$.account.id", String.class);
+		String token = projectInvite(admin());
+		AtomicBoolean interleaved = new AtomicBoolean();
+		AtomicInteger changeStatus = new AtomicInteger();
+		// The password changes after the accept passed the session check, before it signs
+		// the session in again.
+		doAnswer((call) -> {
+			if (interleaved.compareAndSet(false, true)) {
+				changeStatus
+					.set(changing.call("POST", "/api/v1/account/password", passwordChange(PASSWORD, "a new password"))
+						.statusCode());
+			}
+			return call.callRealMethod();
+		}).when(this.accountsSpy).findById(accountId);
+
+		HttpResponse<String> accepted = accepting.call("POST", "/api/v1/invites/" + token + "/accept", "{}");
+		assertThat(accepted.statusCode()).as(accepted.body()).isEqualTo(200);
+		assertThat(changeStatus.get()).isEqualTo(204);
+		assertThat(accepting.get("/api/v1/session").statusCode()).isEqualTo(401);
+		assertThat(changing.get("/api/v1/session").statusCode()).isEqualTo(200);
+	}
+
 	// --- Tenant isolation ---
 
 	/**
@@ -509,6 +575,10 @@ abstract class AbstractProjectsIntegrationTests extends AbstractIntegrationTests
 	}
 
 	// --- Helpers ---
+
+	static String passwordChange(String current, String next) {
+		return "{\"currentPassword\":\"" + current + "\",\"newPassword\":\"" + next + "\"}";
+	}
 
 	static String uniqueEmail() {
 		return "t-" + UUID.randomUUID().toString().substring(0, 12) + "@example.com";

@@ -274,7 +274,8 @@ its memberships (it was removed) gets `403` on project endpoints until it switch
     `201`. An email that already has an account is `409` ("sign in first, then open the link
     again").
   - Signed in: the invite goes to the signed-in account; `email` and `password` are ignored. `200`.
-    A member invite to a project the account is already in is `409`.
+    A member invite to a project the account is already in is `409`. The session keeps the
+    session version it was signed in with, so a password change made meanwhile still ends it.
   - A project invite creates a new project owned by the account, named `projectName` (1 to 200
     characters, default "<local part of the email>'s project"). A new project starts empty: no
     checks, channels or API keys. Its owner creates an API key on the API keys page; only the
@@ -304,7 +305,9 @@ its memberships (it was removed) gets `403` on project endpoints until it switch
   session of the account: the account has a session version, raised by the change, and a session
   made with an older version is signed out on its next request. This works with sessions in
   memory and would with sessions in the database. The session that made the change stays signed
-  in, with a new session id.
+  in, with a new session id. The new password is stored only while the session version is still
+  the one read with the current password, so of two concurrent changes with the same current
+  password the second is `409` (as other conflicts in this module) and changes nothing.
 - **First start.** When no account exists and both `CRONBELL_ADMIN_EMAIL` and
   `CRONBELL_ADMIN_PASSWORD` are set, the server creates that account at start-up. Otherwise the
   dashboard shows a one-time setup page that posts to `POST /api/v1/setup`, which is accepted only

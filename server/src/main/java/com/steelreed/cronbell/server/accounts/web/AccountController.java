@@ -54,7 +54,8 @@ class AccountController {
 
 	/**
 	 * Changes the password. Wrong current passwords count like failed sign-ins. Every
-	 * other session of the account ends; this one goes on with a new session id.
+	 * other session of the account ends; this one goes on with a new session id. A
+	 * concurrent change with the same current password is a 409.
 	 */
 	@PostMapping("/api/v1/account/password")
 	ResponseEntity<Void> changePassword(@AuthenticationPrincipal ProjectPrincipal principal,
@@ -63,13 +64,14 @@ class AccountController {
 		this.limiter.retryAfter(client, principal.email()).ifPresent((wait) -> {
 			throw new TooManySignInsException(wait);
 		});
-		if (this.accounts.authenticateById(principal.accountId(), change.currentPassword()).isEmpty()) {
-			this.limiter.failed(client, principal.email());
-			throw new IllegalArgumentException("the current password is wrong");
-		}
+		Account account = this.accounts.authenticateById(principal.accountId(), change.currentPassword())
+			.orElseThrow(() -> {
+				this.limiter.failed(client, principal.email());
+				return new IllegalArgumentException("the current password is wrong");
+			});
 		this.limiter.succeeded(client, principal.email());
-		Account account = this.accounts.changePassword(principal.accountId(), change.newPassword());
-		this.sessions.signIn(account, principal.projectId(), request, response);
+		Account changed = this.accounts.changePassword(account, change.newPassword());
+		this.sessions.signIn(changed, principal.projectId(), request, response);
 		return ResponseEntity.noContent().build();
 	}
 
