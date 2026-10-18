@@ -55,12 +55,13 @@ public class DeliveryRepository {
 		this.json = json;
 	}
 
-	public void insert(String id, String channelId, String checkId, Alert alert, Instant now) {
+	/** Queues {@code alert} for a channel, raised by the status event {@code eventId}. */
+	public void insert(String id, String channelId, String checkId, String eventId, Alert alert, Instant now) {
 		this.jdbc.sql("""
-				INSERT INTO deliveries (id, channel_id, check_id, event, payload, status, attempts, next_attempt_at,
-				                        created_at)
-				VALUES (?, ?, ?, ?, ?, 'PENDING', 0, ?, ?)""")
-			.params(id, channelId, checkId, alert.kind().name(), this.json.writeValueAsString(alert),
+				INSERT INTO deliveries (id, channel_id, check_id, event_id, event, payload, status, attempts,
+				                        next_attempt_at, created_at)
+				VALUES (?, ?, ?, ?, ?, ?, 'PENDING', 0, ?, ?)""")
+			.params(id, channelId, checkId, eventId, alert.kind().name(), this.json.writeValueAsString(alert),
 					now.toEpochMilli(), now.toEpochMilli())
 			.update();
 	}
@@ -140,6 +141,27 @@ public class DeliveryRepository {
 					rs.getInt("pending")));
 		});
 		return result;
+	}
+
+	/** A delivery as the history of its check shows it. */
+	public record CheckDelivery(String id, String eventId, String channelId, String channelName,
+			ChannelType channelType, Status status, String lastError, Instant createdAt, Instant deliveredAt) {
+	}
+
+	/** The latest deliveries of a check, newest first. */
+	public List<CheckDelivery> findRecentByCheck(String checkId, int limit) {
+		return this.jdbc.sql("""
+				SELECT d.id, d.event_id, d.channel_id, c.name, c.type, d.status, d.last_error, d.created_at,
+				       d.delivered_at
+				  FROM deliveries d JOIN channels c ON c.id = d.channel_id
+				 WHERE d.check_id = ? ORDER BY d.created_at DESC, d.id DESC LIMIT ?""")
+			.param(checkId)
+			.param(limit)
+			.query((rs, row) -> new CheckDelivery(rs.getString("id"), rs.getString("event_id"),
+					rs.getString("channel_id"), rs.getString("name"), ChannelType.valueOf(rs.getString("type")),
+					Status.valueOf(rs.getString("status")), rs.getString("last_error"),
+					Instant.ofEpochMilli(rs.getLong("created_at")), instant(rs, "delivered_at")))
+			.list();
 	}
 
 	/**

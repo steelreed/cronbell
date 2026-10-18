@@ -1,5 +1,5 @@
 import { CheckIcon, ChevronDownIcon, SearchIcon, XIcon } from "lucide-react";
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -61,7 +61,36 @@ export function SearchBox({
   );
 }
 
-/** Exactly one status at a time, with counts: a row of tabs that scrolls on narrow screens. */
+/** Whether a horizontal scroller has more to show past its start and its end. */
+function useOverflow<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  const [overflow, setOverflow] = useState({ start: false, end: false });
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const update = () =>
+      setOverflow({
+        start: element.scrollLeft > 0,
+        end: element.scrollLeft + element.clientWidth < element.scrollWidth - 1,
+      });
+    update();
+    element.addEventListener("scroll", update, { passive: true });
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => {
+      element.removeEventListener("scroll", update);
+      observer.disconnect();
+    };
+  }, []);
+  return [ref, overflow] as const;
+}
+
+const FADE = "2rem";
+
+/**
+ * Exactly one status at a time, with counts: a row of tabs that scrolls on narrow screens.
+ * The edges fade where more tabs are hidden, and the chosen one is scrolled into view.
+ */
 export function StatusTabs({
   value,
   counts,
@@ -73,8 +102,21 @@ export function StatusTabs({
   total: number;
   onChange: (value: StatusFilter) => void;
 }) {
+  const [scroller, overflow] = useOverflow<HTMLDivElement>();
+  useEffect(() => {
+    scroller.current
+      ?.querySelector(`[data-filter="${value}"]`)
+      ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [scroller, value]);
+  const mask = `linear-gradient(to right, ${overflow.start ? `transparent, black ${FADE}` : "black"}, ${
+    overflow.end ? `black calc(100% - ${FADE}), transparent` : "black"
+  })`;
   return (
-    <div className="scrollbar-clean min-w-0 overflow-x-auto">
+    <div
+      ref={scroller}
+      className="scrollbar-clean min-w-0 overflow-x-auto"
+      style={{ maskImage: mask }}
+    >
       <div
         role="radiogroup"
         aria-label={t.checks.statusFilter}
@@ -91,6 +133,7 @@ export function StatusTabs({
               type="button"
               role="radio"
               aria-checked={selected}
+              data-filter={filter}
               onClick={() => onChange(filter)}
               className={cn(
                 "flex h-9 shrink-0 items-center gap-2 rounded-lg border border-transparent px-3 font-medium text-sm transition-colors",

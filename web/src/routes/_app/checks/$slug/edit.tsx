@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { CheckForm } from "@/components/check-form";
+import { CheckNotFound } from "@/components/not-found";
 import { Bar, ErrorState, PageHeader, Panel } from "@/components/page";
-import { api } from "@/lib/api";
+import { api, isNotFound } from "@/lib/api";
 import { checkQuery } from "@/lib/queries";
 import { t } from "@/lib/strings";
 import type { Check, CheckDefinition } from "@/lib/types";
@@ -25,6 +26,7 @@ function EditCheckPage() {
       await navigate({ to: "/checks/$slug", params: { slug } });
     },
   });
+  if (check.isError && isNotFound(check.error)) return <CheckNotFound slug={slug} />;
   return (
     <>
       <PageHeader title={t.form.editTitle(check.data?.name ?? slug)} />

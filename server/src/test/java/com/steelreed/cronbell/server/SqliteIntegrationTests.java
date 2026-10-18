@@ -81,6 +81,7 @@ class SqliteIntegrationTests extends AbstractProjectsIntegrationTests {
 		String url = "jdbc:sqlite:" + file + "?foreign_keys=true";
 		upgradeFromBeta1MakesTheSetupAccountInstanceAdmin(
 				Flyway.configure().dataSource(url, null, null).target("4").load(),
+				Flyway.configure().dataSource(url, null, null).target("6").load(),
 				Flyway.configure().dataSource(url, null, null).load(),
 				JdbcClient.create(new DriverManagerDataSource(url)));
 	}

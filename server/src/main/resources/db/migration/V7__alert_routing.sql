@@ -39,20 +39,24 @@ CREATE TABLE deliveries (
     -- Short reason of the latest failed attempt: status code and message, never a URL or secret.
     last_error      VARCHAR(500),
     created_at      BIGINT      NOT NULL,
-    delivered_at    BIGINT
+    delivered_at    BIGINT,
+    -- The status event that raised the delivery (V6), so a check's history shows where its
+    -- alerts went.
+    event_id        VARCHAR(36)
 );
 
 CREATE INDEX deliveries_due ON deliveries (status, next_attempt_at);
 CREATE INDEX deliveries_channel ON deliveries (channel_id, created_at);
 CREATE INDEX deliveries_status_created ON deliveries (status, created_at);
+CREATE INDEX deliveries_check_created ON deliveries (check_id, created_at);
 
 INSERT INTO channels (id, project_id, type, name, config, created_at, updated_at)
 SELECT id, project_id, type, name, config, created_at, updated_at FROM channels_copy;
 
 INSERT INTO deliveries (id, channel_id, check_id, event, payload, status, attempts, next_attempt_at,
-                        last_attempt_at, last_error, created_at, delivered_at)
+                        last_attempt_at, last_error, created_at, delivered_at, event_id)
 SELECT id, channel_id, check_id, event, payload, status, attempts, next_attempt_at, last_attempt_at,
-       last_error, created_at, delivered_at
+       last_error, created_at, delivered_at, event_id
   FROM deliveries_copy;
 
 DROP TABLE deliveries_copy;

@@ -17,6 +17,6 @@ export const NAV_ICONS: Record<NavTo, ReactNode> = {
   "/channels": <BellRingIcon aria-hidden />,
   "/keys": <KeyRoundIcon aria-hidden />,
   "/members": <UsersRoundIcon aria-hidden />,
-  "/invites": <MailPlusIcon aria-hidden />,
   "/account": <UserRoundIcon aria-hidden />,
+  "/admin/invites": <MailPlusIcon aria-hidden />,
 };

@@ -116,12 +116,36 @@ Rules:
   late; this is documented. On UP → DOWN and DOWN → UP the server publishes an internal
   `CheckEvent`; the notifier (§8) queues its deliveries before the transaction commits and sends
   them after.
+- **Status history.** Every status change is stored as a status event, in the transaction that
+  makes it: `UP` (the first run, a run after a pause, a recovery), `DOWN` with its reason and the
+  run it is about (the missed due time, or the start of the run that ran too long), `PAUSED` and
+  `RESUMED`. Its time is when Cronbell saw the change; for a missed run, when the detector noticed
+  (up to 15 s after `due + grace`). The `CheckEvent` of a DOWN or a recovery carries its event,
+  and every delivery it queues keeps it, so the history shows where each alert went. Upgrading
+  starts the history with one event per check that is DOWN or paused, timed as well as the check
+  row knows. The events of a check are ordered by time, then by the order they were written (a
+  per-check sequence taken under the check's row lock), so two changes in one millisecond keep
+  their order in the history, the uptime and pruning. Pings, pauses and resumes of one check lock
+  its row, so each applies to the state the previous one left.
 - Detection must be safe to run on several server instances: it claims due checks with
   `SELECT … FOR UPDATE SKIP LOCKED`.
+- **Downtime.** Every detector run leaves a heartbeat in the database (`detector_heartbeat`). When
+  the server starts and the last heartbeat is more than 2 minutes old (a constant, a few detector
+  runs), the server was away (stopped, upgraded, the host rebooted) and pings sent meanwhile were
+  lost: the jobs probably ran, Cronbell could not hear them. Before its first detection the server
+  treats as resumed (§3) every UP check whose open run could have finished in the gap (its
+  `max_runtime` ends after the last heartbeat), or whose run fell due by now without a ping and
+  with its grace ending after the last heartbeat: the open run is dropped and `due` is computed
+  from now, so the job has a full period plus grace to report. Nothing is alerted and no status
+  changes; a check that was already DOWN stays DOWN, and one still silent after its new deadline
+  goes DOWN as usual. This pass waits for checks locked by a ping instead of skipping them, so
+  none keeps its old deadline. One INFO line says `Server was away from <last heartbeat> to <now>; N checks
+  given a new deadline`. Shorter restarts, and a first start (no heartbeat yet), change nothing.
 
 ## 5. Ping API
 
-Compatible with the Healthchecks.io URL shape, so moving over is a host change.
+The UUID ping URLs of Healthchecks.io, so a script that uses them moves over by changing the host
+and the key. Its slug URLs (`/ping/{pingKey}/{slug}`) and `?create=1` are not supported.
 
 ```
 GET|POST /ping/{pingKey}              success
@@ -181,6 +205,8 @@ GET    /api/v1/checks/{slug}          one check
 PUT    /api/v1/checks/{slug}          create (201) or update (200); the ping key never changes; optional "channels" (§8, Routing)
 DELETE /api/v1/checks/{slug}          204; its pings and pending alerts go with it
 GET    /api/v1/checks/{slug}/pings    latest pings, newest first (?limit=, default 50, at most 200)
+GET    /api/v1/checks/{slug}/events   status changes, newest first (?limit=, default 50, at most 200)
+GET    /api/v1/checks/{slug}/alerts   deliveries of its alerts with eventId, channel and status, newest first (?limit=, default 50, at most 200)
 POST   /api/v1/checks/{slug}/pause    PAUSED until the next ping
 POST   /api/v1/checks/{slug}/resume   ends a pause (§3)
 GET    /api/v1/channels               alert channels of the project (§8)
@@ -194,6 +220,8 @@ POST   /api/v1/keys                   {"name"} -> 201 with the key, shown this o
 DELETE /api/v1/keys/{id}              204, the key stops working at once (session only)
 GET    /api/v1/runs/recent            latest finished runs per check: {slug: [{at, ok, exitCode}]}, oldest first (?limit=, default 20, at most 90)
 GET    /api/v1/stats/daily            finished runs and failures per day: [{date, runs, failures}], oldest first (?days=, default 14, at most 90; ?tz=, default UTC)
+GET    /api/v1/events                 status changes of every check, newest first, with slug and name (?limit=, default 50, at most 200)
+GET    /api/v1/stats/status           how each check spent each day: [{slug, name, days: [{date, state, runs, failures, missed, downMs}]}], oldest day first (?days=, default 30, at most 90; ?tz=, default UTC)
 GET    /api/v1/schedules/next         next runs of a cron expression: {cron, timeZone, runs} (?cron=, ?timeZone=, default UTC; ?count=, default 5, at most 10)
 ```
 
@@ -209,16 +237,27 @@ A ping in the list has `kind`, `exitCode`, `rid`, `body`, `receivedAt`, `remoteA
 and for a `success`/`fail` that closes a `start` seen in the same list, `durationMs` (matched by
 `rid`, else the latest open `start`).
 
-Runs and daily stats feed the dashboard's run bars and overview. A finished run is a `success`
+Runs feed the dashboard's run ticks, and `stats/daily` counts runs and failures per day. A finished run is a `success`
 or `fail` ping, so both only cover what pings recorded: a missed run leaves no ping and is not
 counted (the check's `status` and `downReason` say when the latest run was missed), and history
 older than the retention (§9) is gone. `runs/recent` reads the latest pings of each check through
 the `(check_id, received_at)` index, one short query per check. `stats/daily` cuts days at
 midnight in `tz` (the browser's zone), so a day can be 23 or 25 hours long around a DST change, and
-counts them in one statement. Status changes (DOWN, recovered) are not stored apart from the alert
-outbox, so there is no incident history yet. `schedules/next` lets the check form preview a cron
+counts them in one statement. `schedules/next` lets the check form preview a cron
 schedule with the detector's own code (DST rules included); it returns `400` for an invalid
 expression or zone, or one that never fires (30 February).
+
+The status history (§4) gives the rest. An event has `kind` (the status entered), `reason` and
+`runAt` for a DOWN, and `at`. `GET /checks/{slug}` (not the list) adds `stats`: `uptime7d` and
+`uptime30d`, the share of the last 7 or 30 days, or since the check was created, that it was not
+DOWN, paused time left out (`null` when no time is left); and `averageDurationMs7d`, the average of
+the runs that started and finished in the last 7 days, paired as in the ping list (it reads at
+most the latest 2,000 pings, about 1,000 runs; `null` when none was timed). Time before the oldest
+kept event counts as not DOWN. In `stats/status` a day (cut as in `stats/daily`, today up to now)
+is `DOWN` if the check was DOWN at its end, `ISSUES` if it was DOWN for a while or had a failed
+run, `OK` if it had runs and neither, and `NONE` otherwise (no run, paused, or before the check
+existed); `missed` counts how often it went DOWN for a missed run that day, `downMs` how long it
+was DOWN.
 
 API keys can read and change checks and channels but cannot manage keys: a leaked key cannot mint
 new ones or revoke the owner's. Key management needs a signed-in session.
@@ -275,7 +314,8 @@ its memberships (it was removed) gets `403` on project endpoints until it switch
     `201`. An email that already has an account is `409` ("sign in first, then open the link
     again").
   - Signed in: the invite goes to the signed-in account; `email` and `password` are ignored. `200`.
-    A member invite to a project the account is already in is `409`.
+    A member invite to a project the account is already in is `409`. The session keeps the
+    session version it was signed in with, so a password change made meanwhile still ends it.
   - A project invite creates a new project owned by the account, named `projectName` (1 to 200
     characters, default "<local part of the email>'s project"). A new project starts empty: no
     checks, channels or API keys. Its owner creates an API key on the API keys page; only the
@@ -305,7 +345,9 @@ its memberships (it was removed) gets `403` on project endpoints until it switch
   session of the account: the account has a session version, raised by the change, and a session
   made with an older version is signed out on its next request. This works with sessions in
   memory and would with sessions in the database. The session that made the change stays signed
-  in, with a new session id.
+  in, with a new session id. The new password is stored only while the session version is still
+  the one read with the current password, so of two concurrent changes with the same current
+  password the second is `409` (as other conflicts in this module) and changes nothing.
 - **First start.** When no account exists and both `CRONBELL_ADMIN_EMAIL` and
   `CRONBELL_ADMIN_PASSWORD` are set, the server creates that account at start-up. Otherwise the
   dashboard shows a one-time setup page that posts to `POST /api/v1/setup`, which is accepted only
@@ -434,7 +476,9 @@ A check alerts every channel of its project until it picks some; then it alerts 
 Deleting a channel removes it from every selection. A check whose picked channels are all deleted
 alerts every channel again rather than none, and its `channels` reads `null`: a check that alerts
 no one is worse than one that alerts too many. The selection lives in the checks module
-(`check_channels`), which asks the alerts module for the project's channel ids to validate it.
+(`check_channels`), which asks the alerts module for the project's channel ids to validate it. It
+is written with the check, under the check's row lock that pings, pause and resume also take, so
+a save never overwrites a state change made meanwhile.
 
 ### Messages
 
@@ -547,15 +591,17 @@ starter/  Java 17 library for user applications (later)
 
 ### History
 
-Pings and finished deliveries are kept for `cronbell.history.retention`
+Pings, status events and finished deliveries are kept for `cronbell.history.retention`
 (`CRONBELL_HISTORY_RETENTION`, a duration such as `90d` or `P90D`, default 90 days; §10). Zero or
 negative is rejected at startup.
 
-- **What is pruned.** Pings received before `now - retention`, and deliveries that are `DELIVERED`
-  or `FAILED` and were created before it. `PENDING` deliveries are never deleted.
+- **What is pruned.** Pings received before `now - retention`, status events before it, and
+  deliveries that are `DELIVERED` or `FAILED` and were created before it. `PENDING` deliveries are
+  never deleted.
 - **What is kept anyway.** Per check: its latest ping, its latest ping with a body (the log
   excerpt of a DOWN alert, §8), and every ping of the open run (received at or after
-  `run_started_at`). The state itself (`status`, `last_ping_at`, `last_success_at`, `next_due_at`,
+  `run_started_at`); and its latest status event before the cutoff, so its history and uptime
+  still know the status it was in. The state itself (`status`, `last_ping_at`, `last_success_at`, `next_due_at`,
   the open run) lives on the check row, so pruning never changes a check's state.
 - **When.** Once a day, and once a minute after the server starts.
 - **Batches.** Rows are deleted at most 5,000 per statement (`cronbell.history.batch-size`), each
@@ -565,7 +611,8 @@ negative is rejected at startup.
   update (`locked_until <= now`), renewed after each batch and released at the end. An instance
   that cannot take it skips the run. Two runs at once would only waste work: deletes are
   idempotent.
-- One INFO log line per run gives the cutoff and the number of pings and deliveries deleted.
+- One INFO log line per run gives the cutoff and the number of pings, status events and
+  deliveries deleted.
 - **SQLite space.** The database runs without `auto_vacuum`, so deleted pages are reused for new
   rows and the file stops growing once the retention window is full, but it does not shrink. To
   return the space, stop the server and run `VACUUM` (not done automatically: it rewrites the
@@ -576,29 +623,35 @@ negative is rejected at startup.
 The web app is served at `/` by the same server, same origin, so it uses the session cookie and
 CSRF header and never sees an API key except when one is created. Look: the Steelreed design
 system (black and white, dark by default with a light mode, colour only for state: UP green, DOWN
-red, warnings and PAUSED amber; system fonts; status is coloured text with a small dot, no
-badges). Dense and calm, data first. English in v0.1; strings live in one module so Vietnamese
+red, late runs and other warnings amber; NEW and PAUSED grey, since a pause is deliberate; system
+fonts; status is coloured text with a small dot, no badges). Dense and calm, data first. English in v0.1; strings live in one module so Vietnamese
 can follow.
 
 The shell is a collapsible left sidebar (the project switcher at the top; Overview, Checks, Alert
-channels, API keys, then Members, Invites for the instance admin, and Account; theme and account
-at the bottom; a sheet on phones) and a header with the page title, or the parent pages as a
-breadcrumb, and a command menu (⌘K, Ctrl+K or `/`: jump to a check by name or slug, go to a page,
-create a check, switch theme). The active page is marked with a grey fill and the product's amber on
-its icon. Theme: dark (default), light or system.
+channels, API keys; Settings: Members and Account; Admin, for the instance admin only: Instance
+invites; theme and account at the bottom; a sheet on phones) and a header with the page title, or
+on deeper pages a breadcrumb ending with the page itself ("Checks / Nightly backup / Edit", the
+check by its name), and a command menu (⌘K, Ctrl+K or `/`: jump to a check by name or slug, go to
+a page, create a check, switch theme). The active page is marked with a grey fill and the product's
+amber on its icon. Theme: dark (default), light or system. In the light theme the page is white and
+cards are the `#F7F7F7` surface; in the dark theme the page is ink and cards `#131313`.
+
+Every page has a skeleton while it loads and, when a load fails, the error with a retry. An
+unknown address or check shows one "not found" page inside the shell (404, what is missing, a link
+back to the overview or the checks); a page that fails to render shows its error with a retry.
 
 | Screen | Path | Content |
 |---|---|---|
 | Setup | `/setup` | first run only: admin email and password |
 | Sign in | `/signin` | email and password; shows the rate-limit wait |
-| Overview | `/` | counts (checks, down, late, up; each opens the filtered list); what needs attention (DOWN first, then late, then never pinged) with the reason and since when, from the check's state; runs and failures per day for 14 days in the browser's zone; a first-check guide when there is no check |
-| Checks | `/checks` | table: name and slug, schedule and time zone, status with reason (late = overdue within grace), the last 20 runs as ticks, last ping (relative, exact on hover), next run (a missed run by its time, with the next run); search, status filter with counts, sortable columns, problems first by default, 25 per page, all in the URL; row menu (open, pause or resume, copy ping URL, delete with confirmation); a list on phones; refreshed every 15 s; empty state with a ready `curl` to create and ping the first check |
-| Check | `/checks/{slug}` | status and since when; the latest runs as ticks (90, 40 on phones) and run durations with the max runtime line; recent pings with exit code, duration and output (expand to read; cards on phones); details, with where alerts go; ping URL with copy and snippets (crontab, shell, Kubernetes CronJob, Spring Boot starter); pause/resume, edit, delete (confirmed) |
+| Overview | `/` | counts (checks, down, late, up; each opens the filtered list); what needs attention (DOWN first, then late, then never pinged) with the reason and since when, from the check's state; the last 30 days in the browser's zone, one square per check and day (`stats/status`: DOWN at day end, failure or downtime, all runs fine, no runs or paused; the day's runs, failures, missed runs and downtime on hover), problems first, 12 checks then "show all"; the recent status changes of the project (`/events`) with the reason or how long the downtime lasted; above them while the project is being set up, its first steps (create a check, receive the first ping, add an alert channel and send a test, and for owners, optional, invite a teammate) with the next one open, until the first three are done (the third once a channel exists, since a test is not stored as a delivery); a project without checks shows only the steps |
+| Checks | `/checks` | table: name and slug, schedule and time zone, status with reason (late = overdue within grace), the last 20 runs as ticks, last ping (relative, exact on hover), next run (a missed run by its time, with the next run); search, status filter with counts, sortable columns, problems first by default, 25 per page, all in the URL; row menu (open, pause or resume, copy ping URL, delete with confirmation); a list on phones; refreshed every 15 s; empty state: a button to create the first check, and behind "Using the API or the Spring Boot starter?" a ready `curl` to create and ping a check and the starter's two properties |
+| Check | `/checks/{slug}` | status and since when; uptime over 7 and 30 days and the average run over 7 days; the latest runs as ticks (90, 40 on phones; missed runs from the status history as hollow ticks) and run durations on an axis from 0 with the max runtime line; the history: each DOWN or pause, newest first, with the reason, start, end and duration, and where its alerts went, the channels the check alerted at the time (✓ delivered, ✗ failed, with the error on hover); recent runs, a start and its end paired as in the ping list, with result, duration and output (expand to read; cards on phones), or the raw pings with exit code and source; details, with where alerts go; ping URL with copy and snippets (crontab, shell, Kubernetes CronJob, Spring Boot starter); pause/resume, edit, delete (confirmed); a check without pings when its page opens leads with the ping URL, waiting for the first ping (refreshed every 3 s) with a test ping sent from the browser to the ping URL, then when it arrived and the next run; its runs, history and pings show once there are some |
 | New / edit check | `/checks/new`, `/checks/{slug}/edit` | slug, name, cron or period, time zone (searchable, common zones first, UTC offsets), the next five runs of a cron schedule (`/schedules/next`), grace, max runtime, alerts to all channels or to ticked ones (at least one) |
 | Channels | `/channels` | channels with type, target, last delivery or last error, how many checks picked it; add and edit in a dialog per type (secrets shown masked, kept unless replaced); send test; delete (confirmed, saying how many checks picked it and that a check left with none alerts every channel) |
 | API keys | `/keys` | keys by name and prefix; create in a dialog that shows the key once with copy; revoke (confirmed); create and revoke for owners only |
 | Members | `/members` | members of the current project with role and "you"; remove (owners) or leave (confirmed); for owners, "Invite member" in a dialog that makes a link and shows it once with copy, and the member invites with status, expiry and delete (confirmed) |
-| Invites | `/invites` | instance admin only: create a project invite with an optional note (link shown once with copy), the project invites with status, who accepted them and expiry; delete (confirmed) |
+| Instance invites | `/admin/invites` | instance admin only: create a project invite with an optional note (link shown once with copy), the project invites with status, who accepted them and expiry; delete (confirmed); a pointer to Members for adding someone to the current project |
 | Account | `/account` | email, change password (current and new), sign out |
 | Invite | `/invite/{token}` | public: who invites to what and until when; email, password (and project name for a project invite) to create the account, or "Accept as <email>" when signed in; a clear message for an invalid or expired link |
 

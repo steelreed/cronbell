@@ -370,6 +370,64 @@ abstract class AbstractIntegrationTests {
 		assertThat(this.events.forSlug(pausedSlug)).isEmpty();
 	}
 
+	@Test
+	void runsDueWhileTheServerWasAwayGetANewDeadlineInsteadOfAlerts() {
+		Project project = newProject();
+		String hook = "/hook/" + UUID.randomUUID();
+		createChannel(project, "{\"type\":\"webhook\",\"config\":{\"url\":\"" + RECEIVER.url(hook) + "\"}}");
+		String missed = uniqueSlug();
+		String missedKey = createCheck(project, missed, "{\"cron\":\"0 * * * *\",\"graceSeconds\":60}");
+		String running = uniqueSlug();
+		String runningKey = createCheck(project, running, "{\"cron\":\"0 * * * *\",\"maxRuntimeSeconds\":600}");
+		String failed = uniqueSlug();
+		String failedKey = createCheck(project, failed, "{\"cron\":\"0 * * * *\"}");
+		get("/ping/" + missedKey);
+		get("/ping/" + runningKey + "/start");
+		post("/ping/" + failedKey + "/fail");
+		this.dispatcher.runOnce();
+		assertThat(RECEIVER.requests(hook)).hasSize(1);
+		CLOCK.set("2026-01-05T10:00:30Z");
+		this.detector.runOnce();
+
+		// Stopped at 10:00:30, started again at 14:00: the 11:00 run and the end of the
+		// open run would have come while nobody listened.
+		CLOCK.set("2026-01-05T14:00:00Z");
+		assertThat(this.detector.resumeAfterDowntime()).isGreaterThanOrEqualTo(2);
+		this.detector.runOnce();
+		assertThat(field(project.key(), missed, "status")).isEqualTo("UP");
+		assertThat(field(project.key(), missed, "nextDueAt")).isEqualTo("2026-01-05T15:00:00Z");
+		assertThat(field(project.key(), running, "status")).isEqualTo("UP");
+		assertThat(field(project.key(), failed, "status")).isEqualTo("DOWN");
+		assertThat(this.events.forSlug(missed)).isEmpty();
+		assertThat(this.events.forSlug(running)).isEmpty();
+		this.dispatcher.runOnce();
+		assertThat(RECEIVER.requests(hook)).hasSize(1);
+		assertThat(this.detector.resumeAfterDowntime()).as("only once per gap").isZero();
+
+		// Still no run after the new deadline: DOWN as usual.
+		CLOCK.set("2026-01-05T15:01:01Z");
+		this.detector.runOnce();
+		assertThat(field(project.key(), missed, "status")).isEqualTo("DOWN");
+		assertThat(field(project.key(), missed, "downReason")).isEqualTo("MISSED");
+		assertThat(this.events.forSlug(missed)).hasSize(1).first().isInstanceOf(CheckEvent.WentDown.class);
+	}
+
+	@Test
+	void aShortRestartOrAFirstStartChangesNoDeadline() {
+		String slug = uniqueSlug();
+		String key = createCheck(slug, "{\"cron\":\"0 * * * *\",\"graceSeconds\":60}");
+		get("/ping/" + key);
+		this.jdbc.sql("UPDATE detector_heartbeat SET beat_at = NULL").update();
+		CLOCK.set("2026-01-05T11:00:30Z");
+		assertThat(this.detector.resumeAfterDowntime()).isZero();
+		this.detector.runOnce();
+		CLOCK.set("2026-01-05T11:02:30Z");
+		assertThat(this.detector.resumeAfterDowntime()).isZero();
+		this.detector.runOnce();
+		assertThat(field(slug, "status")).isEqualTo("DOWN");
+		assertThat(field(slug, "downReason")).isEqualTo("MISSED");
+	}
+
 	// --- Management API ---
 
 	@Test
@@ -886,6 +944,14 @@ abstract class AbstractIntegrationTests {
 		assertThat(RECEIVER.requests(picked)).hasSize(1);
 		assertThat(RECEIVER.requests(other)).isEmpty();
 
+		// The check's history shows the alert where it went, and only there.
+		String events = exchange(HttpMethod.GET, "/api/v1/checks/" + slug + "/events", null, project.key()).getBody();
+		String alerts = exchange(HttpMethod.GET, "/api/v1/checks/" + slug + "/alerts", null, project.key()).getBody();
+		assertThat((List<String>) JsonPath.read(alerts, "$[*].channelId")).containsExactly(pickedId);
+		assertThat((List<String>) JsonPath.read(alerts, "$[*].eventId"))
+			.containsExactly((String) JsonPath.read(events, "$[0].id"));
+		assertThat((List<String>) JsonPath.read(alerts, "$[*].status")).containsExactly("DELIVERED");
+
 		String channels = exchange(HttpMethod.GET, "/api/v1/channels", null, project.key()).getBody();
 		assertThat((List<Integer>) JsonPath.read(channels, "$[?(@.id == '" + pickedId + "')].pickedBy"))
 			.containsExactly(1);
@@ -1347,6 +1413,215 @@ abstract class AbstractIntegrationTests {
 			.query(Long.class)
 			.single()).isZero();
 		assertThat(get("/ping/" + key).getStatusCode().value()).isEqualTo(404);
+	}
+
+	// --- Status history ---
+
+	@Test
+	@SuppressWarnings("unchecked")
+	void everyStatusChangeIsRecordedWithTheAlertsItRaised() {
+		Project project = newProject();
+		String hook = "/hook/" + UUID.randomUUID();
+		createChannel(project,
+				"{\"type\":\"webhook\",\"name\":\"Ops hook\",\"config\":{\"url\":\"" + RECEIVER.url(hook) + "\"}}");
+		String slug = uniqueSlug();
+		String key = createCheck(project, slug, "{\"cron\":\"0 * * * *\",\"graceSeconds\":60}");
+		get("/ping/" + key);
+		CLOCK.advance(Duration.ofMinutes(1));
+		post("/ping/" + key + "/fail");
+		get("/ping/" + key + "/log");
+		CLOCK.advance(Duration.ofMinutes(1));
+		get("/ping/" + key);
+		CLOCK.advance(Duration.ofSeconds(1));
+		exchange(HttpMethod.POST, "/api/v1/checks/" + slug + "/pause", null, project.key());
+		exchange(HttpMethod.POST, "/api/v1/checks/" + slug + "/pause", null, project.key());
+		CLOCK.advance(Duration.ofSeconds(1));
+		exchange(HttpMethod.POST, "/api/v1/checks/" + slug + "/resume", null, project.key());
+		this.dispatcher.runOnce();
+		CLOCK.set("2026-01-05T11:02:00Z");
+		this.detector.runOnce();
+		this.dispatcher.runOnce();
+
+		String events = exchange(HttpMethod.GET, "/api/v1/checks/" + slug + "/events", null, project.key()).getBody();
+		assertThat((List<String>) JsonPath.read(events, "$[*].kind")).containsExactly("DOWN", "RESUMED", "PAUSED", "UP",
+				"DOWN", "UP");
+		assertThat((List<Object>) JsonPath.read(events, "$[*].reason")).containsExactly("MISSED", null, null, null,
+				"FAILED", null);
+		assertThat((String) JsonPath.read(events, "$[0].runAt")).isEqualTo("2026-01-05T11:00:00Z");
+		assertThat((String) JsonPath.read(events, "$[0].at")).isEqualTo("2026-01-05T11:02:00Z");
+		assertThat((String) JsonPath.read(events, "$[4].at")).isEqualTo("2026-01-05T10:01:00Z");
+		assertThat((List<String>) JsonPath.read(events, "$[*].slug")).containsOnly(slug);
+
+		String alerts = exchange(HttpMethod.GET, "/api/v1/checks/" + slug + "/alerts", null, project.key()).getBody();
+		// Going UP the first time alerts nobody.
+		assertThat((List<String>) JsonPath.read(alerts, "$[*].eventId")).containsExactly(
+				JsonPath.read(events, "$[0].id"), JsonPath.read(events, "$[3].id"), JsonPath.read(events, "$[4].id"));
+		assertThat((List<String>) JsonPath.read(alerts, "$[*].channelName")).containsOnly("Ops hook");
+		assertThat((List<String>) JsonPath.read(alerts, "$[*].channelType")).containsOnly("webhook");
+		assertThat((List<String>) JsonPath.read(alerts, "$[*].status")).containsOnly("DELIVERED");
+
+		String recent = exchange(HttpMethod.GET, "/api/v1/events?limit=2", null, project.key()).getBody();
+		assertThat((List<String>) JsonPath.read(recent, "$[*].kind")).containsExactly("DOWN", "RESUMED");
+		for (String path : List.of("/api/v1/events?limit=0", "/api/v1/events?limit=201",
+				"/api/v1/checks/" + slug + "/events?limit=0", "/api/v1/checks/" + slug + "/alerts?limit=201")) {
+			assertThat(exchange(HttpMethod.GET, path, null, project.key()).getStatusCode().value()).as(path)
+				.isEqualTo(400);
+		}
+		for (String path : List.of("/api/v1/checks/" + uniqueSlug() + "/events",
+				"/api/v1/checks/" + uniqueSlug() + "/alerts")) {
+			assertThat(exchange(HttpMethod.GET, path, null, project.key()).getStatusCode().value()).as(path)
+				.isEqualTo(404);
+		}
+	}
+
+	@Test
+	void theCheckHasItsUptimeAndAverageRunDuration() {
+		Project project = newProject();
+		String slug = uniqueSlug();
+		String key = createCheck(project, slug, "{\"cron\":\"0 * * * *\"}");
+		assertThat(stat(project, slug, "uptime7d")).isNull();
+		assertThat(stat(project, slug, "averageDurationMs7d")).isNull();
+
+		get("/ping/" + key + "/start");
+		CLOCK.advance(Duration.ofSeconds(10));
+		get("/ping/" + key);
+		get("/ping/" + key + "/start");
+		CLOCK.advance(Duration.ofSeconds(30));
+		post("/ping/" + key + "/fail");
+		CLOCK.advance(Duration.ofHours(1));
+		get("/ping/" + key);
+		CLOCK.set("2026-01-06T10:00:00Z");
+		assertThat((Double) stat(project, slug, "uptime7d")).isEqualTo(23.0 / 24);
+		assertThat((Double) stat(project, slug, "uptime30d")).isEqualTo(23.0 / 24);
+		assertThat(stat(project, slug, "averageDurationMs7d")).isEqualTo(20000);
+		// Only the detail has them.
+		assertThat(field(project.key(), slug, "stats")).isNull();
+
+		// Paused time is left out, and the 7 days start after the failure.
+		exchange(HttpMethod.POST, "/api/v1/checks/" + slug + "/pause", null, project.key());
+		CLOCK.set("2026-01-07T10:00:00Z");
+		exchange(HttpMethod.POST, "/api/v1/checks/" + slug + "/resume", null, project.key());
+		CLOCK.set("2026-01-14T10:00:00Z");
+		assertThat((Double) stat(project, slug, "uptime7d")).isEqualTo(1.0);
+		assertThat((Double) stat(project, slug, "uptime30d")).isEqualTo(191.0 / 192);
+		assertThat(stat(project, slug, "averageDurationMs7d")).isNull();
+	}
+
+	Object stat(Project project, String slug, String name) {
+		return JsonPath.read(exchange(HttpMethod.GET, "/api/v1/checks/" + slug, null, project.key()).getBody(),
+				"$.stats." + name);
+	}
+
+	@Test
+	@SuppressWarnings("unchecked")
+	void statusStripTellsHowEachCheckSpentEachDay() {
+		Project project = newProject();
+		CLOCK.set("2026-01-03T12:00:00Z");
+		String flaky = uniqueSlug();
+		String flakyKey = createCheck(project, flaky, "{\"cron\":\"0 12 * * *\"}");
+		get("/ping/" + flakyKey);
+		String missed = uniqueSlug();
+		get("/ping/" + createCheck(project, missed, "{\"cron\":\"0 * * * *\"}"));
+		CLOCK.set("2026-01-04T00:00:00Z");
+		this.detector.runOnce();
+		CLOCK.set("2026-01-04T08:00:00Z");
+		post("/ping/" + flakyKey + "/fail");
+		CLOCK.set("2026-01-04T09:00:00Z");
+		get("/ping/" + flakyKey);
+		CLOCK.set("2026-01-05T09:00:00Z");
+		post("/ping/" + flakyKey + "/fail");
+		CLOCK.set("2026-01-05T10:00:00Z");
+		String fresh = uniqueSlug();
+		createCheck(project, fresh, "{\"cron\":\"0 * * * *\"}");
+
+		String strip = exchange(HttpMethod.GET, "/api/v1/stats/status?days=4", null, project.key()).getBody();
+		String days = "$[?(@.slug == '%s')].days[*].";
+		assertThat((List<String>) JsonPath.read(strip, days.formatted(flaky) + "date")).containsExactly("2026-01-02",
+				"2026-01-03", "2026-01-04", "2026-01-05");
+		assertThat((List<String>) JsonPath.read(strip, days.formatted(flaky) + "state")).containsExactly("NONE", "OK",
+				"ISSUES", "DOWN");
+		assertThat((List<Integer>) JsonPath.read(strip, days.formatted(flaky) + "runs")).containsExactly(0, 1, 2, 1);
+		assertThat((List<Integer>) JsonPath.read(strip, days.formatted(flaky) + "failures")).containsExactly(0, 0, 1,
+				1);
+		assertThat((List<Number>) JsonPath.read(strip, days.formatted(flaky) + "downMs")).extracting(Number::longValue)
+			.containsExactly(0L, 0L, 3_600_000L, 3_600_000L);
+		assertThat((List<String>) JsonPath.read(strip, days.formatted(missed) + "state")).containsExactly("NONE", "OK",
+				"DOWN", "DOWN");
+		assertThat((List<Integer>) JsonPath.read(strip, days.formatted(missed) + "missed")).containsExactly(0, 0, 1, 0);
+		assertThat((List<String>) JsonPath.read(strip, days.formatted(fresh) + "state")).containsOnly("NONE");
+
+		assertThat((List<Object>) JsonPath
+			.read(exchange(HttpMethod.GET, "/api/v1/stats/status", null, project.key()).getBody(), "$[0].days"))
+			.hasSize(30);
+		for (String query : List.of("days=0", "days=91", "tz=Mars/Base")) {
+			assertThat(exchange(HttpMethod.GET, "/api/v1/stats/status?" + query, null, project.key()).getStatusCode()
+				.value()).as(query).isEqualTo(400);
+		}
+	}
+
+	@Test
+	@SuppressWarnings("unchecked")
+	void pruningKeepsTheLatestStatusEventOfACheck() {
+		String slug = uniqueSlug();
+		String key = createCheck(slug, "{\"cron\":\"0 * * * *\"}");
+		get("/ping/" + key);
+		CLOCK.advance(Duration.ofMinutes(1));
+		post("/ping/" + key + "/fail");
+		CLOCK.advance(Duration.ofMinutes(1));
+		get("/ping/" + key);
+		CLOCK.advance(Duration.ofDays(100));
+		post("/ping/" + key + "/fail");
+		assertThat(this.pruner.runOnce().events()).isGreaterThanOrEqualTo(2);
+		String events = exchange(HttpMethod.GET, "/api/v1/checks/" + slug + "/events", null, API_KEY).getBody();
+		assertThat((List<String>) JsonPath.read(events, "$[*].kind")).containsExactly("DOWN", "UP");
+		assertThat((String) JsonPath.read(events, "$[1].at")).isEqualTo("2026-01-05T10:02:00Z");
+	}
+
+	@Test
+	@SuppressWarnings("unchecked")
+	void changesInTheSameMillisecondKeepTheirOrder() {
+		Project project = newProject();
+		String slug = uniqueSlug();
+		String key = createCheck(project, slug, "{\"cron\":\"0 * * * *\"}");
+		get("/ping/" + key);
+		CLOCK.advance(Duration.ofMinutes(1));
+		// DOWN, then UP again, in the same millisecond.
+		post("/ping/" + key + "/fail");
+		get("/ping/" + key);
+		// UUIDv7 ids are random within a millisecond: give the later event the smaller
+		// id.
+		List<String> ids = this.jdbc.sql("""
+				SELECT e.id FROM status_events e JOIN checks c ON c.id = e.check_id
+				 WHERE c.ping_key = ? AND e.at = ? ORDER BY e.seq""")
+			.params(key, CLOCK.instant().toEpochMilli())
+			.query(String.class)
+			.list();
+		assertThat(ids).hasSize(2);
+		String low = (ids.get(0).compareTo(ids.get(1)) < 0) ? ids.get(0) : ids.get(1);
+		String high = low.equals(ids.get(0)) ? ids.get(1) : ids.get(0);
+		String swap = UUID.randomUUID().toString();
+		this.jdbc.sql("UPDATE status_events SET id = ? WHERE id = ?").params(swap, ids.get(0)).update();
+		this.jdbc.sql("UPDATE status_events SET id = ? WHERE id = ?").params(low, ids.get(1)).update();
+		this.jdbc.sql("UPDATE status_events SET id = ? WHERE id = ?").params(high, swap).update();
+
+		String events = exchange(HttpMethod.GET, "/api/v1/checks/" + slug + "/events", null, project.key()).getBody();
+		assertThat((List<String>) JsonPath.read(events, "$[*].kind")).containsExactly("UP", "DOWN", "UP");
+		assertThat((List<String>) JsonPath
+			.read(exchange(HttpMethod.GET, "/api/v1/events?limit=2", null, project.key()).getBody(), "$[*].kind"))
+			.containsExactly("UP", "DOWN");
+		CLOCK.set("2026-01-06T10:00:00Z");
+		assertThat((Double) stat(project, slug, "uptime7d")).isEqualTo(1.0);
+		assertThat((List<String>) JsonPath.read(
+				exchange(HttpMethod.GET, "/api/v1/stats/status?days=1", null, project.key()).getBody(),
+				"$[0].days[*].state"))
+			.containsExactly("NONE");
+
+		// Pruning keeps the latest of the two, the one that tells the status.
+		CLOCK.advance(Duration.ofDays(100));
+		this.pruner.runOnce();
+		events = exchange(HttpMethod.GET, "/api/v1/checks/" + slug + "/events", null, project.key()).getBody();
+		assertThat((List<String>) JsonPath.read(events, "$[*].kind")).containsExactly("UP");
+		assertThat((String) JsonPath.read(events, "$[0].at")).isEqualTo("2026-01-05T10:01:00Z");
 	}
 
 	void removeAccounts() {

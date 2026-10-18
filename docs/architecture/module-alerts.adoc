@@ -10,6 +10,7 @@ API: `c.s.c.s.a.DeliveryHistory`.
 |_Controllers_
 
 * `c.s.c.s.a.web.ChannelsController` -- Management API for alert channels (DESIGN.md §6, §8). Scoped to the project of the API key. Secrets in the config are returned masked.
+* `c.s.c.s.a.web.CheckAlertsController` -- The alerts sent for a check (DESIGN.md §6): one delivery per channel and status event, so its history can show where each change went.
 
 _Services_
 

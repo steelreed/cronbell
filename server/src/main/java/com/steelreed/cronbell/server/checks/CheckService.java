@@ -16,6 +16,7 @@ import java.util.regex.Pattern;
 import com.steelreed.cronbell.server.checks.internal.CheckChannelRepository;
 import com.steelreed.cronbell.server.checks.internal.CheckRepository;
 import com.steelreed.cronbell.server.checks.internal.ChecksProperties;
+import com.steelreed.cronbell.server.checks.internal.StatusEventRepository;
 import com.steelreed.cronbell.server.checks.internal.domain.CheckStateMachine;
 import com.steelreed.cronbell.server.checks.internal.domain.CronSchedule;
 import com.steelreed.cronbell.server.checks.internal.domain.Schedule;
@@ -59,6 +60,8 @@ public class CheckService {
 
 	private final AlertChannels alertChannels;
 
+	private final StatusEventRepository history;
+
 	private final ApplicationEventPublisher events;
 
 	private final ChecksProperties properties;
@@ -66,10 +69,11 @@ public class CheckService {
 	private final Clock clock;
 
 	public CheckService(CheckRepository checks, CheckChannelRepository checkChannels, AlertChannels alertChannels,
-			ApplicationEventPublisher events, ChecksProperties properties, Clock clock) {
+			StatusEventRepository history, ApplicationEventPublisher events, ChecksProperties properties, Clock clock) {
 		this.checks = checks;
 		this.checkChannels = checkChannels;
 		this.alertChannels = alertChannels;
+		this.history = history;
 		this.events = events;
 		this.properties = properties;
 		this.clock = clock;
@@ -109,24 +113,28 @@ public class CheckService {
 
 	/**
 	 * Applies a ping received at {@code at} to a check found with {@link #lockByPingKey}:
-	 * stores the new state if it changed and publishes a {@link CheckEvent} when the
-	 * check went DOWN or came back UP.
+	 * stores the new state if it changed, records a {@link StatusEvent} if the status
+	 * changed, and publishes a {@link CheckEvent} when the check went DOWN or came back
+	 * UP.
 	 */
 	@Transactional(propagation = Propagation.MANDATORY)
 	public void applyPing(Check check, PingKind kind, String rid, Instant at) {
 		CheckStateMachine.Outcome outcome = CheckStateMachine.onPing(check.state(), Schedule.of(check), kind, rid, at);
-		if (!outcome.state().equals(check.state())) {
-			this.checks.updateState(check.id(), outcome.state(), at);
+		if (outcome.state().equals(check.state())) {
+			return;
 		}
+		this.checks.updateState(check.id(), outcome.state(), at);
+		Optional<StatusEvent> recorded = this.history.recordChange(check, outcome.state(), at);
 		if (outcome.change() != CheckStateMachine.Change.NONE) {
-			this.events.publishEvent(outcome.toEvent(check, at));
+			this.events.publishEvent(outcome.toEvent(check, at, recorded.orElseThrow().id()));
 		}
 	}
 
 	/**
 	 * Creates the check or updates the one with this slug, so registration is idempotent.
 	 * The ping key never changes. A changed schedule recomputes the next due time from
-	 * now.
+	 * now. An existing check is locked first, as for a ping, so its state and its picked
+	 * channels are written together and never over a concurrent ping, pause or resume.
 	 * @throws IllegalArgumentException if the definition is invalid or picks a channel
 	 * that is not one of the project's
 	 * @throws CheckLimitReachedException if a new check would pass the project's limit
@@ -140,7 +148,7 @@ public class CheckService {
 		Instant now = this.clock.instant().truncatedTo(ChronoUnit.MILLIS);
 		Check defined = validate(projectId, slug, definition, now);
 		List<String> channels = pickedChannels(projectId, definition.channels());
-		var existing = this.checks.findBySlug(projectId, slug);
+		var existing = this.checks.findBySlugForUpdate(projectId, slug);
 		if (existing.isEmpty()) {
 			Integer limit = this.properties.maxPerProject();
 			if (limit != null && this.checks.countByProject(projectId) >= limit) {
@@ -188,11 +196,12 @@ public class CheckService {
 	/**
 	 * Ends a pause without a ping (DESIGN.md §3): back to NEW if never pinged, else UP
 	 * with no open run and the next due time computed from now. A check that is not
-	 * paused is left alone.
+	 * paused is left alone. The check is locked first, as for a ping, so a concurrent
+	 * pause, resume or ping is applied before or after, never on a stale state.
 	 */
 	@Transactional
 	public Check resume(String projectId, String slug) {
-		Check check = get(projectId, slug);
+		Check check = lockBySlug(projectId, slug);
 		CheckState s = check.state();
 		if (s.status() != CheckStatus.PAUSED) {
 			return check;
@@ -203,17 +212,23 @@ public class CheckService {
 				: new CheckState(CheckStatus.UP, null, s.lastPingAt(), s.lastStartAt(), s.lastSuccessAt(),
 						Schedule.of(check).next(now), null, null);
 		this.checks.updateState(check.id(), resumed, now);
+		this.history.record(check, StatusEvent.Kind.RESUMED, resumed, now);
 		return check.withState(resumed);
 	}
 
-	/** Pauses a check: no alerts until its next ping, which returns it to UP. */
+	/**
+	 * Pauses a check: no alerts until its next ping, which returns it to UP. Locks the
+	 * check first, as {@link #resume} does.
+	 */
 	@Transactional
 	public Check pause(String projectId, String slug) {
-		Check check = this.checks.findBySlug(projectId, slug).orElseThrow(() -> new CheckNotFoundException(slug));
+		Check check = lockBySlug(projectId, slug);
 		CheckState s = check.state();
 		CheckState paused = new CheckState(CheckStatus.PAUSED, null, s.lastPingAt(), s.lastStartAt(), s.lastSuccessAt(),
 				s.nextDueAt(), s.runStartedAt(), s.runRid());
-		this.checks.updateState(check.id(), paused, this.clock.instant().truncatedTo(ChronoUnit.MILLIS));
+		Instant now = this.clock.instant().truncatedTo(ChronoUnit.MILLIS);
+		this.checks.updateState(check.id(), paused, now);
+		this.history.recordChange(check, paused, now);
 		return check.withState(paused);
 	}
 
@@ -232,6 +247,10 @@ public class CheckService {
 			}
 		}
 		return picked.stream().distinct().toList();
+	}
+
+	private Check lockBySlug(String projectId, String slug) {
+		return this.checks.findBySlugForUpdate(projectId, slug).orElseThrow(() -> new CheckNotFoundException(slug));
 	}
 
 	private static Check validate(String projectId, String slug, Definition d, Instant now) {

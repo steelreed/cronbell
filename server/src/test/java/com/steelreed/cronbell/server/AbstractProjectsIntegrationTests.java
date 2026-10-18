@@ -9,16 +9,21 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.jayway.jsonpath.JsonPath;
+import com.steelreed.cronbell.server.accounts.internal.AccountService;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doAnswer;
 
 /**
  * Accounts, projects, invites and tenant isolation (DESIGN.md §6, Roles; Projects and
@@ -34,6 +39,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 abstract class AbstractProjectsIntegrationTests extends AbstractIntegrationTests {
 
 	static final String PASSWORD = "tenant password 1";
+
+	/** Lets a test run a concurrent request at an exact point of another one. */
+	@MockitoSpyBean
+	AccountService accountsSpy;
 
 	// --- Invites ---
 
@@ -373,6 +382,63 @@ abstract class AbstractProjectsIntegrationTests extends AbstractIntegrationTests
 			.isEqualTo(403);
 	}
 
+	@Test
+	void ofTwoConcurrentPasswordChangesTheSecondIsRefused() {
+		String email = uniqueEmail();
+		Browser first = tenant(email);
+		Browser second = signedInAs(email, PASSWORD);
+		String accountId = json(first.get("/api/v1/session"), "$.account.id", String.class);
+		AtomicBoolean interleaved = new AtomicBoolean();
+		AtomicInteger firstStatus = new AtomicInteger();
+		// The second change checks the old password, then the first one completes before
+		// the second stores its own.
+		doAnswer((call) -> {
+			Object checked = call.callRealMethod();
+			if (interleaved.compareAndSet(false, true)) {
+				firstStatus
+					.set(first.call("POST", "/api/v1/account/password", passwordChange(PASSWORD, "first new one"))
+						.statusCode());
+			}
+			return checked;
+		}).when(this.accountsSpy).authenticateById(accountId, PASSWORD);
+
+		HttpResponse<String> late = second.call("POST", "/api/v1/account/password",
+				passwordChange(PASSWORD, "second new one"));
+		assertThat(firstStatus.get()).isEqualTo(204);
+		assertThat(late.statusCode()).as(late.body()).isEqualTo(409);
+		assertThat(signIn(email, "first new one").statusCode()).isEqualTo(200);
+		assertThat(signIn(email, "second new one").statusCode()).isEqualTo(401);
+		assertThat(first.get("/api/v1/session").statusCode()).isEqualTo(200);
+		assertThat(second.get("/api/v1/session").statusCode()).isEqualTo(401);
+	}
+
+	@Test
+	void aPasswordChangeDuringASignedInAcceptStillEndsThatSession() {
+		String email = uniqueEmail();
+		Browser accepting = tenant(email);
+		Browser changing = signedInAs(email, PASSWORD);
+		String accountId = json(accepting.get("/api/v1/session"), "$.account.id", String.class);
+		String token = projectInvite(admin());
+		AtomicBoolean interleaved = new AtomicBoolean();
+		AtomicInteger changeStatus = new AtomicInteger();
+		// The password changes after the accept passed the session check, before it signs
+		// the session in again.
+		doAnswer((call) -> {
+			if (interleaved.compareAndSet(false, true)) {
+				changeStatus
+					.set(changing.call("POST", "/api/v1/account/password", passwordChange(PASSWORD, "a new password"))
+						.statusCode());
+			}
+			return call.callRealMethod();
+		}).when(this.accountsSpy).findById(accountId);
+
+		HttpResponse<String> accepted = accepting.call("POST", "/api/v1/invites/" + token + "/accept", "{}");
+		assertThat(accepted.statusCode()).as(accepted.body()).isEqualTo(200);
+		assertThat(changeStatus.get()).isEqualTo(204);
+		assertThat(accepting.get("/api/v1/session").statusCode()).isEqualTo(401);
+		assertThat(changing.get("/api/v1/session").statusCode()).isEqualTo(200);
+	}
+
 	// --- Tenant isolation ---
 
 	/**
@@ -405,12 +471,16 @@ abstract class AbstractProjectsIntegrationTests extends AbstractIntegrationTests
 		assertThat((List<String>) JsonPath.read(b.get("/api/v1/checks").body(), "$[*].slug")).doesNotContain(slug);
 		assertThat(b.get("/api/v1/checks/" + slug).statusCode()).isEqualTo(404);
 		assertThat(b.get("/api/v1/checks/" + slug + "/pings").statusCode()).isEqualTo(404);
+		assertThat(b.get("/api/v1/checks/" + slug + "/events").statusCode()).isEqualTo(404);
+		assertThat(b.get("/api/v1/checks/" + slug + "/alerts").statusCode()).isEqualTo(404);
 		assertThat(b.call("POST", "/api/v1/checks/" + slug + "/pause", null).statusCode()).isEqualTo(404);
 		assertThat(b.call("POST", "/api/v1/checks/" + slug + "/resume", null).statusCode()).isEqualTo(404);
 		assertThat(b.call("DELETE", "/api/v1/checks/" + slug, null).statusCode()).isEqualTo(404);
 		assertThat(b.get("/api/v1/runs/recent").body()).doesNotContain(slug);
 		assertThat((List<Integer>) JsonPath.read(b.get("/api/v1/stats/daily?days=1").body(), "$[*].runs"))
 			.containsExactly(0);
+		assertThat(b.get("/api/v1/events").body()).doesNotContain(slug);
+		assertThat(b.get("/api/v1/stats/status?days=1").body()).doesNotContain(slug);
 		assertThat(b.get("/api/v1/channels").body()).doesNotContain(channel);
 		assertThat(b.get("/api/v1/channels/" + channel).statusCode()).isEqualTo(404);
 		assertThat(b.call("PUT", "/api/v1/channels/" + channel, channelBody).statusCode()).isEqualTo(404);
@@ -431,7 +501,9 @@ abstract class AbstractProjectsIntegrationTests extends AbstractIntegrationTests
 
 		// By B's API key.
 		assertThat(exchange(HttpMethod.GET, "/api/v1/checks", null, bKey).getBody()).doesNotContain(slug);
+		assertThat(exchange(HttpMethod.GET, "/api/v1/events", null, bKey).getBody()).doesNotContain(slug);
 		for (String path : List.of("/api/v1/checks/" + slug, "/api/v1/checks/" + slug + "/pings",
+				"/api/v1/checks/" + slug + "/events", "/api/v1/checks/" + slug + "/alerts",
 				"/api/v1/channels/" + channel)) {
 			assertThat(exchange(HttpMethod.GET, path, null, bKey).getStatusCode().value()).as(path).isEqualTo(404);
 		}
@@ -471,16 +543,21 @@ abstract class AbstractProjectsIntegrationTests extends AbstractIntegrationTests
 			.value()).isEqualTo(200);
 		assertThat(a.get("/api/v1/invites").body()).contains(aInvite);
 		assertThat(a.get("/api/v1/stats/daily?days=1").body()).contains("\"runs\":1");
+		assertThat(a.get("/api/v1/events").body()).contains(slug);
+		assertThat(a.get("/api/v1/stats/status?days=1").body()).contains(slug);
 	}
 
 	// --- Upgrade ---
 
 	/**
 	 * The V5 migration on a database of 0.1.0-beta.1 (one admin, the Default project,
-	 * checks, a channel, keys): the setup account becomes the instance admin. V7 rebuilds
-	 * the channels and deliveries tables and keeps their rows.
+	 * checks, a channel, keys): the setup account becomes the instance admin. V6 starts
+	 * the status history of the checks that are DOWN or paused. V7 rebuilds the channels
+	 * and deliveries tables and keeps their rows, with the status event V6 gave each
+	 * delivery.
 	 */
-	void upgradeFromBeta1MakesTheSetupAccountInstanceAdmin(Flyway beta1, Flyway latest, JdbcClient jdbc) {
+	void upgradeFromBeta1MakesTheSetupAccountInstanceAdmin(Flyway beta1, Flyway history, Flyway latest,
+			JdbcClient jdbc) {
 		beta1.migrate();
 		jdbc.sql("INSERT INTO projects (id, name, created_at) VALUES ('p1', 'Default', 1)").update();
 		jdbc.sql("""
@@ -497,15 +574,27 @@ abstract class AbstractProjectsIntegrationTests extends AbstractIntegrationTests
 				                    status, created_at, updated_at)
 				VALUES ('c1', 'k-1', 'p1', 'backup', 'backup', 'CRON', '0 3 * * *', 3600, 'NEW', 1, 1)""").update();
 		jdbc.sql("""
+				INSERT INTO checks (id, ping_key, project_id, slug, name, schedule_kind, cron_expression, grace_seconds,
+				                    status, down_reason, next_due_at, created_at, updated_at)
+				VALUES ('c2', 'k-2', 'p1', 'report', 'report', 'CRON', '0 3 * * *', 600, 'DOWN', 'MISSED', 10800000,
+				        1, 11400000)""").update();
+		jdbc.sql("""
+				INSERT INTO checks (id, ping_key, project_id, slug, name, schedule_kind, cron_expression, grace_seconds,
+				                    status, created_at, updated_at)
+				VALUES ('c3', 'k-3', 'p1', 'sync', 'sync', 'CRON', '0 3 * * *', 600, 'PAUSED', 1, 5000)""").update();
+		jdbc.sql("""
 				INSERT INTO channels (id, project_id, type, name, config, created_at, updated_at)
 				VALUES ('ch1', 'p1', 'WEBHOOK', 'hook', '{}', 1, 1)""").update();
 		jdbc.sql("""
 				INSERT INTO deliveries (id, channel_id, check_id, event, payload, status, attempts, next_attempt_at,
 				                        created_at)
 				VALUES ('d1', 'ch1', 'c1', 'DOWN', '{}', 'PENDING', 0, 1, 1)""").update();
+		history.migrate();
+		jdbc.sql("UPDATE deliveries SET event_id = 'e1' WHERE id = 'd1'").update();
 		latest.migrate();
-		assertThat(jdbc.sql("SELECT channel_id FROM deliveries WHERE id = 'd1'").query(String.class).single())
-			.isEqualTo("ch1");
+		assertThat(jdbc.sql("SELECT channel_id, event_id FROM deliveries WHERE id = 'd1'")
+			.query((rs, row) -> List.of(rs.getString(1), rs.getString(2)))
+			.single()).containsExactly("ch1", "e1");
 		jdbc.sql("""
 				INSERT INTO channels (id, project_id, type, name, config, created_at, updated_at)
 				VALUES ('ch2', 'p1', 'NTFY', 'ntfy', '{}', 1, 1)""").update();
@@ -516,10 +605,19 @@ abstract class AbstractProjectsIntegrationTests extends AbstractIntegrationTests
 			.isZero();
 		assertThat(jdbc.sql("SELECT COUNT(*) FROM invites").query(Long.class).single()).isZero();
 		assertThat(jdbc.sql("SELECT COUNT(*) FROM checks WHERE project_id = 'p1'").query(Long.class).single())
-			.isEqualTo(1);
+			.isEqualTo(3);
+		assertThat(jdbc.sql("SELECT check_id, kind, reason, run_at, at FROM status_events ORDER BY check_id")
+			.query((rs, row) -> List.of(rs.getString(1), rs.getString(2), String.valueOf(rs.getString(3)),
+					String.valueOf(rs.getObject(4)), rs.getLong(5)))
+			.list()).containsExactly(List.of("c2", "DOWN", "MISSED", "10800000", 11400000L),
+					List.of("c3", "PAUSED", "null", "null", 5000L));
 	}
 
 	// --- Helpers ---
+
+	static String passwordChange(String current, String next) {
+		return "{\"currentPassword\":\"" + current + "\",\"newPassword\":\"" + next + "\"}";
+	}
 
 	static String uniqueEmail() {
 		return "t-" + UUID.randomUUID().toString().substring(0, 12) + "@example.com";

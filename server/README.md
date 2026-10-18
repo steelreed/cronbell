@@ -39,7 +39,7 @@ and is the instance admin.
 There is no open registration. Other people get in through single-use invite links: the instance
 admin's **project invites** give someone an account and a project of their own (the admin gets no
 access to it), and an owner's **member invites** add someone to that owner's project as a member.
-Links are made on the dashboard's Invites and Members pages, last `CRONBELL_INVITE_TTL` (7 days) and
+Links are made on the dashboard's Instance invites and Members pages, last `CRONBELL_INVITE_TTL` (7 days) and
 are not emailed: copy the link and send it. An account can be in several projects and switches
 between them in the sidebar. Roles: owners manage members, invites and API keys; members manage
 checks and alert channels and see the keys. See DESIGN.md §6 (Roles, Projects and invites).
@@ -117,10 +117,10 @@ times as epoch milliseconds.
 ## History
 
 Once a day, and a minute after start, the server deletes pings older than
-`CRONBELL_HISTORY_RETENTION` and alert deliveries that were sent or gave up before then, in
-batches of 5,000 rows, and logs one line with the counts. Pending deliveries are never deleted.
-Each check keeps its latest ping, its latest ping with a body (the log shown in DOWN alerts) and
-the pings of a run still in progress, however old. A check's state (status, last ping, last
+`CRONBELL_HISTORY_RETENTION`, status changes and alert deliveries that were sent or gave up before
+then, in batches of 5,000 rows, and logs one line with the counts. Pending deliveries are never
+deleted. Each check keeps its latest ping, its latest ping with a body (the log shown in DOWN
+alerts), the pings of a run still in progress and its latest status change, however old. A check's state (status, last ping, last
 success, next due) is stored on the check itself, so pruning never changes it. With PostgreSQL and
 several instances, one instance at a time does the work (a lease row in `job_locks`).
 

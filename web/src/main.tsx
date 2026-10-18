@@ -2,6 +2,7 @@ import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@ta
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { RouteError } from "./components/page";
 import { ApiError } from "./lib/api";
 import { sessionQuery } from "./lib/queries";
 import { routeTree } from "./routeTree.gen";
@@ -34,6 +35,7 @@ const router = createRouter({
   context: { queryClient },
   defaultPreload: "intent",
   defaultPreloadStaleTime: 0,
+  defaultErrorComponent: RouteError,
 });
 
 declare module "@tanstack/react-router" {

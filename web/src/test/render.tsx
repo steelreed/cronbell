@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
 import { render } from "@testing-library/react";
+import { RouteError } from "@/components/page";
 import { routeTree } from "@/routeTree.gen";
 
 /** Renders the whole app at a path, with a fresh query cache. Stub fetch first. */
@@ -10,6 +11,7 @@ export function renderAt(path: string) {
     routeTree,
     context: { queryClient },
     history: createMemoryHistory({ initialEntries: [path] }),
+    defaultErrorComponent: RouteError,
   });
   render(
     <QueryClientProvider client={queryClient}>

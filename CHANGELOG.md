@@ -8,6 +8,30 @@ All notable changes to Cronbell are listed here. The format follows
 
 ### Added
 
+- Status history: every change of a check (UP, DOWN with its reason and run, paused, resumed) is
+  stored with the status change and pruned with the rest of the history, keeping each check's
+  latest. `GET /api/v1/checks/{slug}/events` and `GET /api/v1/events` (the whole project) list
+  them; `GET /api/v1/checks/{slug}/alerts` lists the deliveries of each change per channel.
+  Existing checks that are DOWN or paused start their history at upgrade.
+- `GET /api/v1/checks/{slug}` has `stats`: uptime over 7 and 30 days (paused time left out) and
+  the average run duration over 7 days.
+- `GET /api/v1/stats/status`: how each check spent each of the last days (DOWN, issues, OK or no
+  data), with runs, failures, missed runs and time DOWN.
+- Check page: a History panel with each downtime and pause (why, from when to when, how long) and
+  where its alerts went, delivered or failed; uptime over 7 and 30 days and the average run; missed
+  runs among the run ticks.
+- Overview: the last 30 days as one square per check and day, problems first, with the day's runs,
+  failures, missed runs and downtime on hover; and the project's recent status changes next to
+  what needs attention.
+- A check that has never pinged opens on its ping URL, waiting for the first ping (refreshed
+  every 3 seconds), with a **Send a test ping** button that pings it from the browser; then it
+  says when the ping arrived and when the next run is due. Its empty Runs and Recent pings panels
+  stay hidden until there is a ping.
+- First steps on the overview while a project is being set up: create a check, receive its first
+  ping, add an alert channel and send a test, and optionally invite a teammate. The next step is
+  open with its action, and the list goes away once the first three are done.
+- Integration guides in `docs/integrations/`: crontab, systemd timers, Kubernetes CronJob, GitHub
+  Actions, Docker (with Ofelia) and scripts in Python, Node.js, Bash and PowerShell.
 - Discord and ntfy alert channels. Discord gets an embed (red for DOWN, green for UP, mentions
   off) and its rate limits are retried after `retry_after`; ntfy posts to ntfy.sh or a self-hosted
   server, with an optional access token, high priority for DOWN, tags and a link to the check.
@@ -18,8 +42,53 @@ All notable changes to Cronbell are listed here. The format follows
 - Dashboard: "Alert channels" in the check form, where alerts go on the check page, and how many
   checks picked each channel.
 
+### Changed
+
+- The check page lists recent runs, a start and its end in one row with result, duration and
+  output; "Raw pings" shows every ping as before.
+- Durations read the same everywhere ("850ms", "12.4s", "1m 17s", "5h 46m"), and the duration
+  chart's axis starts at 0.
+- The overview's "Runs, last 14 days" chart is replaced by the 30-day status strip.
+- With no checks, the overview and the checks list lead with one button, "Create your first
+  check", which opens the form and then the new check's page. The `curl` recipe for scripts, now
+  with the Spring Boot starter's two properties, sits behind "Using the API or the Spring Boot
+  starter?".
+- The README no longer says every Healthchecks.io script keeps working: it lists what does (UUID
+  ping URLs with `/start`, `/fail`, `/log`, exit codes and `rid`) and what does not (slug URLs,
+  `?create=1`, bodies beyond 10 KB), and how to watch Cronbell itself.
+- One "not found" page for unknown addresses and checks, inside the app with the sidebar and a
+  link back (the global one had no sidebar, a missing check was a bare line). A page that fails to
+  load or render shows the error with a retry instead of the router's raw message.
+- The header's breadcrumb ends with the page itself and names the check: "Checks / Nightly backup",
+  "Checks / Nightly backup / Edit", "Checks / New check" (it showed only "Checks").
+- The instance admin's Invites page, easy to mix up with the member invite links on Members, is
+  now Instance invites at `/admin/invites`, in an Admin group of the sidebar that only the
+  instance admin sees, and points to Members for adding someone to the current project.
+
 ### Fixed
 
+- No more alert storm after the server was down (outage, upgrade, host reboot). Every overdue check
+  used to go DOWN "missed run" or "running too long" on the first detector run, then "UP again"
+  with the next ping. The detector now leaves a heartbeat; after a gap of more than 2 minutes, the
+  checks that could have reported meanwhile get a new deadline, as on resume, and one log line says
+  how long the server was away.
+- The crontab and Kubernetes snippets of a period check always said `*/5 * * * *`. They now use
+  the cron line of the period (`0 * * * *` for every hour, `*/15 * * * *` for 15 minutes, daily,
+  every 2, 3, 4, 6, 8 or 12 hours) and say so when a period has none. A 6-field cron drops its
+  zero seconds field, which crontab does not have.
+- Ping sources read `0:0:0:0:0:0:0:1`; IPv6 addresses are now compressed (`::1`) and
+  IPv4-mapped ones shown as IPv4.
+- Paused checks were amber like late ones. A pause is deliberate, so it is grey everywhere; amber
+  is left for late runs and checks waiting too long for their first ping.
+- The Up tile of the overview said "38% of checks"; it now says "on schedule".
+- The light theme had white cards on a grey page. As in the Steelreed design system, the page is
+  now white and cards, tables and code use the `#F7F7F7` surface.
+- On phones the status filter cut "New" in half and hid "Paused". The row still scrolls, now
+  with a fade on the side that has more, and the chosen filter is scrolled into view.
+- A session that accepted an invite while the account's password was being changed elsewhere
+  stayed signed in; it is now signed out like the other sessions. Of two concurrent password
+  changes with the same current password, the second one overwrote the first; it is now refused
+  with `409`.
 - Channel errors are plain sentences that say what to fix ("Could not resolve
   hooks.example.com", "Connection refused by localhost:8080", "Timed out after 10 s waiting for
   …", "HTTP 401 from Telegram: check the bot token") instead of exception names such as

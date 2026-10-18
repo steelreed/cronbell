@@ -38,14 +38,16 @@ public final class CheckStateMachine {
 		}
 
 		/**
-		 * The event this outcome publishes for {@code check} at {@code at}.
+		 * The event this outcome publishes for {@code check} at {@code at}, with the
+		 * status event recorded for it.
 		 * @throws IllegalArgumentException if nothing changed for alerting
 		 */
-		public CheckEvent toEvent(Check check, Instant at) {
+		public CheckEvent toEvent(Check check, Instant at, String statusEventId) {
 			return switch (this.change) {
-				case WENT_DOWN ->
-					new CheckEvent.WentDown(check.id(), check.projectId(), check.slug(), this.state.downReason(), at);
-				case RECOVERED -> new CheckEvent.Recovered(check.id(), check.projectId(), check.slug(), at);
+				case WENT_DOWN -> new CheckEvent.WentDown(check.id(), check.projectId(), check.slug(),
+						this.state.downReason(), at, statusEventId);
+				case RECOVERED ->
+					new CheckEvent.Recovered(check.id(), check.projectId(), check.slug(), at, statusEventId);
 				case NONE -> throw new IllegalArgumentException("no event for NONE");
 			};
 		}
@@ -126,6 +128,29 @@ public final class CheckStateMachine {
 			return new Outcome(s.withStatus(CheckStatus.DOWN, DownReason.MISSED), Change.WENT_DOWN);
 		}
 		return Outcome.unchanged(s);
+	}
+
+	/**
+	 * Gives a check a new deadline after the server was away from {@code from} to
+	 * {@code now} (DESIGN.md §4, Downtime). An UP check whose open run, or whose run due
+	 * by now, could have reported while nobody listened is treated as resumed: no open
+	 * run, the next due time computed from now. Any other check is returned unchanged.
+	 * Mirrors {@code CheckRepository.claimAffectedByDowntime}.
+	 */
+	public static CheckState afterDowntime(CheckState s, Schedule schedule, Duration grace, Duration maxRuntime,
+			Instant from, Instant now) {
+		if (s.status() != CheckStatus.UP) {
+			return s;
+		}
+		boolean runCouldHaveEnded = s.runStartedAt() != null && s.runStartedAt().plus(maxRuntime).isAfter(from);
+		boolean runCouldHaveCome = s.nextDueAt() != null && !s.nextDueAt().isAfter(now)
+				&& s.nextDueAt().plus(grace).isAfter(from)
+				&& (s.lastPingAt() == null || s.lastPingAt().isBefore(s.nextDueAt()));
+		if (!runCouldHaveEnded && !runCouldHaveCome) {
+			return s;
+		}
+		return new CheckState(CheckStatus.UP, null, s.lastPingAt(), s.lastStartAt(), s.lastSuccessAt(),
+				schedule.next(now), null, null);
 	}
 
 }

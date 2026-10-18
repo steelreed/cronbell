@@ -44,7 +44,7 @@ export function StatTiles({ counts }: { counts: Record<Health, number> }) {
     {
       label: t.overview.tiles.up,
       value: counts.up,
-      meta: t.overview.upMeta(counts.up, total),
+      meta: t.overview.upMeta,
       filter: "up",
       tone: null,
     },
