@@ -9,23 +9,20 @@ export interface FirstStep {
 }
 
 /**
- * The setup of a young project, in order: a check, its first ping, an alert channel that has
- * delivered (a test or a real alert), and, for owners, a teammate. `members` is null when the
- * account cannot invite.
+ * The setup of a young project, in order: a check, its first ping, an alert channel, and, for
+ * owners, a teammate. `members` is null when the account cannot invite. The channel step asks for
+ * a test too, but any channel completes it: a test is not stored as a delivery, so waiting for one
+ * would keep the step open after the test arrived.
  */
 export function firstSteps(
   checks: Pick<Check, "lastPingAt">[],
-  channels: Pick<Channel, "lastDeliveryAt">[],
+  channels: Pick<Channel, "id">[],
   members: Member[] | null,
 ): FirstStep[] {
   const steps: FirstStep[] = [
     { id: "create", done: checks.length > 0, optional: false },
     { id: "ping", done: checks.some((check) => check.lastPingAt !== null), optional: false },
-    {
-      id: "channel",
-      done: channels.some((channel) => channel.lastDeliveryAt !== null),
-      optional: false,
-    },
+    { id: "channel", done: channels.length > 0, optional: false },
   ];
   if (members) steps.push({ id: "invite", done: members.length > 1, optional: true });
   return steps;

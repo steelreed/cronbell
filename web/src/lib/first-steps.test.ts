@@ -22,25 +22,21 @@ describe("firstSteps", () => {
     expect(setUp(steps)).toBe(false);
   });
 
-  it("counts a check, its first ping and a channel that has delivered", () => {
+  it("counts a check, its first ping and a channel", () => {
     const unpinged = aCheck({ status: "NEW", lastPingAt: null });
-    expect(done(firstSteps([unpinged], [{ lastDeliveryAt: null }], null))).toEqual({
+    expect(done(firstSteps([unpinged], [], null))).toEqual({
       create: true,
       ping: false,
       channel: false,
     });
-    const steps = firstSteps(
-      [unpinged, aCheck()],
-      [{ lastDeliveryAt: null }, { lastDeliveryAt: "2026-01-05T09:00:00Z" }],
-      null,
-    );
+    const steps = firstSteps([unpinged, aCheck()], [{ id: "c1" }], null);
     expect(done(steps)).toEqual({ create: true, ping: true, channel: true });
     expect(setUp(steps)).toBe(true);
   });
 
   it("offers inviting a teammate to owners only, and never waits for it", () => {
     expect(firstSteps([], [], null).map((step) => step.id)).not.toContain("invite");
-    const steps = firstSteps([aCheck()], [{ lastDeliveryAt: "2026-01-05T09:00:00Z" }], [owner]);
+    const steps = firstSteps([aCheck()], [{ id: "c1" }], [owner]);
     expect(steps.at(-1)).toEqual({ id: "invite", done: false, optional: true });
     expect(setUp(steps)).toBe(true);
     expect(firstSteps([], [], [owner, teammate]).at(-1)?.done).toBe(true);

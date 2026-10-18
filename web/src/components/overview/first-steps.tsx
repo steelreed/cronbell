@@ -12,7 +12,7 @@ import {
 } from "@/lib/first-steps";
 import { channelsQuery, membersQuery } from "@/lib/queries";
 import { t } from "@/lib/strings";
-import type { Channel, Check, Session } from "@/lib/types";
+import type { Check, Session } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { FirstCheckStart } from "../empty-checks";
 import { Panel } from "../page";
@@ -26,8 +26,8 @@ const TITLES: Record<FirstStepId, string> = {
 
 /**
  * The overview of a young project: what is left to set up, one step open at a time. It is the
- * whole page while there is no check, and goes away once a check has pinged and a channel has
- * delivered; inviting a teammate is optional.
+ * whole page while there is no check, and goes away once a check has pinged and a channel
+ * exists; inviting a teammate is optional.
  */
 export function FirstSteps({ checks, session }: { checks: Check[]; session: Session }) {
   const owner = session.project?.role === "OWNER";
@@ -55,12 +55,7 @@ export function FirstSteps({ checks, session }: { checks: Check[]; session: Sess
         {steps.map((step, i) => (
           <StepRow key={step.id} n={i + 1} step={step} open={step.id === current}>
             {step.id === current || (step.optional && !step.done) ? (
-              <StepBody
-                id={step.id}
-                checks={checks}
-                channels={channels.data ?? []}
-                session={session}
-              />
+              <StepBody id={step.id} checks={checks} session={session} />
             ) : null}
           </StepRow>
         ))}
@@ -120,17 +115,7 @@ function StepRow({
   );
 }
 
-function StepBody({
-  id,
-  checks,
-  channels,
-  session,
-}: {
-  id: FirstStepId;
-  checks: Check[];
-  channels: Channel[];
-  session: Session;
-}) {
+function StepBody({ id, checks, session }: { id: FirstStepId; checks: Check[]; session: Session }) {
   switch (id) {
     case "create":
       return <FirstCheckStart session={session} />;
@@ -150,11 +135,9 @@ function StepBody({
     }
     case "channel":
       return (
-        <Lead text={channels.length > 0 ? t.firstSteps.channelTestLead : t.firstSteps.channelLead}>
+        <Lead text={t.firstSteps.channelLead}>
           <Button variant="outline" asChild>
-            <Link to="/channels">
-              {channels.length > 0 ? t.firstSteps.testChannel : t.firstSteps.addChannel}
-            </Link>
+            <Link to="/channels">{t.firstSteps.addChannel}</Link>
           </Button>
         </Lead>
       );

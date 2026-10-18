@@ -35,12 +35,7 @@ const aPing: Ping = {
   durationMs: null,
 };
 
-const channel = (lastDeliveryAt: string | null) => ({
-  id: "c1",
-  type: "EMAIL",
-  name: "Ops",
-  lastDeliveryAt,
-});
+const neverDelivered = { id: "c1", type: "EMAIL", name: "Ops", lastDeliveryAt: null };
 
 async function findSteps() {
   const heading = await screen.findByRole("heading", { name: "Get started" });
@@ -71,31 +66,32 @@ describe("first steps on the overview", () => {
     expect(within(steps).getByText(/Invite a teammate/)).toBeInTheDocument();
   });
 
-  it("asks for a test once a channel exists but has delivered nothing", async () => {
+  it("asks for a channel and a test after the first ping", async () => {
     vi.stubGlobal(
       "fetch",
       stubFetch({
         ...signedIn,
         "GET /api/v1/checks": () => [200, [aCheck()]],
-        "GET /api/v1/channels": () => [200, [channel(null)]],
+        "GET /api/v1/channels": () => [200, []],
       }),
     );
     renderAt("/");
     const steps = await findSteps();
     expect(within(steps).getByText("2 of 3 done")).toBeInTheDocument();
-    expect(within(steps).getByRole("link", { name: "Send a test" })).toHaveAttribute(
+    expect(within(steps).getByText(/Send a test to see one arrive/)).toBeInTheDocument();
+    expect(within(steps).getByRole("link", { name: "Add a channel" })).toHaveAttribute(
       "href",
       "/channels",
     );
   });
 
-  it("goes away once a check has pinged and a channel has delivered", async () => {
+  it("goes away once a check has pinged and a channel exists, even before any delivery", async () => {
     vi.stubGlobal(
       "fetch",
       stubFetch({
         ...signedIn,
         "GET /api/v1/checks": () => [200, [aCheck()]],
-        "GET /api/v1/channels": () => [200, [channel("2026-01-05T09:00:00Z")]],
+        "GET /api/v1/channels": () => [200, [neverDelivered]],
       }),
     );
     renderAt("/");
