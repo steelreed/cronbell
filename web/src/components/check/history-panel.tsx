@@ -83,7 +83,7 @@ function EpisodeRow({ episode, now }: { episode: Episode; now: number }) {
           view={{
             label: down ? t.check.history.down : t.check.history.paused,
             reason: null,
-            tone: down ? "problem" : "warn",
+            tone: down ? "problem" : "muted",
           }}
           className="shrink-0"
         />
