@@ -11,6 +11,13 @@ All notable changes to Cronbell are listed here. The format follows
 - Integration guides in `docs/integrations/`: crontab, systemd timers, Kubernetes CronJob, GitHub
   Actions, Docker (with Ofelia) and scripts in Python, Node.js, Bash and PowerShell.
 
+### Fixed
+
+- A session that accepted an invite while the account's password was being changed elsewhere
+  stayed signed in; it is now signed out like the other sessions. Of two concurrent password
+  changes with the same current password, the second one overwrote the first; it is now refused
+  with `409`.
+
 ## [0.1.0-beta.2] - 2026-10-17
 
 ### Added

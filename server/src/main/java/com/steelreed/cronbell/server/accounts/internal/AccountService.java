@@ -158,19 +158,27 @@ public class AccountService {
 	}
 
 	/**
-	 * Replaces the password and raises the session version, so other sessions end.
+	 * Replaces the password and raises the session version, so other sessions end. Only
+	 * while the session version is still the one read with the current password, so of
+	 * two concurrent changes the second is refused.
+	 * @param account the account as {@link #authenticateById} returned it
 	 * @return the account with its new session version
 	 * @throws IllegalArgumentException if the new password is invalid
+	 * @throws AccountConflictException if the password changed since it was checked
 	 */
-	@Transactional
-	public Account changePassword(String accountId, String newPassword) {
+	public Account changePassword(Account account, String newPassword) {
 		validatePassword(newPassword);
-		this.jdbc.sql("""
+		int updated = this.jdbc.sql("""
 				UPDATE accounts SET password_hash = ?, session_version = session_version + 1, updated_at = ?
-				 WHERE id = ?""")
-			.params(this.passwordEncoder.encode(newPassword), now().toEpochMilli(), accountId)
+				 WHERE id = ? AND session_version = ?""")
+			.params(this.passwordEncoder.encode(newPassword), now().toEpochMilli(), account.id(),
+					account.sessionVersion())
 			.update();
-		return findById(accountId).orElseThrow(() -> new IllegalStateException("no account " + accountId));
+		if (updated == 0) {
+			throw new AccountConflictException("the password was changed at the same time: sign in again");
+		}
+		return new Account(account.id(), account.email(), account.instanceAdmin(), account.sessionVersion() + 1,
+				account.createdAt());
 	}
 
 	public Optional<Account> findById(String id) {

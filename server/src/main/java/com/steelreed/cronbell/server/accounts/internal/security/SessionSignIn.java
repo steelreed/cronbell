@@ -9,6 +9,7 @@ import com.steelreed.cronbell.server.accounts.internal.ProjectService;
 import com.steelreed.cronbell.server.accounts.internal.ProjectService.Role;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -90,6 +91,22 @@ public class SessionSignIn {
 		new CsrfAuthenticationStrategy(this.csrfTokens).onAuthentication(authentication, request, response);
 		loadCsrfToken(request);
 		return principal;
+	}
+
+	/**
+	 * Signs the account already signed in to this session in again, acting on
+	 * {@code projectId}, but keeps the session version the session was signed in with: a
+	 * password change made since then still ends it.
+	 * @return the new principal
+	 */
+	public ProjectPrincipal signInAgain(Account account, String projectId, HttpServletRequest request,
+			HttpServletResponse response) {
+		HttpSession session = request.getSession(false);
+		if (session == null || !(session.getAttribute(VERSION_ATTRIBUTE) instanceof Integer version)) {
+			throw new IllegalStateException("no signed-in session");
+		}
+		return signIn(new Account(account.id(), account.email(), account.instanceAdmin(), version, account.createdAt()),
+				projectId, request, response);
 	}
 
 	/**
