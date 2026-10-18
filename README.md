@@ -29,7 +29,8 @@ usually hear about them from a customer. Cronbell turns "nothing happened" into 
    webhook.
 
 The ping API is compatible with Healthchecks.io (`/ping/<key>`, `/start`, `/fail`, exit codes), so
-existing scripts keep working.
+existing scripts keep working. [`docs/integrations/`](docs/integrations) has guides for crontab,
+systemd timers, Kubernetes, GitHub Actions, Docker and scripts.
 
 **Spring Boot teams** can use
 [`cronbell-spring-boot-starter`](https://github.com/steelreed/cronbell-spring-boot-starter) (beta):
