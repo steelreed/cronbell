@@ -136,7 +136,9 @@ curl -fsS https://cron.example.com/ping/<pingKey>      # -> OK
 ```
 
 The check turns UP in the dashboard. Its page has ready-made crontab, shell and Kubernetes
-snippets; [`integrations/`](integrations) covers more ways to run jobs. Add an alert channel under **Channels** and send a test message.
+snippets; [`integrations/`](integrations) covers more ways to run jobs. In the dashboard, **Create your
+first check** opens the form instead; the new check's page shows its ping URL and a **Send a test
+ping** button. Add an alert channel under **Channels** and send a test message.
 
 ## 8. Back up
 
@@ -204,10 +206,10 @@ and send yourself (Cronbell does not email it). Links are valid for 7 days
 before they are used.
 
 - **Someone with a project of their own** (a tester, another team): as the admin, open
-  **Invites**, choose **Create invite**, add a note such as "Lan, beta tester", and copy the link.
+  **Instance invites** (under Admin in the sidebar), choose **Create invite**, add a note such as "Lan, beta tester", and copy the link.
   Whoever opens it picks an email, a password and a project name, and gets an empty project with
   its own checks, alert channels and API keys (they create a key on their API keys page). You do
-  not see their project, and they do not see yours. The Invites page shows when a link was
+  not see their project, and they do not see yours. The Instance invites page shows when a link was
   accepted, by whom.
 - **Someone in your project**: open **Members**, choose **Invite member** and copy the link. The
   person joins your current project as a member: they can manage checks and alert channels and

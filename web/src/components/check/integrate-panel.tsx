@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { crontabSnippet, kubernetesSnippet, shellSnippet, springSnippet } from "@/lib/snippets";
 import { t } from "@/lib/strings";
@@ -5,10 +6,14 @@ import type { Check } from "@/lib/types";
 import { CodeBlock, CopyButton } from "../copy-button";
 import { Panel } from "../page";
 
-/** The ping URL with copy, and ready snippets for crontab, shell, Kubernetes and Spring. */
-export function IntegratePanel({ check }: { check: Check }) {
+/**
+ * The ping URL with copy, and ready snippets for crontab, shell, Kubernetes and Spring; a
+ * status line above the URL when given (the first ping).
+ */
+export function IntegratePanel({ check, children }: { check: Check; children?: ReactNode }) {
   return (
     <Panel title={t.check.integrate} lead={t.check.integrateLead}>
+      {children}
       <div className="flex min-w-0 items-center gap-2">
         <code
           className="min-w-0 flex-1 truncate rounded-lg border bg-page px-3 py-1.5 font-mono text-[13px]"

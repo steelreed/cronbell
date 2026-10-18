@@ -8,11 +8,49 @@ All notable changes to Cronbell are listed here. The format follows
 
 ### Added
 
+- A check that has never pinged opens on its ping URL, waiting for the first ping (refreshed
+  every 3 seconds), with a **Send a test ping** button that pings it from the browser; then it
+  says when the ping arrived and when the next run is due. Its empty Runs and Recent pings panels
+  stay hidden until there is a ping.
+- First steps on the overview while a project is being set up: create a check, receive its first
+  ping, add an alert channel and send a test, and optionally invite a teammate. The next step is
+  open with its action, and the list goes away once the first three are done.
 - Integration guides in `docs/integrations/`: crontab, systemd timers, Kubernetes CronJob, GitHub
   Actions, Docker (with Ofelia) and scripts in Python, Node.js, Bash and PowerShell.
 
+### Changed
+
+- With no checks, the overview and the checks list lead with one button, "Create your first
+  check", which opens the form and then the new check's page. The `curl` recipe for scripts, now
+  with the Spring Boot starter's two properties, sits behind "Using the API or the Spring Boot
+  starter?".
+- The README no longer says every Healthchecks.io script keeps working: it lists what does (UUID
+  ping URLs with `/start`, `/fail`, `/log`, exit codes and `rid`) and what does not (slug URLs,
+  `?create=1`, bodies beyond 10 KB), and how to watch Cronbell itself.
+- One "not found" page for unknown addresses and checks, inside the app with the sidebar and a
+  link back (the global one had no sidebar, a missing check was a bare line). A page that fails to
+  load or render shows the error with a retry instead of the router's raw message.
+- The header's breadcrumb ends with the page itself and names the check: "Checks / Nightly backup",
+  "Checks / Nightly backup / Edit", "Checks / New check" (it showed only "Checks").
+- The instance admin's Invites page, easy to mix up with the member invite links on Members, is
+  now Instance invites at `/admin/invites`, in an Admin group of the sidebar that only the
+  instance admin sees, and points to Members for adding someone to the current project.
+
 ### Fixed
 
+- The crontab and Kubernetes snippets of a period check always said `*/5 * * * *`. They now use
+  the cron line of the period (`0 * * * *` for every hour, `*/15 * * * *` for 15 minutes, daily,
+  every 2, 3, 4, 6, 8 or 12 hours) and say so when a period has none. A 6-field cron drops its
+  zero seconds field, which crontab does not have.
+- Ping sources read `0:0:0:0:0:0:0:1`; IPv6 addresses are now compressed (`::1`) and
+  IPv4-mapped ones shown as IPv4.
+- Paused checks were amber like late ones. A pause is deliberate, so it is grey everywhere; amber
+  is left for late runs and checks waiting too long for their first ping.
+- The Up tile of the overview said "38% of checks"; it now says "on schedule".
+- The light theme had white cards on a grey page. As in the Steelreed design system, the page is
+  now white and cards, tables and code use the `#F7F7F7` surface.
+- On phones the status filter cut "New" in half and hid "Paused". The row still scrolls, now
+  with a fade on the side that has more, and the chosen filter is scrolled into view.
 - A session that accepted an invite while the account's password was being changed elsewhere
   stayed signed in; it is now signed out like the other sessions. Of two concurrent password
   changes with the same current password, the second one overwrote the first; it is now refused

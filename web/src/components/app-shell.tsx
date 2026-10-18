@@ -8,8 +8,9 @@ import { headerFor, navFor } from "@/lib/nav";
 import { checksQuery } from "@/lib/queries";
 import { countByHealth } from "@/lib/status";
 import { t } from "@/lib/strings";
-import type { Session } from "@/lib/types";
+import type { Check, Session } from "@/lib/types";
 import { useNow } from "@/lib/use-now";
+import { cn } from "@/lib/utils";
 import { AppSidebar } from "./app-sidebar";
 import { CommandMenu, useCommandShortcut } from "./command-menu";
 
@@ -26,7 +27,7 @@ export function AppShell({ session, children }: { session: Session; children: Re
     <SidebarProvider>
       <AppSidebar session={session} problems={problems} />
       <SidebarInset className="min-w-0 bg-page">
-        <AppHeader onSearch={openSearch} />
+        <AppHeader checks={checks.data} onSearch={openSearch} />
         <main className="mx-auto w-full min-w-0 max-w-[1600px] flex-1 p-4 sm:p-6">{children}</main>
       </SidebarInset>
       <CommandMenu open={searching} onOpenChange={setSearching} pages={navFor(session)} />
@@ -34,9 +35,9 @@ export function AppShell({ session, children }: { session: Session; children: Re
   );
 }
 
-function AppHeader({ onSearch }: { onSearch: () => void }) {
+function AppHeader({ checks, onSearch }: { checks?: Check[]; onSearch: () => void }) {
   const path = useRouterState({ select: (state) => state.location.pathname });
-  const header = headerFor(path);
+  const header = headerFor(path, checks);
   return (
     <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b bg-background px-3 sm:px-4">
       <SidebarTrigger aria-label={t.nav.toggleSidebar} className="size-9" />
@@ -51,19 +52,31 @@ function AppHeader({ onSearch }: { onSearch: () => void }) {
           <nav aria-label="Breadcrumb">
             <ol className="flex min-w-0 items-center gap-1.5 text-sm">
               {header.crumbs.map((crumb, i) => (
-                <li key={crumb.href} className="flex min-w-0 items-center gap-1.5">
+                <li
+                  key={crumb.href ?? crumb.label}
+                  className={cn(
+                    "flex min-w-0 items-center gap-1.5",
+                    crumb.href ? "shrink-0" : "shrink",
+                  )}
+                >
                   {i > 0 && (
                     <ChevronRightIcon
                       aria-hidden
                       className="size-4 shrink-0 text-muted-foreground"
                     />
                   )}
-                  <Link
-                    to={crumb.href}
-                    className="inline-flex h-9 max-w-48 items-center truncate text-muted-foreground transition-colors hover:text-foreground"
-                  >
-                    {crumb.label}
-                  </Link>
+                  {crumb.href ? (
+                    <Link
+                      to={crumb.href}
+                      className="block h-9 max-w-32 truncate text-muted-foreground leading-9 transition-colors hover:text-foreground sm:max-w-48"
+                    >
+                      {crumb.label}
+                    </Link>
+                  ) : (
+                    <span aria-current="page" className="truncate font-medium">
+                      {crumb.label}
+                    </span>
+                  )}
                 </li>
               ))}
             </ol>

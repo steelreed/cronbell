@@ -121,7 +121,8 @@ Rules:
 
 ## 5. Ping API
 
-Compatible with the Healthchecks.io URL shape, so moving over is a host change.
+The UUID ping URLs of Healthchecks.io, so a script that uses them moves over by changing the host
+and the key. Its slug URLs (`/ping/{pingKey}/{slug}`) and `?create=1` are not supported.
 
 ```
 GET|POST /ping/{pingKey}              success
@@ -541,29 +542,35 @@ negative is rejected at startup.
 The web app is served at `/` by the same server, same origin, so it uses the session cookie and
 CSRF header and never sees an API key except when one is created. Look: the Steelreed design
 system (black and white, dark by default with a light mode, colour only for state: UP green, DOWN
-red, warnings and PAUSED amber; system fonts; status is coloured text with a small dot, no
-badges). Dense and calm, data first. English in v0.1; strings live in one module so Vietnamese
+red, late runs and other warnings amber; NEW and PAUSED grey, since a pause is deliberate; system
+fonts; status is coloured text with a small dot, no badges). Dense and calm, data first. English in v0.1; strings live in one module so Vietnamese
 can follow.
 
 The shell is a collapsible left sidebar (the project switcher at the top; Overview, Checks, Alert
-channels, API keys, then Members, Invites for the instance admin, and Account; theme and account
-at the bottom; a sheet on phones) and a header with the page title, or the parent pages as a
-breadcrumb, and a command menu (⌘K, Ctrl+K or `/`: jump to a check by name or slug, go to a page,
-create a check, switch theme). The active page is marked with a grey fill and the product's amber on
-its icon. Theme: dark (default), light or system.
+channels, API keys; Settings: Members and Account; Admin, for the instance admin only: Instance
+invites; theme and account at the bottom; a sheet on phones) and a header with the page title, or
+on deeper pages a breadcrumb ending with the page itself ("Checks / Nightly backup / Edit", the
+check by its name), and a command menu (⌘K, Ctrl+K or `/`: jump to a check by name or slug, go to
+a page, create a check, switch theme). The active page is marked with a grey fill and the product's
+amber on its icon. Theme: dark (default), light or system. In the light theme the page is white and
+cards are the `#F7F7F7` surface; in the dark theme the page is ink and cards `#131313`.
+
+Every page has a skeleton while it loads and, when a load fails, the error with a retry. An
+unknown address or check shows one "not found" page inside the shell (404, what is missing, a link
+back to the overview or the checks); a page that fails to render shows its error with a retry.
 
 | Screen | Path | Content |
 |---|---|---|
 | Setup | `/setup` | first run only: admin email and password |
 | Sign in | `/signin` | email and password; shows the rate-limit wait |
-| Overview | `/` | counts (checks, down, late, up; each opens the filtered list); what needs attention (DOWN first, then late, then never pinged) with the reason and since when, from the check's state; runs and failures per day for 14 days in the browser's zone; a first-check guide when there is no check |
-| Checks | `/checks` | table: name and slug, schedule and time zone, status with reason (late = overdue within grace), the last 20 runs as ticks, last ping (relative, exact on hover), next run (a missed run by its time, with the next run); search, status filter with counts, sortable columns, problems first by default, 25 per page, all in the URL; row menu (open, pause or resume, copy ping URL, delete with confirmation); a list on phones; refreshed every 15 s; empty state with a ready `curl` to create and ping the first check |
-| Check | `/checks/{slug}` | status and since when; the latest runs as ticks (90, 40 on phones) and run durations with the max runtime line; recent pings with exit code, duration and output (expand to read; cards on phones); details; ping URL with copy and snippets (crontab, shell, Kubernetes CronJob, Spring Boot starter); pause/resume, edit, delete (confirmed) |
+| Overview | `/` | counts (checks, down, late, up; each opens the filtered list); what needs attention (DOWN first, then late, then never pinged) with the reason and since when, from the check's state; runs and failures per day for 14 days in the browser's zone; above them while the project is being set up, its first steps (create a check, receive the first ping, add an alert channel and send a test, and for owners, optional, invite a teammate) with the next one open, until the first three are done (the third once a channel exists, since a test is not stored as a delivery); a project without checks shows only the steps |
+| Checks | `/checks` | table: name and slug, schedule and time zone, status with reason (late = overdue within grace), the last 20 runs as ticks, last ping (relative, exact on hover), next run (a missed run by its time, with the next run); search, status filter with counts, sortable columns, problems first by default, 25 per page, all in the URL; row menu (open, pause or resume, copy ping URL, delete with confirmation); a list on phones; refreshed every 15 s; empty state: a button to create the first check, and behind "Using the API or the Spring Boot starter?" a ready `curl` to create and ping a check and the starter's two properties |
+| Check | `/checks/{slug}` | status and since when; the latest runs as ticks (90, 40 on phones) and run durations with the max runtime line; recent pings with exit code, duration and output (expand to read; cards on phones); details; ping URL with copy and snippets (crontab, shell, Kubernetes CronJob, Spring Boot starter); pause/resume, edit, delete (confirmed); a check without pings when its page opens leads with the ping URL, waiting for the first ping (refreshed every 3 s) with a test ping sent from the browser to the ping URL, then when it arrived and the next run; its runs and pings show once there are some |
 | New / edit check | `/checks/new`, `/checks/{slug}/edit` | slug, name, cron or period, time zone (searchable, common zones first, UTC offsets), the next five runs of a cron schedule (`/schedules/next`), grace, max runtime |
 | Channels | `/channels` | channels with type, target, last delivery or last error; add and edit in a dialog per type (secrets shown masked, kept unless replaced); send test; delete (confirmed) |
 | API keys | `/keys` | keys by name and prefix; create in a dialog that shows the key once with copy; revoke (confirmed); create and revoke for owners only |
 | Members | `/members` | members of the current project with role and "you"; remove (owners) or leave (confirmed); for owners, "Invite member" in a dialog that makes a link and shows it once with copy, and the member invites with status, expiry and delete (confirmed) |
-| Invites | `/invites` | instance admin only: create a project invite with an optional note (link shown once with copy), the project invites with status, who accepted them and expiry; delete (confirmed) |
+| Instance invites | `/admin/invites` | instance admin only: create a project invite with an optional note (link shown once with copy), the project invites with status, who accepted them and expiry; delete (confirmed); a pointer to Members for adding someone to the current project |
 | Account | `/account` | email, change password (current and new), sign out |
 | Invite | `/invite/{token}` | public: who invites to what and until when; email, password (and project name for a project invite) to create the account, or "Accept as <email>" when signed in; a clear message for an invalid or expired link |
 

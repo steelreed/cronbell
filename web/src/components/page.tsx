@@ -1,3 +1,4 @@
+import { useRouter } from "@tanstack/react-router";
 import { RotateCwIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
@@ -92,6 +93,25 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
           {t.common.retry}
         </Button>
       )}
+    </div>
+  );
+}
+
+/**
+ * The router's error component: a page whose loading or rendering failed. Inside the shell
+ * unless the shell itself failed (the session could not be read).
+ */
+export function RouteError({ error, reset }: { error: unknown; reset: () => void }) {
+  const router = useRouter();
+  return (
+    <div className="mx-auto max-w-md pt-12 sm:pt-20">
+      <ErrorState
+        error={error}
+        onRetry={() => {
+          reset();
+          void router.invalidate();
+        }}
+      />
     </div>
   );
 }

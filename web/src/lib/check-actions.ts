@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
 import { checkQuery, checksQuery } from "./queries";
+import { t } from "./strings";
 import type { Check } from "./types";
 
 /** Pause or resume, and delete, keeping the list and the detail queries in step. */
@@ -29,4 +30,23 @@ export function useCheckActions(check: Pick<Check, "slug" | "status">, onDeleted
     },
   });
   return { toggle, remove };
+}
+
+/**
+ * A success ping from this browser to the check's own ping URL, as a job sends it. Same origin
+ * (`/ping` needs no session or CSRF token), so it works whatever the configured base URL.
+ */
+export function useTestPing(check: Pick<Check, "pingKey">) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`/ping/${encodeURIComponent(check.pingKey)}`, {
+        method: "POST",
+        body: t.check.firstPing.testBody,
+      });
+      if (response.status === 429) throw new Error(t.check.firstPing.rateLimited);
+      if (!response.ok) throw new Error(t.check.firstPing.failed(response.status));
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["checks"] }),
+  });
 }

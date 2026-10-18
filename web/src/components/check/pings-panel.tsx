@@ -1,7 +1,7 @@
 import { ChevronRightIcon } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { formatDuration } from "@/lib/format";
+import { formatAddress, formatDuration } from "@/lib/format";
 import { t } from "@/lib/strings";
 import type { Ping, PingKind } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -120,7 +120,9 @@ function Output({ body }: { body: string }) {
 }
 
 function source(ping: Ping) {
-  return [ping.remoteAddr, ping.userAgent].filter(Boolean).join(" · ");
+  return [ping.remoteAddr && formatAddress(ping.remoteAddr), ping.userAgent]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function PingRow({ ping, now }: { ping: Ping; now: number }) {

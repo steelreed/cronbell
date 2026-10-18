@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { EmptyChecks } from "@/components/empty-checks";
 import { AttentionList } from "@/components/overview/attention-list";
 import { DailyChart } from "@/components/overview/daily-chart";
+import { FirstSteps } from "@/components/overview/first-steps";
 import { StatTiles } from "@/components/overview/stat-tiles";
 import { Bar, EmptyLine, ErrorState, Panel } from "@/components/page";
 import { checksQuery, dailyStatsQuery } from "@/lib/queries";
@@ -16,8 +16,8 @@ export const Route = createFileRoute("/_app/")({
 });
 
 /**
- * The overview: counts, what needs attention now, and runs per day. A brand-new install
- * shows how to add the first check instead of empty widgets.
+ * The overview: counts, what needs attention now, and runs per day, under the setup steps
+ * while the project is young. A project without checks shows only the steps.
  */
 function OverviewPage() {
   const { session } = Route.useRouteContext();
@@ -31,9 +31,10 @@ function OverviewPage() {
       </Panel>
     );
   }
-  if (checks.data.length === 0) return <EmptyChecks session={session} />;
+  if (checks.data.length === 0) return <FirstSteps checks={checks.data} session={session} />;
   return (
     <div className="space-y-4">
+      <FirstSteps checks={checks.data} session={session} />
       <StatTiles counts={countByHealth(checks.data, now)} />
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <Panel title={t.overview.chart}>

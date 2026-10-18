@@ -14,8 +14,9 @@ export const en = {
     keys: "API keys",
     settings: "Settings",
     members: "Members",
-    invites: "Invites",
     account: "Account",
+    admin: "Admin",
+    instanceInvites: "Instance invites",
     toggleSidebar: "Toggle sidebar",
   },
   theme: {
@@ -103,8 +104,7 @@ export const en = {
       "all reporting",
     downMeta: (n: number) => (n === 0 ? "nothing failing" : "need a look now"),
     lateMeta: (n: number) => (n === 0 ? "none overdue" : "overdue, within grace"),
-    upMeta: (n: number, total: number) =>
-      total === 0 ? "no checks" : `${Math.round((n / total) * 100)}% of checks`,
+    upMeta: "on schedule",
     attention: "Needs attention",
     allGood: "Every check is up or paused.",
     since: "since",
@@ -115,6 +115,21 @@ export const en = {
       `${plural(runs, "run", "runs")}, ${plural(failures, "failure", "failures")} in 14 days`,
     chartEmpty: "No runs in the last 14 days.",
     viewAll: "View all checks",
+  },
+  firstSteps: {
+    title: "Get started",
+    progress: (done: number, total: number) => `${done} of ${total} done`,
+    done: "Done:",
+    optional: "optional",
+    create: "Create a check",
+    ping: "Receive the first ping",
+    pingLead: "Run the job with the ping added, or send a test ping from the check's page.",
+    openCheck: (name: string) => `Open ${name}`,
+    channel: "Add an alert channel and send a test",
+    channelLead: "Alerts go to email, Telegram, Slack or a webhook. Send a test to see one arrive.",
+    addChannel: "Add a channel",
+    invite: "Invite a teammate",
+    inviteAction: "Invite member",
   },
   checks: {
     title: "Checks",
@@ -157,18 +172,16 @@ export const en = {
     page: (n: number) => `Page ${n}`,
     copyPingUrl: "Copy ping URL",
     empty: {
-      title: "Add your first check",
+      title: "No checks yet",
       lead: "A check watches one job. It expects a ping after every run and alerts you when a run fails or does not happen.",
-      step1: "Create a check",
-      step1Lead: "Use the form, or the API with a key, from a script or a deploy.",
-      step2: "Ping it at the end of the job",
-      step2Lead: "Add one line after the job. Cronbell turns the exit code into up or down.",
-      step3: "Get alerts",
-      step3Lead: "Add an email, Telegram, Slack or webhook channel.",
-      form: "Create with the form",
+      create: "Create your first check",
+      other: "Using the API or the Spring Boot starter?",
+      apiLead:
+        "Create checks from a script or a deploy with an API key, then ping each one at the end of its job:",
+      springLead:
+        "With the Spring Boot starter, every @Scheduled job registers its check and reports its runs:",
       key: "Create an API key",
-      channel: "Add a channel",
-      waiting: "Waiting for the first check…",
+      starter: "Spring Boot starter",
     },
   },
   runs: {
@@ -208,6 +221,16 @@ export const en = {
     pingUrl: "Ping URL",
     integrate: "Send pings",
     integrateLead: "Report start, exit code and the last 10 KB of output.",
+    firstPing: {
+      waiting: "Waiting for the first ping…",
+      received: "First ping received",
+      next: "next run",
+      test: "Send a test ping",
+      testing: "Sending…",
+      testBody: "Test ping from the Cronbell dashboard",
+      rateLimited: "Too many pings at once. Try again in a second.",
+      failed: (status: number) => `The ping was refused (HTTP ${status}).`,
+    },
     snippets: {
       crontab: "crontab",
       shell: "Shell",
@@ -227,8 +250,6 @@ export const en = {
       body: "Output",
     },
     kinds: { START: "start", SUCCESS: "success", FAIL: "fail", LOG: "log" },
-    notFound: "This check does not exist.",
-    backToChecks: "Back to checks",
     sameAsGrace: "same as grace",
     showOutput: "Show output",
     hideOutput: "Hide output",
@@ -365,6 +386,8 @@ export const en = {
   },
   invites: {
     lead: "Invite someone to Cronbell with a project of their own. They choose their email and password when they open the link. You do not get access to their project.",
+    memberHint: "Adding someone to the current project?",
+    toMembers: "Invite them from Members",
     create: "Create invite",
     createProjectTitle: "Invite to a new project",
     createMemberTitle: "Invite a member",
@@ -428,8 +451,15 @@ export const en = {
       "It may have expired, been used or been withdrawn. Ask the person who invited you for a new link.",
     goToSignIn: "Go to sign in",
   },
-  notFound: "Page not found.",
-  goToOverview: "Go to overview",
+  notFound: {
+    title: "Page not found",
+    lead: "The address may be mistyped, or the page has moved.",
+    checkTitle: "Check not found",
+    checkLead: (slug: string) =>
+      `There is no check ${slug} in this project. It may have been deleted, or be in another project.`,
+    toOverview: "Go to overview",
+    toChecks: "Back to checks",
+  },
 };
 
 export type Strings = typeof en;

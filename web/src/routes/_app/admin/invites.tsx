@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { MailPlusIcon } from "lucide-react";
 import { useState } from "react";
 import { InviteDialog } from "@/components/invite-dialog";
@@ -10,7 +10,7 @@ import { adminInvitesQuery, useSession } from "@/lib/queries";
 import { t } from "@/lib/strings";
 import { useNow } from "@/lib/use-now";
 
-export const Route = createFileRoute("/_app/invites")({
+export const Route = createFileRoute("/_app/admin/invites")({
   component: InvitesPage,
 });
 
@@ -33,7 +33,18 @@ function AdminInvites() {
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="max-w-[65ch] text-muted-foreground text-sm text-pretty">{t.invites.lead}</p>
+        <div className="max-w-[65ch] space-y-1 text-muted-foreground text-sm text-pretty">
+          <p>{t.invites.lead}</p>
+          <p>
+            {t.invites.memberHint}{" "}
+            <Link
+              to="/members"
+              className="font-medium text-foreground underline-offset-4 hover:underline"
+            >
+              {t.invites.toMembers}
+            </Link>
+          </p>
+        </div>
         <Button onClick={() => setCreating(true)} className="shrink-0 self-start sm:self-auto">
           <MailPlusIcon aria-hidden />
           {t.invites.create}
