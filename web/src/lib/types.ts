@@ -4,7 +4,7 @@ export type CheckStatus = "NEW" | "UP" | "DOWN" | "PAUSED";
 export type DownReason = "MISSED" | "FAILED" | "RUNNING_TOO_LONG";
 export type ScheduleKind = "CRON" | "PERIOD";
 export type PingKind = "START" | "SUCCESS" | "FAIL" | "LOG";
-export type ChannelType = "email" | "telegram" | "slack" | "webhook";
+export type ChannelType = "email" | "telegram" | "slack" | "discord" | "ntfy" | "webhook";
 
 export interface Check {
   slug: string;

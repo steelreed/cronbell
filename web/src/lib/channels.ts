@@ -3,6 +3,8 @@ import type { ChannelType } from "./types";
 
 export interface ChannelFieldSpec {
   key: string;
+  /** Overrides the label of the key, when one key means different things per type. */
+  label?: string;
   secret: boolean;
   required: boolean;
   inputType: "text" | "email" | "url" | "password";
@@ -10,7 +12,14 @@ export interface ChannelFieldSpec {
   hint?: string;
 }
 
-export const CHANNEL_TYPES: ChannelType[] = ["email", "telegram", "slack", "webhook"];
+export const CHANNEL_TYPES: ChannelType[] = [
+  "email",
+  "telegram",
+  "slack",
+  "discord",
+  "ntfy",
+  "webhook",
+];
 
 /** Config fields per type (DESIGN.md §8). Secrets come back masked and are kept when left empty. */
 export const CHANNEL_FIELDS: Record<ChannelType, ChannelFieldSpec[]> = {
@@ -51,6 +60,43 @@ export const CHANNEL_FIELDS: Record<ChannelType, ChannelFieldSpec[]> = {
       hint: t.channels.hints.webhookUrl,
     },
   ],
+  discord: [
+    {
+      key: "webhookUrl",
+      label: t.channels.fields.discordWebhookUrl,
+      secret: true,
+      required: true,
+      inputType: "url",
+      placeholder: "https://discord.com/api/webhooks/…",
+      hint: t.channels.hints.discordWebhookUrl,
+    },
+  ],
+  ntfy: [
+    {
+      key: "serverUrl",
+      secret: false,
+      required: false,
+      inputType: "url",
+      placeholder: "https://ntfy.sh",
+      hint: t.channels.hints.serverUrl,
+    },
+    {
+      key: "topic",
+      secret: false,
+      required: true,
+      inputType: "text",
+      placeholder: "cronbell-ops-7f3k",
+      hint: t.channels.hints.topic,
+    },
+    {
+      key: "token",
+      secret: true,
+      required: false,
+      inputType: "password",
+      placeholder: "tk_…",
+      hint: t.channels.hints.token,
+    },
+  ],
   webhook: [
     {
       key: "url",
@@ -69,6 +115,10 @@ export const CHANNEL_FIELDS: Record<ChannelType, ChannelFieldSpec[]> = {
   ],
 };
 
+export function fieldLabel(field: ChannelFieldSpec): string {
+  return field.label ?? t.channels.fields[field.key as keyof typeof t.channels.fields];
+}
+
 /**
  * The config to send. When editing, an empty secret is left out so the server keeps the
  * stored value; on create, required fields must be filled.
@@ -85,8 +135,7 @@ export function channelConfig(
     if (value) {
       config[field.key] = value;
     } else if (field.required && !(editing && field.secret)) {
-      errors[field.key] =
-        `${t.channels.fields[field.key as keyof typeof t.channels.fields]} is required.`;
+      errors[field.key] = `${fieldLabel(field)} is required.`;
     }
   }
   return { config, errors };
@@ -100,7 +149,10 @@ export function channelTarget(type: ChannelType, config: Record<string, string>)
     case "telegram":
       return `chat ${config.chatId ?? ""}`;
     case "slack":
+    case "discord":
       return config.webhookUrl ?? "";
+    case "ntfy":
+      return `${(config.serverUrl ?? "").replace(/^https?:\/\//, "")}/${config.topic ?? ""}`;
     case "webhook":
       return config.url ?? "";
   }

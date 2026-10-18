@@ -1,4 +1,4 @@
-import type { Check, Session } from "@/lib/types";
+import type { Channel, Check, Session } from "@/lib/types";
 
 export const NOW = Date.parse("2026-01-05T10:00:00Z");
 
@@ -22,6 +22,22 @@ export function aCheck(overrides: Partial<Check> = {}): Check {
     nextDueAt: "2026-01-05T20:00:00Z",
     nextRunAt: "2026-01-05T20:00:00Z",
     createdAt: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+export function aChannel(overrides: Partial<Channel> = {}): Channel {
+  return {
+    id: "ch-ops",
+    type: "telegram",
+    name: "Ops chat",
+    config: { botToken: "12…Qr", chatId: "-1001234567890" },
+    createdAt: "2026-01-01T00:00:00Z",
+    updatedAt: "2026-01-01T00:00:00Z",
+    lastAttemptAt: null,
+    lastDeliveryAt: null,
+    lastError: null,
+    pendingDeliveries: 0,
     ...overrides,
   };
 }
