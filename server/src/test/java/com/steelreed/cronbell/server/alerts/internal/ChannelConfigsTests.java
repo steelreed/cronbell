@@ -101,24 +101,65 @@ class ChannelConfigsTests {
 	}
 
 	@Test
+	void scrubsTheBareWebhookPathAndLongerSecretsFirst() {
+		Channel slack = channel(ChannelType.SLACK, Map.of("webhookUrl", "https://hooks.slack.com/services/T0/B0/xyz"));
+		assertThat(
+				ChannelConfigs.scrub(slack, "POST https://hooks.slack.com/services/T0/B0/xyz and /services/T0/B0/xyz"))
+			.isEqualTo("POST **** and ****");
+		// A path too short to hide anything is left alone.
+		Channel webhook = channel(ChannelType.WEBHOOK, Map.of("url", "https://hooks.example.com/hook"));
+		assertThat(ChannelConfigs.scrub(webhook, "POST /hook refused")).isEqualTo("POST /hook refused");
+	}
+
+	/**
+	 * The receiver's body is cut to 200 characters; a secret it echoes across that limit
+	 * must not leave its start in the message.
+	 */
+	@Test
+	void failureScrubsSecretsBeforeShorteningTheBody() {
+		String ntfyToken = "tk_" + "0123456789abcdef".repeat(2);
+		String slackUrl = "https://hooks.slack.com/services/T0000/B0000/" + "s".repeat(24);
+		String discordUrl = "https://discord.com/api/webhooks/123456/" + "d".repeat(60);
+		String hookSecret = "whsec_" + "w".repeat(30);
+		Map<Channel, String> echoed = Map.of(
+				channel(ChannelType.NTFY, Map.of("serverUrl", "https://ntfy.sh", "topic", "ops", "token", ntfyToken)),
+				ntfyToken, channel(ChannelType.TELEGRAM, Map.of("botToken", TOKEN, "chatId", "42")), TOKEN,
+				channel(ChannelType.SLACK, Map.of("webhookUrl", slackUrl)), "/services/T0000/B0000/" + "s".repeat(24),
+				channel(ChannelType.DISCORD, Map.of("webhookUrl", discordUrl)), discordUrl,
+				channel(ChannelType.WEBHOOK, Map.of("url", "https://hooks.example.com/in", "secret", hookSecret)),
+				hookSecret);
+		echoed.forEach((channel, secret) -> {
+			String body = "x".repeat(190) + secret + "\nend";
+			String message = HttpPoster
+				.failure(new HttpPoster.Response(500, body, null), channel, "receiver", body, null)
+				.getMessage();
+			assertThat(message).as(channel.type().id())
+				.isEqualTo("HTTP 500 from receiver: " + "x".repeat(190) + "**** end");
+			assertThat(message).as(channel.type().id()).doesNotContain(secret.substring(0, 5));
+		});
+	}
+
+	@Test
 	void retryableStatuses() {
-		assertThat(HttpPoster.failure(new HttpPoster.Response(503, "", "7"), "Slack", null, null).retryAfter())
+		Channel slack = channel(ChannelType.SLACK, Map.of("webhookUrl", "https://hooks.slack.com/services/T0/B0/xyz"));
+		assertThat(HttpPoster.failure(new HttpPoster.Response(503, "", "7"), slack, "Slack", null, null).retryAfter())
 			.isEqualTo(Duration.ofSeconds(7));
-		assertThat(HttpPoster.failure(new HttpPoster.Response(429, "", null), "Discord", "slow down",
+		assertThat(HttpPoster.failure(new HttpPoster.Response(429, "", null), slack, "Discord", "slow down",
 				Duration.ofSeconds(3)))
 			.satisfies((ex) -> {
 				assertThat(ex.retryable()).isTrue();
 				assertThat(ex.getMessage()).isEqualTo("HTTP 429 from Discord: slow down");
 				assertThat(ex.retryAfter()).isEqualTo(Duration.ofSeconds(3));
 			});
-		assertThat(HttpPoster.failure(new HttpPoster.Response(408, "", null), "Slack", null, null).retryable())
+		assertThat(HttpPoster.failure(new HttpPoster.Response(408, "", null), slack, "Slack", null, null).retryable())
 			.isTrue();
-		assertThat(HttpPoster.failure(new HttpPoster.Response(404, "no_service", null), "Slack", "no_service", null))
+		assertThat(HttpPoster.failure(new HttpPoster.Response(404, "no_service", null), slack, "Slack", "no_service",
+				null))
 			.satisfies((ex) -> {
 				assertThat(ex.retryable()).isFalse();
 				assertThat(ex.getMessage()).isEqualTo("HTTP 404 from Slack: no_service");
 			});
-		assertThat(HttpPoster.failure(new HttpPoster.Response(500, "", null), "hooks.example.com", "  ", null)
+		assertThat(HttpPoster.failure(new HttpPoster.Response(500, "", null), slack, "hooks.example.com", "  ", null)
 			.getMessage()).isEqualTo("HTTP 500 from hooks.example.com");
 	}
 

@@ -559,6 +559,9 @@ Any 2xx answer is a success. Redirects are not followed.
   hooks.example.com: <first 200 characters of the body>`, `SMTP server smtp.example.com rejected
   the user name or password (…)`. A network error names the host and port only, since a webhook
   URL can itself be a secret; a given-up delivery reads `Gave up after 8 attempts in 60 min: …`.
+  A body that echoes a secret of the channel (a token, the webhook URL or its path) has it
+  replaced by `****` before it is cut to 200 characters, so a secret across the cut leaves no
+  part behind.
 - **Rate limits.** Alerts are only sent on transitions, so there is no per-channel limit in
   v0.1. `POST /channels/{id}/test` is limited to one call per 10 s per channel (`429`).
 - Finished deliveries are kept for history and pruned with the pings (§10).

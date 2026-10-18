@@ -57,7 +57,7 @@ final class NtfySender implements ChannelSender {
 						: "the topic needs an access token";
 				default -> detail;
 			};
-			throw HttpPoster.failure(response, "ntfy", detail, null);
+			throw HttpPoster.failure(response, channel, "ntfy", detail, null);
 		}
 	}
 

@@ -47,7 +47,7 @@ final class WebhookSender implements ChannelSender {
 		URI uri = URI.create(channel.get(ChannelConfigs.URL));
 		HttpPoster.Response response = this.http.post(uri, headers, body);
 		if (!response.successful()) {
-			throw HttpPoster.failure(response, uri.getHost(), response.body(), null);
+			throw HttpPoster.failure(response, channel, uri.getHost(), response.body(), null);
 		}
 	}
 

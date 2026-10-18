@@ -3,6 +3,7 @@ package com.steelreed.cronbell.server.alerts.internal;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -36,6 +37,12 @@ public final class ChannelConfigs {
 	static final String NTFY_SERVER = "https://ntfy.sh";
 
 	private static final int MAX_URL_LENGTH = 2000;
+
+	/**
+	 * Shorter paths of a secret URL ({@code /}, {@code /hook}) are not scrubbed on their
+	 * own: they hide nothing and would blank out ordinary words of a message.
+	 */
+	private static final int MIN_SECRET_PATH = 8;
 
 	private static final Pattern EMAIL = Pattern
 		.compile("[^\\s@<>,;:\"()\\[\\]]+@[^\\s@<>,;:\"()\\[\\]]+\\.[^\\s@<>,;:\"()\\[\\]]+");
@@ -211,16 +218,36 @@ public final class ChannelConfigs {
 		return result;
 	}
 
-	/** Secret values of the channel, to scrub from error messages. */
+	/**
+	 * Secret values of the channel, to scrub from error messages, longest first. A secret
+	 * URL also gives its path and query, which a receiver may echo without the host.
+	 */
 	static List<String> secrets(Channel channel) {
 		List<String> result = new ArrayList<>();
 		for (Field field : fields(channel.type())) {
 			String value = channel.get(field.name());
-			if (field.secret() && value != null) {
-				result.add(value);
+			if (!field.secret() || value == null || value.isEmpty()) {
+				continue;
+			}
+			result.add(value);
+			String path = (field.kind() == Kind.URL) ? pathOf(value) : null;
+			if (path != null && path.length() >= MIN_SECRET_PATH) {
+				result.add(path);
 			}
 		}
+		result.sort(Comparator.comparingInt(String::length).reversed());
 		return result;
+	}
+
+	private static String pathOf(String url) {
+		try {
+			URI uri = new URI(url);
+			String path = (uri.getRawPath() != null) ? uri.getRawPath() : "";
+			return (uri.getRawQuery() != null) ? path + "?" + uri.getRawQuery() : path;
+		}
+		catch (URISyntaxException ex) {
+			return null;
+		}
 	}
 
 	private static String mask(Kind kind, String value) {
@@ -252,16 +279,17 @@ public final class ChannelConfigs {
 		}
 	}
 
-	/** Replaces every secret of the channel in {@code text} with {@code ****}. */
+	/**
+	 * Replaces every secret of the channel in {@code text} with {@code ****}. Scrub the
+	 * whole text before shortening it: a secret cut at the end no longer matches.
+	 */
 	static String scrub(Channel channel, String text) {
 		if (text == null) {
 			return null;
 		}
 		String result = text;
 		for (String secret : secrets(channel)) {
-			if (!secret.isEmpty()) {
-				result = result.replace(secret, "****");
-			}
+			result = result.replace(secret, "****");
 		}
 		return result;
 	}

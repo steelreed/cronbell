@@ -54,7 +54,7 @@ final class DiscordSender implements ChannelSender {
 			if (response.status() == 401 || response.status() == 404) {
 				detail = SlackSender.WEBHOOK_GONE;
 			}
-			throw HttpPoster.failure(response, "Discord", detail, retryAfter);
+			throw HttpPoster.failure(response, channel, "Discord", detail, retryAfter);
 		}
 	}
 

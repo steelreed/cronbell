@@ -912,6 +912,32 @@ abstract class AbstractIntegrationTests {
 	}
 
 	@Test
+	void anErrorBodyEchoingASecretNeverKeepsAPieceOfIt() {
+		Project project = newProject();
+		// The token starts at character 193 of the body and the error keeps 200.
+		String server = "/ntfy/" + UUID.randomUUID();
+		String token = "tk_" + UUID.randomUUID().toString().replace("-", "");
+		RECEIVER.always(server, FakeReceiver.Response.of(500, "a".repeat(185) + " token=" + token + " was refused"));
+		String ntfy = createChannel(project, "{\"type\":\"ntfy\",\"config\":{\"serverUrl\":\"" + RECEIVER.url(server)
+				+ "\",\"topic\":\"ops\",\"token\":\"" + token + "\"}}");
+		// Discord's webhook path, without the host, from character 182.
+		String path = "/discord/" + UUID.randomUUID();
+		RECEIVER.always(path, FakeReceiver.Response.of(502, "b".repeat(180) + " " + path + " is unavailable"));
+		String discord = insertWebhookUrlChannel(project, ChannelType.DISCORD, path);
+		goDown(project);
+		this.dispatcher.runOnce();
+
+		String ntfyError = JsonPath
+			.read(exchange(HttpMethod.GET, "/api/v1/channels/" + ntfy, null, project.key()).getBody(), "$.lastError");
+		assertThat(ntfyError).startsWith("HTTP 500 from ntfy: aaa").endsWith(" token=**** was…");
+		assertThat(ntfyError).doesNotContain(token.substring(0, 8));
+		String discordError = JsonPath.read(
+				exchange(HttpMethod.GET, "/api/v1/channels/" + discord, null, project.key()).getBody(), "$.lastError");
+		assertThat(discordError).startsWith("HTTP 502 from Discord: bbb").contains(" **** is");
+		assertThat(discordError).doesNotContain(path.substring(0, 18));
+	}
+
+	@Test
 	void unreachableChannelsGetAPlainReason() {
 		Project project = newProject();
 		String channel = createChannel(project,

@@ -76,12 +76,16 @@ class HttpPoster {
 	/**
 	 * Turns a non-2xx response into a delivery error that names the receiver ("HTTP 401
 	 * from Telegram: check the bot token"): 408, 429 and 5xx are retried, other statuses
-	 * are permanent.
+	 * are permanent. {@code detail}, often the receiver's body, is scrubbed of the
+	 * channel's secrets before it is put on one line and shortened, as a receiver may
+	 * echo a token or the webhook URL and a secret cut short would no longer match.
 	 */
-	static DeliveryException failure(Response response, String receiver, String detail, Duration retryAfter) {
+	static DeliveryException failure(Response response, Channel channel, String receiver, String detail,
+			Duration retryAfter) {
 		int status = response.status();
+		String shown = ChannelConfigs.scrub(channel, detail);
 		String message = "HTTP " + status + " from " + receiver
-				+ ((detail != null && !detail.isBlank()) ? ": " + oneLine(detail) : "");
+				+ ((shown != null && !shown.isBlank()) ? ": " + oneLine(shown) : "");
 		boolean retryable = status == 408 || status == 429 || status >= 500;
 		Duration wait = (retryAfter != null) ? retryAfter : parseRetryAfter(response.retryAfter());
 		return new DeliveryException(message, retryable, retryable ? wait : null);

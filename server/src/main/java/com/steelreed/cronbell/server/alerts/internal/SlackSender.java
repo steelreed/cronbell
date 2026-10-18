@@ -39,7 +39,7 @@ final class SlackSender implements ChannelSender {
 				case 401, 403, 404 -> WEBHOOK_GONE;
 				default -> response.body();
 			};
-			throw HttpPoster.failure(response, "Slack", detail, null);
+			throw HttpPoster.failure(response, channel, "Slack", detail, null);
 		}
 	}
 

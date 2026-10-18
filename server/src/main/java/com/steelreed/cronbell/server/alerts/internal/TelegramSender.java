@@ -62,7 +62,7 @@ final class TelegramSender implements ChannelSender {
 			if (response.status() == 401 || response.status() == 404) {
 				detail = "check the bot token";
 			}
-			throw HttpPoster.failure(response, "Telegram", detail, retryAfter);
+			throw HttpPoster.failure(response, channel, "Telegram", detail, retryAfter);
 		}
 	}
 

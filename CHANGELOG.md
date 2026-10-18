@@ -93,6 +93,10 @@ All notable changes to Cronbell are listed here. The format follows
   hooks.example.com", "Connection refused by localhost:8080", "Timed out after 10 s waiting for
   …", "HTTP 401 from Telegram: check the bot token") instead of exception names such as
   `UnresolvedAddressException`.
+- A channel error that quoted the receiver's body could keep the start of a token or webhook URL
+  the body echoed: the body was cut to 200 characters before secrets were replaced, so a secret
+  across the cut no longer matched. Secrets, and the path of a webhook URL on its own, are now
+  replaced first.
 
 ## [0.1.0-beta.2] - 2026-10-17
 
