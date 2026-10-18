@@ -88,7 +88,7 @@ spec:
                   exit $code`;
 }
 
-/** The empty state: create a check with the API, then ping it. */
+/** The empty state, for scripts: create a check with the API, then ping it; or the starter. */
 export function firstCheckSnippets(origin: string, pingBaseUrl: string, timeZone: string) {
   return {
     create: `curl -X PUT ${origin}/api/v1/checks/nightly-backup \\
@@ -97,6 +97,9 @@ export function firstCheckSnippets(origin: string, pingBaseUrl: string, timeZone
   -d '{"cron": "0 3 * * *", "timeZone": "${timeZone}", "graceSeconds": 1800}'`,
     ping: `# at the end of the job, with the pingKey from the answer
 ${CURL} ${pingBaseUrl}<pingKey>`,
+    spring: `# application.properties, with com.steelreed:cronbell-spring-boot-starter
+cronbell.url=${origin}
+cronbell.api-key=\${CRONBELL_API_KEY}`,
   };
 }
 

@@ -99,7 +99,11 @@ describe("auth guard", () => {
       }),
     );
     renderAt("/");
-    expect(await screen.findByText("Add your first check")).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Create your first check" })).toHaveAttribute(
+      "href",
+      "/checks/new",
+    );
+    expect(screen.getByText("Using the API or the Spring Boot starter?")).toBeInTheDocument();
     expect(
       screen.getByText(/curl -X PUT http:\/\/localhost(:\d+)?\/api\/v1\/checks\/nightly-backup/),
     ).toBeInTheDocument();

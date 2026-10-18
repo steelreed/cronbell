@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { aCheck } from "@/test/fixtures";
-import { crontabSnippet, kubernetesSnippet, periodCron } from "./snippets";
+import { crontabSnippet, firstCheckSnippets, kubernetesSnippet, periodCron } from "./snippets";
 
 const every = (periodSeconds: number) =>
   aCheck({ scheduleKind: "PERIOD", cron: null, periodSeconds, timeZone: "UTC" });
@@ -61,5 +61,22 @@ describe("kubernetesSnippet", () => {
     const yaml = kubernetesSnippet(every(45 * 60));
     expect(yaml.startsWith("# every 45m has no exact cron schedule")).toBe(true);
     expect(yaml).toContain('schedule: "<schedule>"');
+  });
+});
+
+describe("firstCheckSnippets", () => {
+  it("points the API, the ping and the starter at this server", () => {
+    const snippets = firstCheckSnippets(
+      "https://cron.example.com",
+      "https://cron.example.com/ping/",
+      "UTC",
+    );
+    expect(snippets.create).toContain(
+      "curl -X PUT https://cron.example.com/api/v1/checks/nightly-backup",
+    );
+    expect(snippets.ping).toContain("https://cron.example.com/ping/<pingKey>");
+    expect(snippets.spring).toContain(
+      "cronbell.url=https://cron.example.com\ncronbell.api-key=${CRONBELL_API_KEY}",
+    );
   });
 });

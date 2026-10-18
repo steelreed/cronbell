@@ -157,18 +157,16 @@ export const en = {
     page: (n: number) => `Page ${n}`,
     copyPingUrl: "Copy ping URL",
     empty: {
-      title: "Add your first check",
+      title: "No checks yet",
       lead: "A check watches one job. It expects a ping after every run and alerts you when a run fails or does not happen.",
-      step1: "Create a check",
-      step1Lead: "Use the form, or the API with a key, from a script or a deploy.",
-      step2: "Ping it at the end of the job",
-      step2Lead: "Add one line after the job. Cronbell turns the exit code into up or down.",
-      step3: "Get alerts",
-      step3Lead: "Add an email, Telegram, Slack or webhook channel.",
-      form: "Create with the form",
+      create: "Create your first check",
+      other: "Using the API or the Spring Boot starter?",
+      apiLead:
+        "Create checks from a script or a deploy with an API key, then ping each one at the end of its job:",
+      springLead:
+        "With the Spring Boot starter, every @Scheduled job registers its check and reports its runs:",
       key: "Create an API key",
-      channel: "Add a channel",
-      waiting: "Waiting for the first check…",
+      starter: "Spring Boot starter",
     },
   },
   runs: {
