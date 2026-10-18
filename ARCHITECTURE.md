@@ -143,7 +143,8 @@ Every 15 s `checks.internal.Detector` claims UP checks that are overdue in batch
 there the alert path is the same as for a ping. Each run then writes its time to
 `detector_heartbeat`. The first run after a start reads it first: after more than 2 minutes of
 silence, `CheckStateMachine.afterDowntime` gives the checks that could have reported in the gap a
-new deadline, without events (DESIGN.md §4, Downtime).
+new deadline, without events (DESIGN.md §4, Downtime). That claim waits for rows locked by a
+ping (`FOR UPDATE`, not `SKIP LOCKED`), so no check keeps its old deadline.
 
 ### History pruning
 

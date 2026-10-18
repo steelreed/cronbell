@@ -137,7 +137,8 @@ Rules:
   with its grace ending after the last heartbeat: the open run is dropped and `due` is computed
   from now, so the job has a full period plus grace to report. Nothing is alerted and no status
   changes; a check that was already DOWN stays DOWN, and one still silent after its new deadline
-  goes DOWN as usual. One INFO line says `Server was away from <last heartbeat> to <now>; N checks
+  goes DOWN as usual. This pass waits for checks locked by a ping instead of skipping them, so
+  none keeps its old deadline. One INFO line says `Server was away from <last heartbeat> to <now>; N checks
   given a new deadline`. Shorter restarts, and a first start (no heartbeat yet), change nothing.
 
 ## 5. Ping API

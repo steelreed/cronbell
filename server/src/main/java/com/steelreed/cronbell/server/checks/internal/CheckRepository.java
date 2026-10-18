@@ -109,7 +109,10 @@ public class CheckRepository {
 	 * Claims UP checks that could have reported while the server was away from
 	 * {@code from} to {@code now}: an open run whose deadline is after {@code from}, or a
 	 * run due by now, not pinged since, whose deadline is after {@code from}. Mirrors
-	 * {@code CheckStateMachine.afterDowntime}; locks as {@link #claimOverdue} does.
+	 * {@code CheckStateMachine.afterDowntime}. On PostgreSQL rows are locked, and unlike
+	 * {@link #claimOverdue} a row locked by a ping or another instance is waited for, not
+	 * skipped: a check left out would keep its old deadline and go DOWN for the downtime.
+	 * Rows are locked in one order, so instances recovering at once do not deadlock.
 	 */
 	public List<Check> claimAffectedByDowntime(Instant from, Instant now, int limit) {
 		String sql = """
@@ -120,8 +123,8 @@ public class CheckRepository {
 				         AND run_started_at + COALESCE(max_runtime_seconds, grace_seconds) * 1000 > :from)
 				     OR (next_due_at IS NOT NULL AND next_due_at <= :now AND next_due_at + grace_seconds * 1000 > :from
 				         AND (last_ping_at IS NULL OR last_ping_at < next_due_at)))
-				 ORDER BY next_due_at
-				 LIMIT :limit%s""".formatted(COLUMNS, this.database.forUpdateSkipLocked());
+				 ORDER BY next_due_at, id
+				 LIMIT :limit%s""".formatted(COLUMNS, this.database.forUpdate());
 		return this.jdbc.sql(sql)
 			.param("from", from.toEpochMilli())
 			.param("now", now.toEpochMilli())

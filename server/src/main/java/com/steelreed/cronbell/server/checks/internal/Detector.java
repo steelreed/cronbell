@@ -31,7 +31,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <p>
  * Each batch is claimed and updated in one transaction. On PostgreSQL the claim uses
  * {@code FOR UPDATE SKIP LOCKED}, so several instances can run the detector at once
- * without double-processing a check.
+ * without double-processing a check. The claim after downtime waits for locked checks
+ * instead, so none keeps its old deadline (a ping holding its row would otherwise turn
+ * the downtime into an alert).
  */
 @Component
 public class Detector {
