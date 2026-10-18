@@ -32,14 +32,24 @@ describe("crontabSnippet", () => {
   });
 
   it("runs a period check on the cron line of its period", () => {
-    expect(crontabSnippet(every(3_600))).toMatch(/^0 \* \* \* \* \/path\/to\/job\.sh;/);
-    expect(crontabSnippet(every(900))).toMatch(/^\*\/15 \* \* \* \* /);
+    expect(crontabSnippet(every(3_600)).split("\n").at(-1)).toMatch(
+      /^0 \* \* \* \* \/path\/to\/job\.sh;/,
+    );
+    expect(crontabSnippet(every(900)).split("\n").at(-1)).toMatch(/^\*\/15 \* \* \* \* /);
+  });
+
+  it("runs a period check in UTC whatever its zone, so daylight saving cannot shift a run", () => {
+    const lines = crontabSnippet({ ...every(6 * 3_600), timeZone: "America/New_York" }).split("\n");
+    expect(lines[0]).toBe("# UTC: a daylight saving change would stretch or shrink the period");
+    expect(lines[1]).toBe("CRON_TZ=UTC");
+    expect(lines[2]).toMatch(/^0 \*\/6 \* \* \* \/path\/to\/job\.sh;/);
+    expect(lines.join("\n")).not.toContain("America/New_York");
   });
 
   it("says so when the period has no cron line", () => {
     const lines = crontabSnippet(every(7 * 60)).split("\n");
     expect(lines[0]).toBe("# every 7m has no exact cron schedule: replace <schedule>");
-    expect(lines[1]).toMatch(/^<schedule> \/path\/to\/job\.sh;/);
+    expect(lines.at(-1)).toMatch(/^<schedule> \/path\/to\/job\.sh;/);
   });
 
   it("drops a zero seconds field, which crontab does not have", () => {
@@ -55,6 +65,18 @@ describe("crontabSnippet", () => {
 describe("kubernetesSnippet", () => {
   it("schedules a period check by its cron line", () => {
     expect(kubernetesSnippet(every(2 * 3_600))).toContain('schedule: "0 */2 * * *"');
+  });
+
+  it("runs a period check in UTC whatever its zone, so daylight saving cannot shift a run", () => {
+    const yaml = kubernetesSnippet({ ...every(6 * 3_600), timeZone: "America/New_York" });
+    expect(yaml).toContain(
+      'timeZone: "Etc/UTC"   # UTC: a daylight saving change would stretch or shrink the period',
+    );
+    expect(yaml).not.toContain("America/New_York");
+  });
+
+  it("runs a cron check in its zone", () => {
+    expect(kubernetesSnippet(aCheck())).toContain('timeZone: "Asia/Ho_Chi_Minh"\n');
   });
 
   it("leaves a placeholder with a note when the period has no cron line", () => {

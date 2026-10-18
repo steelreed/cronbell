@@ -41,14 +41,20 @@ function noScheduleNote(check: Check): string {
   return `# ${formatSchedule(check)} has no exact cron schedule: replace ${NO_SCHEDULE}`;
 }
 
+/**
+ * A period is a fixed number of seconds, so its cron line runs in UTC whatever the check's zone:
+ * in a zone with daylight saving, every 6 hours has two runs 5 or 7 hours apart on the day the
+ * clocks change, and the check would turn late.
+ */
+const PERIOD_IN_UTC = "# UTC: a daylight saving change would stretch or shrink the period";
+
 /** A crontab line: run the job, then report its exit code. */
 export function crontabSnippet(check: Check): string {
   const schedule = cronSchedule(check);
   const lines: string[] = [];
   if (schedule === null) lines.push(noScheduleNote(check));
-  if (check.scheduleKind === "CRON" && check.timeZone !== "UTC") {
-    lines.push(`CRON_TZ=${check.timeZone}`);
-  }
+  if (check.scheduleKind === "PERIOD") lines.push(PERIOD_IN_UTC, "CRON_TZ=UTC");
+  else if (check.timeZone !== "UTC") lines.push(`CRON_TZ=${check.timeZone}`);
   lines.push(`${schedule ?? NO_SCHEDULE} /path/to/job.sh; ${CURL} ${check.pingUrl}/$?`);
   return lines.join("\n");
 }
@@ -64,13 +70,15 @@ export function shellSnippet(check: Check): string {
 
 export function kubernetesSnippet(check: Check): string {
   const schedule = cronSchedule(check);
+  const timeZone =
+    check.scheduleKind === "PERIOD" ? `"Etc/UTC"   ${PERIOD_IN_UTC}` : `"${check.timeZone}"`;
   return `${schedule === null ? `${noScheduleNote(check)}\n` : ""}apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: ${check.slug.toLowerCase().replace(/[^a-z0-9-]/g, "-")}
 spec:
   schedule: "${schedule ?? NO_SCHEDULE}"
-  timeZone: "${check.timeZone}"
+  timeZone: ${timeZone}
   jobTemplate:
     spec:
       template:
