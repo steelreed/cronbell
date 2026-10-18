@@ -14,7 +14,7 @@ const SHOWN = 6;
 const KIND_VIEW: Record<StatusEventKind, { label: string; tone: Tone }> = {
   DOWN: { label: t.status.DOWN, tone: "problem" },
   UP: { label: t.status.UP, tone: "ok" },
-  PAUSED: { label: t.status.PAUSED, tone: "warn" },
+  PAUSED: { label: t.status.PAUSED, tone: "muted" },
   RESUMED: { label: t.overview.events.resumed, tone: "muted" },
 };
 
