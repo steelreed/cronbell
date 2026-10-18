@@ -31,7 +31,7 @@ jobs:
     steps:
       - name: Cronbell start
         continue-on-error: true
-        run: curl -fsS -m 10 --retry 3 -o /dev/null "$PING_URL/start?rid=$RID"
+        run: curl -fsS -m 10 --retry 3 --retry-max-time 30 -o /dev/null "$PING_URL/start?rid=$RID"
 
       - uses: actions/checkout@v5
 
@@ -45,7 +45,7 @@ jobs:
           JOB_STATUS: ${{ job.status }}
         run: |
           if [ "$JOB_STATUS" = success ]; then result=0; else result=fail; fi
-          curl -fsS -m 10 --retry 3 -o /dev/null "$PING_URL/$result?rid=$RID"
+          curl -fsS -m 10 --retry 3 --retry-max-time 30 -o /dev/null "$PING_URL/$result?rid=$RID"
 ```
 
 - `job.status` is `success`, `failure` or `cancelled` at that point; anything but `success` sends

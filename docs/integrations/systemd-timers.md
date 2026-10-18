@@ -6,7 +6,7 @@ environment file, readable only by root:
 
 ```bash
 sudo mkdir -p /etc/cronbell
-echo 'PING_URL=https://cron.example.com/ping/<pingKey>' | sudo tee /etc/cronbell/backup.env
+echo 'PING_URL=https://cron.example.com/ping/<pingKey>' | sudo tee /etc/cronbell/backup.env >/dev/null
 sudo chmod 600 /etc/cronbell/backup.env
 ```
 
@@ -21,9 +21,9 @@ Description=Nightly backup
 [Service]
 Type=oneshot
 EnvironmentFile=/etc/cronbell/backup.env
-ExecStartPre=-/usr/bin/curl -fsS -m 10 --retry 3 -o /dev/null ${PING_URL}/start
+ExecStartPre=-/usr/bin/curl -fsS -m 10 --retry 3 --retry-max-time 30 -o /dev/null ${PING_URL}/start
 ExecStart=/usr/local/bin/backup.sh
-ExecStopPost=/bin/sh -c 'if [ "$$SERVICE_RESULT" = success ]; then s=0; elif [ "$$EXIT_CODE" = exited ]; then s=$$EXIT_STATUS; else s=fail; fi; /usr/bin/curl -fsS -m 10 --retry 3 -o /dev/null "$$PING_URL/$$s" || true'
+ExecStopPost=/bin/sh -c 'if [ "$$SERVICE_RESULT" = success ]; then s=0; elif [ "$$EXIT_CODE" = exited ]; then s=$$EXIT_STATUS; else s=fail; fi; /usr/bin/curl -fsS -m 10 --retry 3 --retry-max-time 30 -o /dev/null "$$PING_URL/$$s" || true'
 ```
 
 `/etc/systemd/system/backup.timer`:
@@ -67,7 +67,7 @@ run's log with a `/log` ping, which changes nothing but shows up in the check's 
 next DOWN alert:
 
 ```ini
-ExecStopPost=/bin/sh -c 'journalctl -q -o cat _SYSTEMD_INVOCATION_ID="$$INVOCATION_ID" | tail -c 10000 | /usr/bin/curl -fsS -m 10 --retry 3 -o /dev/null --data-binary @- "$$PING_URL/log" || true'
+ExecStopPost=/bin/sh -c 'journalctl -q -o cat _SYSTEMD_INVOCATION_ID="$$INVOCATION_ID" | tail -c 10000 | /usr/bin/curl -fsS -m 10 --retry 3 --retry-max-time 30 -o /dev/null --data-binary @- "$$PING_URL/log" || true'
 ```
 
 Put it above the result line, so the log ping is stored first. Reading the journal needs root or
@@ -85,7 +85,7 @@ Description=Report %i failure to Cronbell
 [Service]
 Type=oneshot
 EnvironmentFile=/etc/cronbell/%i.env
-ExecStart=/usr/bin/curl -fsS -m 10 --retry 3 -o /dev/null ${PING_URL}/fail
+ExecStart=/usr/bin/curl -fsS -m 10 --retry 3 --retry-max-time 30 -o /dev/null ${PING_URL}/fail
 ```
 
 and in `backup.service`:
@@ -99,7 +99,7 @@ OnFailure=cronbell-fail@%N.service
 Type=oneshot
 EnvironmentFile=/etc/cronbell/backup.env
 ExecStart=/usr/local/bin/backup.sh
-ExecStartPost=-/usr/bin/curl -fsS -m 10 --retry 3 -o /dev/null ${PING_URL}
+ExecStartPost=-/usr/bin/curl -fsS -m 10 --retry 3 --retry-max-time 30 -o /dev/null ${PING_URL}
 ```
 
 `%N` is the unit name without `.service` (`backup`), so the helper reads

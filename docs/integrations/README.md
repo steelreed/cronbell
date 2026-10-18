@@ -38,7 +38,8 @@ URL, `https://cron.example.com/ping/<pingKey>`. Then:
 - The ping key is the only secret: treat the URL like a password (keep it out of public
   repositories, use your CI's or cluster's secrets).
 
-The examples use `curl -fsS -m 10 --retry 3 -o /dev/null`: fail on HTTP errors but print nothing
-else, give up after 10 seconds, retry 3 times on timeouts and temporary errors (`429`, `5xx`), and drop the `OK` answer. A ping
-that fails must never break the job, so the examples ignore its result, and Cronbell reports a run
-it did not hear about as missed.
+The examples use `curl -fsS -m 10 --retry 3 --retry-max-time 30 -o /dev/null`: fail on HTTP
+errors but print nothing else, give up on an attempt after 10 seconds, retry 3 times on timeouts
+and temporary errors (`429`, `5xx`) but start no retry after 30 seconds (so a long `Retry-After`
+cannot hold the job), and drop the `OK` answer. A ping that fails must never break the job, so the
+examples ignore its result, and Cronbell reports a run it did not hear about as missed.

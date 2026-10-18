@@ -7,7 +7,7 @@ the job pings from inside the container.
 ## docker run from the host's crontab
 
 ```cron
-0 2 * * * docker run --rm --name nightly-backup -v backup-data:/data ghcr.io/acme/backup:1.4 > /tmp/backup.log 2>&1; code=$?; tail -c 10000 /tmp/backup.log | curl -fsS -m 10 --retry 3 -o /dev/null --data-binary @- https://cron.example.com/ping/<pingKey>/$code
+0 2 * * * docker run --rm --name nightly-backup -v backup-data:/data ghcr.io/acme/backup:1.4 > /tmp/backup.log 2>&1; code=$?; tail -c 10000 /tmp/backup.log | curl -fsS -m 10 --retry 3 --retry-max-time 30 -o /dev/null --data-binary @- https://cron.example.com/ping/<pingKey>/$code
 ```
 
 - The exit code is the job's, or Docker's own when the container could not run: `125` (Docker
@@ -35,7 +35,7 @@ volumes:
 ```
 
 ```cron
-0 2 * * * docker compose -f /opt/app/compose.yaml run --rm -T backup > /tmp/backup.log 2>&1; code=$?; tail -c 10000 /tmp/backup.log | curl -fsS -m 10 --retry 3 -o /dev/null --data-binary @- https://cron.example.com/ping/<pingKey>/$code
+0 2 * * * docker compose -f /opt/app/compose.yaml run --rm -T backup > /tmp/backup.log 2>&1; code=$?; tail -c 10000 /tmp/backup.log | curl -fsS -m 10 --retry 3 --retry-max-time 30 -o /dev/null --data-binary @- https://cron.example.com/ping/<pingKey>/$code
 ```
 
 `-T` runs without a terminal, which cron does not have. `docker compose run` exits with the
@@ -57,9 +57,9 @@ services:
       ofelia.enabled: "true"
       ofelia.job-exec.cleanup.schedule: "0 0 2 * * *"
       ofelia.job-exec.cleanup.command: >-
-        sh -c 'curl -fsS -m 10 --retry 3 -o /dev/null "$$PING_URL/start";
+        sh -c 'curl -fsS -m 10 --retry 3 --retry-max-time 30 -o /dev/null "$$PING_URL/start";
         /app/cleanup > /tmp/cleanup.log 2>&1; code=$$?;
-        tail -c 10000 /tmp/cleanup.log | curl -fsS -m 10 --retry 3 -o /dev/null --data-binary @- "$$PING_URL/$$code";
+        tail -c 10000 /tmp/cleanup.log | curl -fsS -m 10 --retry 3 --retry-max-time 30 -o /dev/null --data-binary @- "$$PING_URL/$$code";
         exit $$code'
 
   ofelia:

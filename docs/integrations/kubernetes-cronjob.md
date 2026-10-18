@@ -40,7 +40,7 @@ spec:
               command: ["/bin/sh", "-c"]
               args:
                 - |
-                  ping() { curl -fsS -m 10 --retry 3 -o /dev/null "$@" || true; }
+                  ping() { curl -fsS -m 10 --retry 3 --retry-max-time 30 -o /dev/null "$@" || true; }
                   ping "$PING_URL/start?rid=$HOSTNAME"
                   { sleep 5; date; } > /tmp/job.log 2>&1   # the job
                   code=$?

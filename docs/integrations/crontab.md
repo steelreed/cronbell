@@ -7,7 +7,7 @@ key. Edit the crontab with `crontab -e`.
 ## Report success
 
 ```cron
-0 2 * * * /usr/local/bin/backup.sh && curl -fsS -m 10 --retry 3 -o /dev/null https://cron.example.com/ping/<pingKey>
+0 2 * * * /usr/local/bin/backup.sh && curl -fsS -m 10 --retry 3 --retry-max-time 30 -o /dev/null https://cron.example.com/ping/<pingKey>
 ```
 
 The ping only goes out when the job exits with 0. A failure is reported as a missed run, one grace
@@ -16,7 +16,7 @@ period later.
 ## Report the exit code
 
 ```cron
-0 2 * * * /usr/local/bin/backup.sh; curl -fsS -m 10 --retry 3 -o /dev/null https://cron.example.com/ping/<pingKey>/$?
+0 2 * * * /usr/local/bin/backup.sh; curl -fsS -m 10 --retry 3 --retry-max-time 30 -o /dev/null https://cron.example.com/ping/<pingKey>/$?
 ```
 
 `$?` is the job's exit code: `/0` is a success, anything else turns the check DOWN at once, with
@@ -28,7 +28,7 @@ Cronbell stores up to 10 KB of the request body with the ping and puts it in the
 the end of the output, where the error is:
 
 ```cron
-0 2 * * * /usr/local/bin/backup.sh > /tmp/backup.log 2>&1; code=$?; tail -c 10000 /tmp/backup.log | curl -fsS -m 10 --retry 3 -o /dev/null --data-binary @- https://cron.example.com/ping/<pingKey>/$code
+0 2 * * * /usr/local/bin/backup.sh > /tmp/backup.log 2>&1; code=$?; tail -c 10000 /tmp/backup.log | curl -fsS -m 10 --retry 3 --retry-max-time 30 -o /dev/null --data-binary @- https://cron.example.com/ping/<pingKey>/$code
 ```
 
 Use `--data-binary` (`-d @-` would strip the newlines). In a crontab line, `%` means a newline:
@@ -46,10 +46,10 @@ small wrapper script is easier to read than a crontab line:
 url=https://cron.example.com/ping/<pingKey>
 log=$(mktemp)
 
-curl -fsS -m 10 --retry 3 -o /dev/null "$url/start"
+curl -fsS -m 10 --retry 3 --retry-max-time 30 -o /dev/null "$url/start"
 /usr/local/bin/backup.sh > "$log" 2>&1
 code=$?
-tail -c 10000 "$log" | curl -fsS -m 10 --retry 3 -o /dev/null --data-binary @- "$url/$code"
+tail -c 10000 "$log" | curl -fsS -m 10 --retry 3 --retry-max-time 30 -o /dev/null --data-binary @- "$url/$code"
 rm -f "$log"
 exit "$code"
 ```

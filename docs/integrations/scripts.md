@@ -57,9 +57,20 @@ if __name__ == "__main__":
 ```
 
 A `POST` with a body is sent when there is something to send (the traceback), a `GET` otherwise.
-To run another program instead of a function, use
-`subprocess.run([...], capture_output=True, text=True)` and send `/{returncode}` with the end of
-its `stdout + stderr`.
+To run another program instead of a function, send its exit code. Only 0 to 255 fit in the URL:
+a program killed by a signal has a negative `returncode` (`-15` for `SIGTERM`), so send `/fail`
+with the code at the end of the output, which is the part that is kept:
+
+```python
+import subprocess
+
+result = subprocess.run(["/usr/local/bin/export"], capture_output=True, text=True)
+output = result.stdout + result.stderr
+if 0 <= result.returncode <= 255:
+    ping(f"/{result.returncode}", output, rid)
+else:
+    ping("/fail", f"{output}\nexit code {result.returncode}", rid)
+```
 
 ## Node.js
 
@@ -113,11 +124,11 @@ cronbell_run() {
   shift
   rid=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen)
   log=$(mktemp)
-  curl -fsS -m 10 --retry 3 -o /dev/null "$url/start?rid=$rid" || true
+  curl -fsS -m 10 --retry 3 --retry-max-time 30 -o /dev/null "$url/start?rid=$rid" || true
   "$@" >"$log" 2>&1 || code=$?
   cat "$log"
   tail -c 10000 "$log" |
-    curl -fsS -m 10 --retry 3 -o /dev/null --data-binary @- "$url/$code?rid=$rid" || true
+    curl -fsS -m 10 --retry 3 --retry-max-time 30 -o /dev/null --data-binary @- "$url/$code?rid=$rid" || true
   rm -f "$log"
   return "$code"
 }
@@ -162,7 +173,11 @@ try {
     $output = & C:\jobs\export.exe 2>&1 | Out-String   # the job
     $code = $LASTEXITCODE
     Write-Output $output
-    Send-CronbellPing -Path "/$code" -Body $output -Rid $rid
+    if ($code -ge 0 -and $code -le 255) {
+        Send-CronbellPing -Path "/$code" -Body $output -Rid $rid
+    } else {
+        Send-CronbellPing -Path "/fail" -Body "$output`nexit code $code" -Rid $rid
+    }
     exit $code
 } catch {
     Send-CronbellPing -Path "/fail" -Body ($_ | Out-String) -Rid $rid
@@ -170,5 +185,7 @@ try {
 }
 ```
 
-For PowerShell commands instead of a program, put them in the `try` block with
+Windows exit codes go beyond 255 (`-1073741819` for a crash), so codes outside 0 to 255 are
+sent as `/fail`, with the code at the end of the output. For PowerShell commands instead of a
+program, put them in the `try` block with
 `$ErrorActionPreference = "Stop"`, and send an empty path (success) after them.
