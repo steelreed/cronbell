@@ -7,6 +7,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.function.IntSupplier;
 
 import com.steelreed.cronbell.server.alerts.DeliveryHistory;
+import com.steelreed.cronbell.server.checks.StatusHistory;
 import com.steelreed.cronbell.server.pings.PingHistory;
 import com.steelreed.cronbell.server.shared.database.Ids;
 import com.steelreed.cronbell.server.shared.database.JobLocks;
@@ -17,10 +18,10 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Deletes pings and finished deliveries older than the retention (DESIGN.md §9, History).
- * Runs once a day and a minute after start. Rows go in batches, one short transaction
- * each. With several instances, the one holding the {@code history-pruning} lease does
- * the work and the others skip the run.
+ * Deletes pings, status events and finished deliveries older than the retention
+ * (DESIGN.md §9, History). Runs once a day and a minute after start. Rows go in batches,
+ * one short transaction each. With several instances, the one holding the
+ * {@code history-pruning} lease does the work and the others skip the run.
  */
 @Component
 public class HistoryPruner {
@@ -33,10 +34,12 @@ public class HistoryPruner {
 	static final Duration LEASE = Duration.ofMinutes(10);
 
 	/** What a run did. {@code ran} is false when another instance held the lease. */
-	public record Result(boolean ran, int pings, int deliveries) {
+	public record Result(boolean ran, int pings, int events, int deliveries) {
 	}
 
 	private final PingHistory pings;
+
+	private final StatusHistory events;
 
 	private final DeliveryHistory deliveries;
 
@@ -46,9 +49,10 @@ public class HistoryPruner {
 
 	private final Clock clock;
 
-	public HistoryPruner(PingHistory pings, DeliveryHistory deliveries, JobLocks locks, HistoryProperties properties,
-			Clock clock) {
+	public HistoryPruner(PingHistory pings, StatusHistory events, DeliveryHistory deliveries, JobLocks locks,
+			HistoryProperties properties, Clock clock) {
 		this.pings = pings;
+		this.events = events;
 		this.deliveries = deliveries;
 		this.locks = locks;
 		this.properties = properties;
@@ -70,17 +74,19 @@ public class HistoryPruner {
 		String owner = Ids.newId();
 		if (!this.locks.tryAcquire(LOCK, owner, now, now.plus(LEASE))) {
 			logger.info("History pruning skipped: another instance is running it");
-			return new Result(false, 0, 0);
+			return new Result(false, 0, 0, 0);
 		}
 		try {
 			Instant cutoff = now.minus(this.properties.retention());
 			int batchSize = this.properties.batchSize();
 			int deletedPings = deleteInBatches(owner, () -> this.pings.deleteBefore(cutoff, batchSize));
+			int deletedEvents = deleteInBatches(owner, () -> this.events.deleteBefore(cutoff, batchSize));
 			int deletedDeliveries = deleteInBatches(owner,
 					() -> this.deliveries.deleteFinishedBefore(cutoff, batchSize));
-			logger.info("History pruned: deleted {} pings and {} deliveries older than {} (before {})", deletedPings,
-					deletedDeliveries, describe(this.properties.retention()), cutoff);
-			return new Result(true, deletedPings, deletedDeliveries);
+			logger.info(
+					"History pruned: deleted {} pings, {} status events and {} deliveries older than {} (before {})",
+					deletedPings, deletedEvents, deletedDeliveries, describe(this.properties.retention()), cutoff);
+			return new Result(true, deletedPings, deletedEvents, deletedDeliveries);
 		}
 		finally {
 			this.locks.release(LOCK, owner);

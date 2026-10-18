@@ -12,7 +12,8 @@ type Routes = Parameters<typeof stubFetch>[0];
 const signedIn: Routes = {
   "GET /api/v1/setup": () => [200, { required: false }],
   "GET /api/v1/session": () => [200, SESSION],
-  "GET /api/v1/stats/daily": () => [200, []],
+  "GET /api/v1/stats/status": () => [200, []],
+  "GET /api/v1/events": () => [200, []],
   "GET /api/v1/members": () => [200, [{ accountId: "a1", email: "admin@example.com" }]],
 };
 
@@ -121,6 +122,8 @@ describe("a check waiting for its first ping", () => {
         "GET /api/v1/checks": () => [200, [check]],
         "GET /api/v1/checks/nightly-backup": () => [200, check],
         "GET /api/v1/checks/nightly-backup/pings": () => [200, pings],
+        "GET /api/v1/checks/nightly-backup/events": () => [200, []],
+        "GET /api/v1/checks/nightly-backup/alerts": () => [200, []],
         [`POST /ping/${fresh.pingKey}`]: ping,
       }),
     );
@@ -128,12 +131,14 @@ describe("a check waiting for its first ping", () => {
     expect(await screen.findByText("Waiting for the first ping…")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Send pings" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Runs" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Recent pings" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "History" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Recent runs" })).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Send a test ping" }));
     expect(await screen.findByText("First ping received")).toBeInTheDocument();
     expect(ping).toHaveBeenCalledOnce();
-    expect(await screen.findByRole("heading", { name: "Recent pings" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Recent runs" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "History" })).toBeInTheDocument();
     const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
     expect(headings.indexOf("Send pings")).toBeLessThan(headings.indexOf("Runs"));
   });
@@ -163,10 +168,12 @@ describe("a check waiting for its first ping", () => {
         "GET /api/v1/checks": () => [200, [aCheck()]],
         "GET /api/v1/checks/nightly-backup": () => [200, aCheck()],
         "GET /api/v1/checks/nightly-backup/pings": () => [200, [aPing]],
+        "GET /api/v1/checks/nightly-backup/events": () => [200, []],
+        "GET /api/v1/checks/nightly-backup/alerts": () => [200, []],
       }),
     );
     renderAt("/checks/nightly-backup");
-    expect(await screen.findByRole("heading", { name: "Recent pings" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Recent runs" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Send a test ping" })).not.toBeInTheDocument();
     const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
     expect(headings.indexOf("Runs")).toBeLessThan(headings.indexOf("Send pings"));

@@ -29,6 +29,7 @@ _Others_
 * `c.s.c.s.p.internal.PingRateLimiter` -- Token bucket per check: up to `rate` pings per second, bursts of `rate`.  
 +
 In memory, so the limit is per server instance: with N instances behind a load balancer a check can get up to N times the rate.
+* `c.s.c.s.p.internal.PingRunStats` -- `c.s.c.s.c.RunStats` from the stored pings.
 |Bean references
 |* `c.s.c.s.c.CheckService` (in Checks) -- The checks module's API: creates, updates and pauses checks of a project, and applies the pings recorded by the pings module to the state of their check.
 |===

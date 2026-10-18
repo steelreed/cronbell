@@ -1,8 +1,10 @@
 package com.steelreed.cronbell.server.checks.web;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.OptionalDouble;
 import java.util.UUID;
 
 import com.steelreed.cronbell.server.accounts.ProjectPrincipal;
@@ -10,8 +12,12 @@ import com.steelreed.cronbell.server.checks.Check;
 import com.steelreed.cronbell.server.checks.CheckService;
 import com.steelreed.cronbell.server.checks.CheckStatus;
 import com.steelreed.cronbell.server.checks.DownReason;
+import com.steelreed.cronbell.server.checks.RunStats;
 import com.steelreed.cronbell.server.checks.ScheduleKind;
+import com.steelreed.cronbell.server.checks.StatusEvent;
+import com.steelreed.cronbell.server.checks.internal.StatusEventRepository;
 import com.steelreed.cronbell.server.checks.internal.domain.Schedule;
+import com.steelreed.cronbell.server.checks.internal.domain.StatusTimeline;
 import com.steelreed.cronbell.server.shared.web.ManagementApi;
 
 import org.springframework.http.HttpStatus;
@@ -35,15 +41,21 @@ class ChecksController {
 
 	private final CheckService checks;
 
+	private final StatusEventRepository history;
+
+	private final RunStats runs;
+
 	private final Clock clock;
 
-	ChecksController(CheckService checks, Clock clock) {
+	ChecksController(CheckService checks, StatusEventRepository history, RunStats runs, Clock clock) {
 		this.checks = checks;
+		this.history = history;
+		this.runs = runs;
 		this.clock = clock;
 	}
 
 	private CheckResponse response(Check check) {
-		return CheckResponse.of(check, this.clock.instant());
+		return CheckResponse.of(check, this.clock.instant(), null);
 	}
 
 	@GetMapping
@@ -62,9 +74,28 @@ class ChecksController {
 			.body(response(saved.check()));
 	}
 
+	/** One check, with its {@link Stats}. */
 	@GetMapping("/{slug}")
 	CheckResponse get(@AuthenticationPrincipal ProjectPrincipal project, @PathVariable String slug) {
-		return response(this.checks.get(project.projectId(), slug));
+		Check check = this.checks.get(project.projectId(), slug);
+		Instant now = this.clock.instant();
+		List<StatusEvent> timeline = this.history.findTimeline(check.id(), now.minus(Duration.ofDays(30)));
+		Long averageMs = this.runs.averageDuration(check.id(), now.minus(Duration.ofDays(7)))
+			.map(Duration::toMillis)
+			.orElse(null);
+		Stats stats = new Stats(uptime(check, timeline, now, 7), uptime(check, timeline, now, 30), averageMs);
+		return CheckResponse.of(check, now, stats);
+	}
+
+	/**
+	 * The share of the last {@code days} days, or since the check was created, that it
+	 * was not DOWN, paused time left out. Null with no such time.
+	 */
+	private static Double uptime(Check check, List<StatusEvent> timeline, Instant now, int days) {
+		Instant windowStart = now.minus(Duration.ofDays(days));
+		Instant from = check.createdAt().isAfter(windowStart) ? check.createdAt() : windowStart;
+		OptionalDouble share = StatusTimeline.between(timeline, from, now).uptime();
+		return share.isPresent() ? share.getAsDouble() : null;
 	}
 
 	@DeleteMapping("/{slug}")
@@ -93,12 +124,23 @@ class ChecksController {
 
 	}
 
+	/**
+	 * Figures of one check, in {@code GET /checks/{slug}} only: uptime over 7 and 30 days
+	 * (0 to 1) and the average duration of the runs of the last 7 days. Null when not
+	 * known.
+	 */
+	record Stats(Double uptime7d, Double uptime30d, Long averageDurationMs7d) {
+	}
+
+	/**
+	 * @param stats only in {@code GET /checks/{slug}}, null elsewhere
+	 */
 	record CheckResponse(String slug, String name, UUID pingKey, String pingUrl, ScheduleKind scheduleKind, String cron,
 			String timeZone, Long periodSeconds, long graceSeconds, Long maxRuntimeSeconds, CheckStatus status,
 			DownReason downReason, Instant lastPingAt, Instant lastStartAt, Instant lastSuccessAt, Instant nextDueAt,
-			Instant nextRunAt, Instant createdAt) {
+			Instant nextRunAt, Instant createdAt, Stats stats) {
 
-		static CheckResponse of(Check c, Instant now) {
+		static CheckResponse of(Check c, Instant now, Stats stats) {
 			String pingUrl = ServletUriComponentsBuilder.fromCurrentContextPath()
 				.path("/ping/{key}")
 				.buildAndExpand(c.pingKey())
@@ -107,7 +149,7 @@ class ChecksController {
 			return new CheckResponse(c.slug(), c.name(), c.pingKey(), pingUrl, c.scheduleKind(), c.cronExpression(),
 					c.timeZone().getId(), c.periodSeconds(), c.graceSeconds(), c.maxRuntimeSeconds(), s.status(),
 					s.downReason(), s.lastPingAt(), s.lastStartAt(), s.lastSuccessAt(), s.nextDueAt(),
-					nextRunAt(c, now), c.createdAt());
+					nextRunAt(c, now), c.createdAt(), stats);
 		}
 
 		/**

@@ -46,12 +46,34 @@ public class PingRepository {
 			.list();
 	}
 
+	/**
+	 * The {@code start}, {@code success} and {@code fail} pings of a check received since
+	 * {@code since}, newest first, at most {@code limit}, without their bodies.
+	 */
+	public List<Ping> findRunPingsSince(String checkId, Instant since, int limit) {
+		return this.jdbc.sql("""
+				SELECT id, check_id, kind, exit_code, rid, received_at FROM pings
+				 WHERE check_id = ? AND kind <> 'LOG' AND received_at >= ?
+				 ORDER BY received_at DESC, id DESC LIMIT ?""")
+			.param(checkId)
+			.param(since.toEpochMilli())
+			.param(limit)
+			.query((rs, row) -> {
+				int code = rs.getInt("exit_code");
+				Integer exitCode = rs.wasNull() ? null : code;
+				return new Ping(rs.getString("id"), rs.getString("check_id"), PingKind.valueOf(rs.getString("kind")),
+						exitCode, rs.getString("rid"), null, Instant.ofEpochMilli(rs.getLong("received_at")), null,
+						null);
+			})
+			.list();
+	}
+
 	/** A finished run: a {@code success} or {@code fail} ping. */
 	public record FinishedRun(Instant at, PingKind kind, Integer exitCode) {
 	}
 
-	/** How many {@code success} or {@code fail} pings fell in one bucket. */
-	public record BucketCount(int bucket, PingKind kind, long count) {
+	/** How many {@code success} or {@code fail} pings of a check fell in one bucket. */
+	public record BucketCount(String checkId, int bucket, PingKind kind, long count) {
 	}
 
 	/**
@@ -71,7 +93,7 @@ public class PingRepository {
 	}
 
 	/**
-	 * Counts the {@code success} and {@code fail} pings of the checks per bucket, where
+	 * Counts the {@code success} and {@code fail} pings per check and bucket, where
 	 * bucket {@code i} is {@code boundaries[i] <= received_at < boundaries[i + 1]}. One
 	 * statement: the range is read through the {@code (check_id, received_at)} index and
 	 * the bucket is picked with a {@code CASE} over the boundaries.
@@ -94,11 +116,11 @@ public class PingRepository {
 			bucket.append(" ELSE ").append(last).append(" END");
 		}
 		var spec = this.jdbc.sql("""
-				SELECT bucket, kind, COUNT(*) AS n FROM (
-				  SELECT %s AS bucket, kind FROM pings
+				SELECT check_id, bucket, kind, COUNT(*) AS n FROM (
+				  SELECT check_id, %s AS bucket, kind FROM pings
 				   WHERE check_id IN (:ids) AND kind IN ('SUCCESS', 'FAIL')
 				     AND received_at >= :start AND received_at < :end
-				) counted GROUP BY bucket, kind""".formatted(bucket))
+				) counted GROUP BY check_id, bucket, kind""".formatted(bucket))
 			.param("ids", checkIds)
 			.param("start", boundaries.getFirst().toEpochMilli())
 			.param("end", boundaries.getLast().toEpochMilli());
@@ -106,8 +128,8 @@ public class PingRepository {
 			spec = spec.param("b" + i, boundaries.get(i).toEpochMilli());
 		}
 		return spec
-			.query((rs, row) -> new BucketCount(rs.getInt("bucket"), PingKind.valueOf(rs.getString("kind")),
-					rs.getLong("n")))
+			.query((rs, row) -> new BucketCount(rs.getString("check_id"), rs.getInt("bucket"),
+					PingKind.valueOf(rs.getString("kind")), rs.getLong("n")))
 			.list();
 	}
 

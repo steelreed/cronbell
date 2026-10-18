@@ -44,7 +44,7 @@ class AlertOutbox {
 		Alert alert = this.alerts.create(event);
 		Instant now = this.clock.instant().truncatedTo(ChronoUnit.MILLIS);
 		for (Channel channel : targets) {
-			this.deliveries.insert(Ids.newId(), channel.id(), event.checkId(), alert, now);
+			this.deliveries.insert(Ids.newId(), channel.id(), event.checkId(), event.statusEventId(), alert, now);
 		}
 	}
 

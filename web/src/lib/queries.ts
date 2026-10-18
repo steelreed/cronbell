@@ -4,7 +4,8 @@ import type {
   ApiKey,
   Channel,
   Check,
-  DayStat,
+  CheckAlert,
+  CheckDays,
   Invite,
   InviteOffer,
   Member,
@@ -13,6 +14,7 @@ import type {
   RecentRuns,
   Session,
   SetupStatus,
+  StatusEvent,
 } from "./types";
 
 /** The detector runs every 15 s (DESIGN.md §4), so polling faster shows nothing new. */
@@ -67,6 +69,39 @@ export const pingsQuery = (slug: string) =>
     refetchInterval: POLL_MS,
   });
 
+export const checkEventsQuery = (slug: string) =>
+  queryOptions({
+    queryKey: ["checks", slug, "events"],
+    queryFn: () => api<StatusEvent[]>(`/checks/${encodeURIComponent(slug)}/events`),
+    refetchInterval: POLL_MS,
+  });
+
+/** Enough for the alerts of every event the check page reads, to a few channels each. */
+export const ALERT_LIMIT = 200;
+
+export const checkAlertsQuery = (slug: string) =>
+  queryOptions({
+    queryKey: ["checks", slug, "alerts"],
+    queryFn: () =>
+      api<CheckAlert[]>(`/checks/${encodeURIComponent(slug)}/alerts?limit=${ALERT_LIMIT}`),
+    refetchInterval: POLL_MS,
+  });
+
+export const projectEventsQuery = (limit: number) =>
+  queryOptions({
+    queryKey: ["events", limit],
+    queryFn: () => api<StatusEvent[]>(`/events?limit=${limit}`),
+    refetchInterval: POLL_MS,
+  });
+
+export const statusDaysQuery = (timeZone: string, days = 30) =>
+  queryOptions({
+    queryKey: ["stats", "status", timeZone, days],
+    queryFn: () =>
+      api<CheckDays[]>(`/stats/status?days=${days}&tz=${encodeURIComponent(timeZone)}`),
+    refetchInterval: 60_000,
+  });
+
 /** Runs shown in each row of the checks list. */
 export const LIST_RUNS = 20;
 
@@ -75,13 +110,6 @@ export const recentRunsQuery = queryOptions({
   queryFn: () => api<RecentRuns>(`/runs/recent?limit=${LIST_RUNS}`),
   refetchInterval: POLL_MS,
 });
-
-export const dailyStatsQuery = (timeZone: string, days = 14) =>
-  queryOptions({
-    queryKey: ["stats", "daily", timeZone, days],
-    queryFn: () => api<DayStat[]>(`/stats/daily?days=${days}&tz=${encodeURIComponent(timeZone)}`),
-    refetchInterval: 60_000,
-  });
 
 export const nextRunsQuery = (cron: string, timeZone: string) =>
   queryOptions({

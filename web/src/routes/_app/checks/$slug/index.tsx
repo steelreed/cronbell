@@ -3,6 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { PauseIcon, PencilIcon, PlayIcon } from "lucide-react";
 import { useState } from "react";
 import { FirstPingPanel } from "@/components/check/first-ping";
+import { HistoryPanel } from "@/components/check/history-panel";
 import { IntegratePanel } from "@/components/check/integrate-panel";
 import { PingsPanel } from "@/components/check/pings-panel";
 import { RunsPanel } from "@/components/check/runs-panel";
@@ -10,14 +11,22 @@ import { CheckActionsMenu } from "@/components/checks/row-actions";
 import { Dash, DescriptionList } from "@/components/description-list";
 import { NextDue } from "@/components/next-due";
 import { CheckNotFound } from "@/components/not-found";
-import { Bar, ErrorNote, ErrorState, PageHeader, Panel } from "@/components/page";
+import { Bar, ErrorNote, ErrorState, LoadingList, PageHeader, Panel } from "@/components/page";
 import { StatusText } from "@/components/status-text";
 import { Time } from "@/components/time";
 import { Button } from "@/components/ui/button";
 import { isNotFound } from "@/lib/api";
 import { useCheckActions } from "@/lib/check-actions";
 import { formatSchedule, formatSeconds } from "@/lib/format";
-import { checkQuery, FIRST_PING_POLL_MS, POLL_MS, pingsQuery } from "@/lib/queries";
+import { missedRuns } from "@/lib/history";
+import {
+  checkAlertsQuery,
+  checkEventsQuery,
+  checkQuery,
+  FIRST_PING_POLL_MS,
+  POLL_MS,
+  pingsQuery,
+} from "@/lib/queries";
 import { runsFromPings } from "@/lib/runs";
 import { attention } from "@/lib/status";
 import { t } from "@/lib/strings";
@@ -54,8 +63,10 @@ function CheckView({ check, now }: { check: Check; now: number }) {
     refetchInterval: (query) =>
       firstRun && !query.state.data?.length ? FIRST_PING_POLL_MS : POLL_MS,
   });
+  const events = useQuery(checkEventsQuery(check.slug));
   const runs = pings.data ? runsFromPings(pings.data) : [];
-  const history = !firstRun || pings.isError || (pings.data?.length ?? 0) > 0;
+  const missed = events.data ? missedRuns(events.data) : [];
+  const showRuns = !firstRun || pings.isError || (pings.data?.length ?? 0) > 0;
   return (
     <>
       <CheckHeader check={check} now={now} />
@@ -63,7 +74,7 @@ function CheckView({ check, now }: { check: Check; now: number }) {
         <div className="grid gap-4 @[64rem]:grid-cols-[minmax(0,1fr)_20rem]">
           <div className="min-w-0 space-y-4">
             {firstRun && <FirstPingPanel check={check} now={now} />}
-            {!history ? null : pings.isPending ? (
+            {!showRuns ? null : pings.isPending ? (
               <Panel title={t.check.runs}>
                 <Bar className="h-9 w-full" />
                 <Bar className="mt-8 h-32 w-full" />
@@ -73,11 +84,10 @@ function CheckView({ check, now }: { check: Check; now: number }) {
                 <ErrorState error={pings.error} onRetry={() => pings.refetch()} />
               </Panel>
             ) : (
-              <>
-                <RunsPanel check={check} runs={runs} />
-                <PingsPanel pings={pings.data} now={now} />
-              </>
+              <RunsPanel check={check} runs={runs} missed={missed} />
             )}
+            {showRuns && <History slug={check.slug} now={now} />}
+            {showRuns && pings.data && <PingsPanel pings={pings.data} now={now} />}
             {!firstRun && <IntegratePanel check={check} />}
           </div>
           <div className="min-w-0 space-y-4 @[64rem]:order-none">
@@ -121,6 +131,26 @@ function CheckView({ check, now }: { check: Check; now: number }) {
       </div>
     </>
   );
+}
+
+function History({ slug, now }: { slug: string; now: number }) {
+  const events = useQuery(checkEventsQuery(slug));
+  const alerts = useQuery(checkAlertsQuery(slug));
+  if (events.isPending) {
+    return (
+      <Panel title={t.check.history.title} flush>
+        <LoadingList rows={2} />
+      </Panel>
+    );
+  }
+  if (events.isError) {
+    return (
+      <Panel title={t.check.history.title}>
+        <ErrorState error={events.error} onRetry={() => events.refetch()} />
+      </Panel>
+    );
+  }
+  return <HistoryPanel events={events.data} alerts={alerts.data ?? []} now={now} />;
 }
 
 function CheckHeader({ check, now }: { check: Check; now: number }) {

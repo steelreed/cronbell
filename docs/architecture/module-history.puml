@@ -18,6 +18,7 @@ top to bottom direction
 System_Boundary("Cronbell_boundary", "Cronbell", $tags="") {
   Container_Boundary("Cronbell.Cronbell_boundary", "Cronbell", $tags="") {
     Component(Cronbell.Cronbell.Shared, "Shared", $techn="Module", $descr="", $tags="", $link="")
+    Component(Cronbell.Cronbell.Checks, "Checks", $techn="Module", $descr="", $tags="", $link="")
     Component(Cronbell.Cronbell.Pings, "Pings", $techn="Module", $descr="", $tags="", $link="")
     Component(Cronbell.Cronbell.Alerts, "Alerts", $techn="Module", $descr="", $tags="", $link="")
     Component(Cronbell.Cronbell.History, "History", $techn="Module", $descr="", $tags="", $link="")
@@ -25,12 +26,17 @@ System_Boundary("Cronbell_boundary", "Cronbell", $tags="") {
 
 }
 
-Rel(Cronbell.Cronbell.History, Cronbell.Cronbell.Pings, "uses", $techn="", $tags="", $link="")
-Rel(Cronbell.Cronbell.History, Cronbell.Cronbell.Alerts, "uses", $techn="", $tags="", $link="")
-Rel(Cronbell.Cronbell.History, Cronbell.Cronbell.Shared, "uses", $techn="", $tags="", $link="")
+Rel(Cronbell.Cronbell.Alerts, Cronbell.Cronbell.Checks, "uses", $techn="", $tags="", $link="")
 Rel(Cronbell.Cronbell.Alerts, Cronbell.Cronbell.Pings, "uses", $techn="", $tags="", $link="")
 Rel(Cronbell.Cronbell.Alerts, Cronbell.Cronbell.Shared, "uses", $techn="", $tags="", $link="")
 Rel(Cronbell.Cronbell.Pings, Cronbell.Cronbell.Shared, "depends on", $techn="", $tags="", $link="")
+Rel(Cronbell.Cronbell.Pings, Cronbell.Cronbell.Checks, "uses", $techn="", $tags="", $link="")
+Rel(Cronbell.Cronbell.Checks, Cronbell.Cronbell.Shared, "uses", $techn="", $tags="", $link="")
+Rel(Cronbell.Cronbell.History, Cronbell.Cronbell.Pings, "uses", $techn="", $tags="", $link="")
+Rel(Cronbell.Cronbell.History, Cronbell.Cronbell.Checks, "uses", $techn="", $tags="", $link="")
+Rel(Cronbell.Cronbell.History, Cronbell.Cronbell.Alerts, "uses", $techn="", $tags="", $link="")
+Rel(Cronbell.Cronbell.History, Cronbell.Cronbell.Shared, "uses", $techn="", $tags="", $link="")
+Rel(Cronbell.Cronbell.Alerts, Cronbell.Cronbell.Checks, "listens to", $techn="", $tags="", $link="")
 
 SHOW_LEGEND(true)
 hide stereotypes

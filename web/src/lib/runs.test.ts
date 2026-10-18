@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { aCheck } from "@/test/fixtures";
-import { countTicks, runsFromPings, runTicks } from "./runs";
+import { axisTop, countTicks, groupRuns, runsFromPings, runTicks } from "./runs";
 import type { Ping } from "./types";
 
 const run = (at: string, ok: boolean, exitCode: number | null = ok ? 0 : 1) => ({
@@ -41,6 +41,22 @@ describe("runTicks", () => {
     expect(ticks[2].at).toBe("2026-01-05T20:00:00Z");
   });
 
+  it("places the runs missed in the past among the real ones, once each", () => {
+    const check = aCheck({
+      status: "DOWN",
+      downReason: "MISSED",
+      nextDueAt: "2026-01-05T20:00:00Z",
+    });
+    const ticks = runTicks(
+      [run("2026-01-02T20:00:00Z", true), run("2026-01-04T20:00:00Z", true)],
+      check,
+      5,
+      ["2026-01-05T20:00:00Z", "2026-01-03T20:00:00Z"],
+    );
+    expect(ticks.map((tick) => tick.kind)).toEqual(["empty", "ok", "missed", "ok", "missed"]);
+    expect(ticks[2].at).toBe("2026-01-03T20:00:00Z");
+  });
+
   it("does not invent missed runs for checks that are up or failed", () => {
     const failed = aCheck({ status: "DOWN", downReason: "FAILED" });
     expect(countTicks(runTicks([], failed, 5)).missed).toBe(0);
@@ -48,24 +64,27 @@ describe("runTicks", () => {
   });
 });
 
+const ping = (
+  id: string,
+  kind: Ping["kind"],
+  receivedAt: string,
+  durationMs: number | null = null,
+  extra: Partial<Ping> = {},
+): Ping => ({
+  id,
+  kind,
+  exitCode: kind === "FAIL" ? 2 : null,
+  rid: null,
+  body: null,
+  receivedAt,
+  remoteAddr: null,
+  userAgent: null,
+  durationMs,
+  ...extra,
+});
+
 describe("runsFromPings", () => {
   it("keeps success and fail pings, oldest first, with their durations", () => {
-    const ping = (
-      id: string,
-      kind: Ping["kind"],
-      receivedAt: string,
-      durationMs: number | null = null,
-    ): Ping => ({
-      id,
-      kind,
-      exitCode: kind === "FAIL" ? 2 : null,
-      rid: null,
-      body: null,
-      receivedAt,
-      remoteAddr: null,
-      userAgent: null,
-      durationMs,
-    });
     const runs = runsFromPings([
       ping("4", "FAIL", "2026-01-05T03:00:09Z", 9000),
       ping("3", "START", "2026-01-05T03:00:00Z"),
@@ -76,5 +95,68 @@ describe("runsFromPings", () => {
       { at: "2026-01-04T03:00:05Z", ok: true, exitCode: null, durationMs: null },
       { at: "2026-01-05T03:00:09Z", ok: false, exitCode: 2, durationMs: 9000 },
     ]);
+  });
+});
+
+describe("groupRuns", () => {
+  it("pairs a finish with the start just before it, and keeps the output", () => {
+    const runs = groupRuns([
+      ping("3", "FAIL", "2026-01-05T03:01:10Z", null, { exitCode: 3, body: "disk full" }),
+      ping("2", "LOG", "2026-01-05T03:00:30Z", null, { body: "halfway" }),
+      ping("1", "START", "2026-01-05T03:00:00Z"),
+    ]);
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({
+      id: "1",
+      startedAt: "2026-01-05T03:00:00Z",
+      durationMs: 70_000,
+      result: "fail",
+      exitCode: 3,
+      output: "disk full",
+    });
+    expect(runs[0].pings.map((p) => p.id)).toEqual(["1", "2", "3"]);
+  });
+
+  it("pairs overlapping runs by rid", () => {
+    const runs = groupRuns([
+      ping("4", "SUCCESS", "2026-01-05T03:00:50Z", null, { rid: "a" }),
+      ping("3", "SUCCESS", "2026-01-05T03:00:40Z", null, { rid: "b" }),
+      ping("2", "START", "2026-01-05T03:00:20Z", null, { rid: "b" }),
+      ping("1", "START", "2026-01-05T03:00:00Z", null, { rid: "a" }),
+    ]);
+    expect(runs.map((r) => [r.id, r.durationMs])).toEqual([
+      ["2", 20_000],
+      ["1", 50_000],
+    ]);
+  });
+
+  it("keeps pings without a partner as runs of their own", () => {
+    const runs = groupRuns([
+      ping("5", "START", "2026-01-05T05:00:00Z"),
+      ping("4", "SUCCESS", "2026-01-05T04:00:00Z", null, { body: "done" }),
+      ping("3", "LOG", "2026-01-05T03:30:00Z", null, { body: "note" }),
+      ping("2", "START", "2026-01-05T03:00:00Z"),
+      ping("1", "START", "2026-01-05T02:00:00Z"),
+    ]);
+    expect(runs.map((r) => [r.id, r.result, r.durationMs])).toEqual([
+      ["5", "running", null],
+      ["2", "ok", 3_600_000],
+      ["1", "unfinished", null],
+    ]);
+    expect(runs[1].output).toBe("done");
+    const alone = groupRuns([
+      ping("2", "LOG", "2026-01-05T03:30:00Z", null, { body: "note" }),
+      ping("1", "SUCCESS", "2026-01-05T03:00:00Z"),
+    ]);
+    expect(alone.map((r) => r.result)).toEqual(["log", "ok"]);
+  });
+});
+
+describe("axisTop", () => {
+  it("rounds the top of the duration axis up to two round steps", () => {
+    expect(axisTop(77_000)).toBe(90_000);
+    expect(axisTop(40_000)).toBe(60_000);
+    expect(axisTop(2_100)).toBe(4_000);
+    expect(axisTop(0)).toBe(200);
   });
 });

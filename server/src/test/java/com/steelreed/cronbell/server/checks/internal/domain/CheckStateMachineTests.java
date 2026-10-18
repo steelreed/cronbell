@@ -252,4 +252,65 @@ class CheckStateMachineTests {
 
 	}
 
+	@Nested
+	class Downtime {
+
+		private CheckState afterDowntime(CheckState s, String from, String now) {
+			return CheckStateMachine.afterDowntime(s, HOURLY, GRACE, MAX_RUNTIME, at(from), at(now));
+		}
+
+		@Test
+		void aRunDueInTheGapGetsAFullPeriodFromNow() {
+			CheckState up = ping(CheckState.initial(), PingKind.SUCCESS, "10:00:05").state();
+			CheckState resumed = afterDowntime(up, "10:30:00", "13:20:00");
+			assertThat(resumed.status()).isEqualTo(CheckStatus.UP);
+			assertThat(resumed.nextDueAt()).isEqualTo(at("14:00:00"));
+			assertThat(resumed.lastSuccessAt()).isEqualTo(at("10:00:05"));
+			assertThat(CheckStateMachine.detect(resumed, GRACE, MAX_RUNTIME, at("13:20:00")).change())
+				.isEqualTo(Change.NONE);
+		}
+
+		@Test
+		void aRunDueInTheGapWithItsGraceStillAheadToo() {
+			CheckState up = ping(CheckState.initial(), PingKind.SUCCESS, "10:00:05").state();
+			assertThat(afterDowntime(up, "10:58:00", "11:02:00").nextDueAt()).isEqualTo(at("12:00:00"));
+		}
+
+		@Test
+		void anOpenRunIsDropped() {
+			CheckState running = ping(CheckState.initial(), PingKind.START, "10:00:00").state();
+			CheckState resumed = afterDowntime(running, "10:05:00", "10:30:00");
+			assertThat(resumed.runStartedAt()).isNull();
+			assertThat(resumed.runRid()).isNull();
+			assertThat(resumed.lastStartAt()).isEqualTo(at("10:00:00"));
+			assertThat(resumed.nextDueAt()).isEqualTo(at("11:00:00"));
+		}
+
+		@Test
+		void checksTheGapCannotHaveAffectedAreUnchanged() {
+			CheckState up = ping(CheckState.initial(), PingKind.SUCCESS, "10:00:05").state();
+			// Next run after the gap.
+			assertThat(afterDowntime(up, "10:10:00", "10:40:00")).isSameAs(up);
+			// Already past its grace before the server went away: the detector decides.
+			assertThat(afterDowntime(up, "11:10:00", "11:40:00")).isSameAs(up);
+			// A run that was already too long before the gap.
+			CheckState running = ping(up, PingKind.START, "10:30:00").state();
+			assertThat(afterDowntime(running, "10:45:00", "10:50:00")).isSameAs(running);
+			// The due run started before the gap and was too long before it too.
+			CheckState started = ping(withDue(up, "10:20:00"), PingKind.START, "10:21:00").state();
+			assertThat(afterDowntime(started, "10:40:00", "13:00:00")).isSameAs(started);
+		}
+
+		@Test
+		void downNewAndPausedChecksAreLeftAlone() {
+			CheckState up = ping(CheckState.initial(), PingKind.SUCCESS, "10:00:05").state();
+			CheckState down = up.withStatus(CheckStatus.DOWN, DownReason.FAILED);
+			assertThat(afterDowntime(down, "10:30:00", "13:00:00")).isSameAs(down);
+			CheckState paused = up.withStatus(CheckStatus.PAUSED, null);
+			assertThat(afterDowntime(paused, "10:30:00", "13:00:00")).isSameAs(paused);
+			assertThat(afterDowntime(CheckState.initial(), "10:30:00", "13:00:00")).isEqualTo(CheckState.initial());
+		}
+
+	}
+
 }

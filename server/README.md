@@ -117,10 +117,10 @@ times as epoch milliseconds.
 ## History
 
 Once a day, and a minute after start, the server deletes pings older than
-`CRONBELL_HISTORY_RETENTION` and alert deliveries that were sent or gave up before then, in
-batches of 5,000 rows, and logs one line with the counts. Pending deliveries are never deleted.
-Each check keeps its latest ping, its latest ping with a body (the log shown in DOWN alerts) and
-the pings of a run still in progress, however old. A check's state (status, last ping, last
+`CRONBELL_HISTORY_RETENTION`, status changes and alert deliveries that were sent or gave up before
+then, in batches of 5,000 rows, and logs one line with the counts. Pending deliveries are never
+deleted. Each check keeps its latest ping, its latest ping with a body (the log shown in DOWN
+alerts), the pings of a run still in progress and its latest status change, however old. A check's state (status, last ping, last
 success, next due) is stored on the check itself, so pruning never changes it. With PostgreSQL and
 several instances, one instance at a time does the work (a lease row in `job_locks`).
 

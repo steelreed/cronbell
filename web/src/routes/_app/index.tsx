@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { AttentionList } from "@/components/overview/attention-list";
-import { DailyChart } from "@/components/overview/daily-chart";
 import { FirstSteps } from "@/components/overview/first-steps";
+import { RecentEvents } from "@/components/overview/recent-events";
 import { StatTiles } from "@/components/overview/stat-tiles";
-import { Bar, EmptyLine, ErrorState, Panel } from "@/components/page";
-import { checksQuery, dailyStatsQuery } from "@/lib/queries";
+import { StatusStrip } from "@/components/overview/status-strip";
+import { Bar, ErrorState, LoadingList, Panel } from "@/components/page";
+import { checksQuery, projectEventsQuery, statusDaysQuery } from "@/lib/queries";
 import { countByHealth, needsAttention } from "@/lib/status";
 import { t } from "@/lib/strings";
 import { useNow } from "@/lib/use-now";
@@ -15,9 +16,13 @@ export const Route = createFileRoute("/_app/")({
   component: OverviewPage,
 });
 
+/** Events the feed reads: more than it shows, to tell a recovery from a first run. */
+const EVENTS = 30;
+
 /**
- * The overview: counts, what needs attention now, and runs per day, under the setup steps
- * while the project is young. A project without checks shows only the steps.
+ * The overview: counts, what needs attention now, the latest status changes and how every
+ * check spent the last 30 days, under the setup steps while the project is young. A project
+ * without checks shows only the steps.
  */
 function OverviewPage() {
   const { session } = Route.useRouteContext();
@@ -36,40 +41,60 @@ function OverviewPage() {
     <div className="space-y-4">
       <FirstSteps checks={checks.data} session={session} />
       <StatTiles counts={countByHealth(checks.data, now)} />
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
-        <Panel title={t.overview.chart}>
-          <RunsChart />
-        </Panel>
-        <div className="order-first min-w-0 xl:order-none">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem] xl:grid-rows-[auto_1fr]">
+        <div className="min-w-0 xl:col-start-2">
           <AttentionList items={needsAttention(checks.data, now)} now={now} />
+        </div>
+        <Panel
+          title={t.overview.strip.title}
+          lead={t.overview.strip.lead}
+          className="xl:col-start-1 xl:row-span-2 xl:row-start-1 xl:self-start"
+        >
+          <Strip />
+        </Panel>
+        <div className="min-w-0 xl:col-start-2">
+          <Events now={now} />
         </div>
       </div>
     </div>
   );
 }
 
-function RunsChart() {
-  const stats = useQuery(dailyStatsQuery(browserTimeZone()));
-  if (stats.isPending) return <ChartSkeleton />;
-  if (stats.isError) return <ErrorState error={stats.error} onRetry={() => stats.refetch()} />;
-  if (stats.data.every((day) => day.runs === 0))
-    return <EmptyLine>{t.overview.chartEmpty}</EmptyLine>;
-  return <DailyChart days={stats.data} />;
+function Strip() {
+  const days = useQuery(statusDaysQuery(browserTimeZone()));
+  if (days.isPending) return <StripSkeleton />;
+  if (days.isError) return <ErrorState error={days.error} onRetry={() => days.refetch()} />;
+  return <StatusStrip checks={days.data} />;
 }
 
-function ChartSkeleton() {
+function Events({ now }: { now: number }) {
+  const events = useQuery(projectEventsQuery(EVENTS));
+  if (events.isPending) {
+    return (
+      <Panel title={t.overview.events.title} flush>
+        <LoadingList rows={3} />
+      </Panel>
+    );
+  }
+  if (events.isError) {
+    return (
+      <Panel title={t.overview.events.title}>
+        <ErrorState error={events.error} onRetry={() => events.refetch()} />
+      </Panel>
+    );
+  }
+  return <RecentEvents events={events.data} now={now} />;
+}
+
+function StripSkeleton() {
   return (
-    <div aria-busy="true" className="flex h-64 items-end gap-2 pt-8">
+    <div aria-busy="true" className="space-y-3">
       <span className="sr-only" role="status">
         {t.common.loading}
       </span>
-      {Array.from({ length: 14 }, (_, i) => (
-        <span
-          // biome-ignore lint/suspicious/noArrayIndexKey: placeholders have no identity
-          key={i}
-          className="block flex-1 animate-pulse rounded-t bg-foreground/[0.07] motion-reduce:animate-none"
-          style={{ height: `${30 + ((i * 37) % 60)}%` }}
-        />
+      {Array.from({ length: 4 }, (_, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: placeholders have no identity
+        <Bar key={i} className="h-3.5 w-full" />
       ))}
     </div>
   );
@@ -92,8 +117,8 @@ function OverviewSkeleton() {
         ))}
       </div>
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
-        <Panel title={t.overview.chart}>
-          <ChartSkeleton />
+        <Panel title={t.overview.strip.title}>
+          <StripSkeleton />
         </Panel>
         <Panel title={t.overview.attention}>
           <div className="space-y-5">

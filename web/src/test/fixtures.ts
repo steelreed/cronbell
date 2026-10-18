@@ -1,4 +1,4 @@
-import type { Check, Session } from "@/lib/types";
+import type { Check, CheckAlert, Session, StatusEvent } from "@/lib/types";
 
 export const NOW = Date.parse("2026-01-05T10:00:00Z");
 
@@ -25,6 +25,41 @@ export function aCheck(overrides: Partial<Check> = {}): Check {
     ...overrides,
   };
 }
+
+/** A status event of the fixture check. */
+export const anEvent = (
+  id: string,
+  kind: StatusEvent["kind"],
+  at: string,
+  extra: Partial<StatusEvent> = {},
+): StatusEvent => ({
+  id,
+  slug: "nightly-backup",
+  name: "Nightly backup",
+  kind,
+  reason: kind === "DOWN" ? "FAILED" : null,
+  runAt: null,
+  at,
+  ...extra,
+});
+
+/** An alert of the fixture check for one of its events. */
+export const anAlert = (
+  id: string,
+  eventId: string,
+  channelName: string,
+  status: CheckAlert["status"],
+): CheckAlert => ({
+  id,
+  eventId,
+  channelId: `ch-${channelName}`,
+  channelName,
+  channelType: "telegram",
+  status,
+  lastError: status === "FAILED" ? "connection refused" : null,
+  createdAt: "2026-01-03T02:15:00Z",
+  deliveredAt: null,
+});
 
 export const SESSION: Session = {
   account: { id: "a1", email: "admin@example.com", instanceAdmin: true },

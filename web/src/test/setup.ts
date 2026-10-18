@@ -1,6 +1,10 @@
 import "@testing-library/jest-dom/vitest";
-import { cleanup } from "@testing-library/react";
+import { cleanup, configure } from "@testing-library/react";
 import { afterEach } from "vitest";
+
+// Route tests load the whole app with its lazy route chunks; on a busy machine the first
+// screen can take longer than the default second.
+configure({ asyncUtilTimeout: 5000 });
 
 // jsdom has no matchMedia (sidebar, theme) nor ResizeObserver (charts, Radix).
 if (!window.matchMedia) {

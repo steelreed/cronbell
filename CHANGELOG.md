@@ -8,6 +8,21 @@ All notable changes to Cronbell are listed here. The format follows
 
 ### Added
 
+- Status history: every change of a check (UP, DOWN with its reason and run, paused, resumed) is
+  stored with the status change and pruned with the rest of the history, keeping each check's
+  latest. `GET /api/v1/checks/{slug}/events` and `GET /api/v1/events` (the whole project) list
+  them; `GET /api/v1/checks/{slug}/alerts` lists the deliveries of each change per channel.
+  Existing checks that are DOWN or paused start their history at upgrade.
+- `GET /api/v1/checks/{slug}` has `stats`: uptime over 7 and 30 days (paused time left out) and
+  the average run duration over 7 days.
+- `GET /api/v1/stats/status`: how each check spent each of the last days (DOWN, issues, OK or no
+  data), with runs, failures, missed runs and time DOWN.
+- Check page: a History panel with each downtime and pause (why, from when to when, how long) and
+  where its alerts went, delivered or failed; uptime over 7 and 30 days and the average run; missed
+  runs among the run ticks.
+- Overview: the last 30 days as one square per check and day, problems first, with the day's runs,
+  failures, missed runs and downtime on hover; and the project's recent status changes next to
+  what needs attention.
 - A check that has never pinged opens on its ping URL, waiting for the first ping (refreshed
   every 3 seconds), with a **Send a test ping** button that pings it from the browser; then it
   says when the ping arrived and when the next run is due. Its empty Runs and Recent pings panels
@@ -20,6 +35,11 @@ All notable changes to Cronbell are listed here. The format follows
 
 ### Changed
 
+- The check page lists recent runs, a start and its end in one row with result, duration and
+  output; "Raw pings" shows every ping as before.
+- Durations read the same everywhere ("850ms", "12.4s", "1m 17s", "5h 46m"), and the duration
+  chart's axis starts at 0.
+- The overview's "Runs, last 14 days" chart is replaced by the 30-day status strip.
 - With no checks, the overview and the checks list lead with one button, "Create your first
   check", which opens the form and then the new check's page. The `curl` recipe for scripts, now
   with the Spring Boot starter's two properties, sits behind "Using the API or the Spring Boot
@@ -38,6 +58,11 @@ All notable changes to Cronbell are listed here. The format follows
 
 ### Fixed
 
+- No more alert storm after the server was down (outage, upgrade, host reboot). Every overdue check
+  used to go DOWN "missed run" or "running too long" on the first detector run, then "UP again"
+  with the next ping. The detector now leaves a heartbeat; after a gap of more than 2 minutes, the
+  checks that could have reported meanwhile get a new deadline, as on resume, and one log line says
+  how long the server was away.
 - The crontab and Kubernetes snippets of a period check always said `*/5 * * * *`. They now use
   the cron line of the period (`0 * * * *` for every hour, `*/15 * * * *` for 15 minutes, daily,
   every 2, 3, 4, 6, 8 or 12 hours) and say so when a period has none. A 6-field cron drops its

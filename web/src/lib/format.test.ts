@@ -4,6 +4,7 @@ import {
   formatAddress,
   formatClock,
   formatDuration,
+  formatPercent,
   formatRelative,
   formatSchedule,
   formatSeconds,
@@ -27,9 +28,23 @@ describe("format", () => {
   it("writes durations", () => {
     expect(formatSeconds(3600)).toBe("1h");
     expect(formatSeconds(5400)).toBe("1h 30m");
-    expect(formatDuration(850)).toBe("850 ms");
-    expect(formatDuration(12_400)).toBe("12.4 s");
-    expect(formatDuration(185_000)).toBe("3m 5s");
+  });
+
+  it("writes every run duration in one style", () => {
+    expect(formatDuration(0)).toBe("0s");
+    expect(formatDuration(850)).toBe("850ms");
+    expect(formatDuration(12_400)).toBe("12.4s");
+    expect(formatDuration(40_000)).toBe("40s");
+    expect(formatDuration(77_000)).toBe("1m 17s");
+    expect(formatDuration(20_760_000)).toBe("5h 46m");
+    expect(formatDuration(null)).toBe("");
+  });
+
+  it("writes uptime without rounding up to 100%", () => {
+    expect(formatPercent(1)).toBe("100%");
+    expect(formatPercent(0.9999)).toBe("99.9%");
+    expect(formatPercent(23 / 24)).toBe("95.8%");
+    expect(formatPercent(0)).toBe("0%");
   });
 
   it("writes IPv6 addresses compressed and IPv4-mapped ones as IPv4", () => {
