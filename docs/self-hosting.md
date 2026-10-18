@@ -88,8 +88,8 @@ Set at least:
 - `CRONBELL_ADMIN_EMAIL` and `CRONBELL_ADMIN_PASSWORD`: the admin account, created on first start.
   Leave them out to create the account on a setup page instead, but then open the dashboard right
   away: until an account exists, anyone who reaches the page can create it.
-- `CRONBELL_VERSION`: the image tag. Pin a release such as `0.1.0-beta.1`, so the server only
-  changes version when you change it. Image tags are the version (`0.1.0-beta.1`, `0.1.0`), `0.1`
+- `CRONBELL_VERSION`: the image tag. Pin a release such as `0.1.0-beta.3`, so the server only
+  changes version when you change it. Image tags are the version (`0.1.0-beta.3`, `0.1.0`), `0.1`
   for the newest patch of a minor version, `latest` for the newest stable release and `beta` for
   the newest pre-release. Until 0.1.0 is out there are only pre-releases, so `latest` does not
   exist yet.
@@ -292,5 +292,5 @@ with `POSTGRES_PASSWORD` in `.env` and
 
 With `CRONBELL_DOMAIN=localhost`, Caddy uses a certificate from its own local authority instead of
 Let's Encrypt; `curl -k https://localhost` or accept the browser warning. Without HTTPS at all,
-`docker run -p 8080:8080 -v cronbell-data:/data ghcr.io/steelreed/cronbell:0.1.0-beta.2` is enough; see
+`docker run -p 8080:8080 -v cronbell-data:/data ghcr.io/steelreed/cronbell:0.1.0-beta.3` is enough; see
 [`server/README.md`](../server/README.md) for every setting.

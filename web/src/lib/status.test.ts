@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { aCheck, NOW } from "@/test/fixtures";
-import { attention, countByHealth, dueView, health, needsAttention, statusView } from "./status";
+import {
+  attention,
+  countByHealth,
+  dueView,
+  health,
+  needsAttention,
+  stateSince,
+  statusView,
+} from "./status";
 
 describe("statusView", () => {
   it("shows UP in the OK tone without a reason", () => {
@@ -76,7 +84,7 @@ describe("late and attention", () => {
     expect(health(aCheck(), NOW)).toBe("up");
   });
 
-  it("explains each problem with the time it started", () => {
+  it("explains each problem with the time its state tells when the history has none", () => {
     const failed = aCheck({
       status: "DOWN",
       downReason: "FAILED",
@@ -92,6 +100,45 @@ describe("late and attention", () => {
     expect(attention(late, NOW)).toMatchObject({ health: "late", since: "2026-01-05T09:50:00Z" });
     expect(attention(aCheck(), NOW)).toBeNull();
     expect(attention(aCheck({ status: "PAUSED" }), NOW)).toBeNull();
+  });
+
+  it("dates a DOWN check from when it went down, not from its latest failing ping", () => {
+    const wentDown = "2026-01-05T08:58:00Z";
+    const stillFailing = aCheck({
+      status: "DOWN",
+      downReason: "FAILED",
+      statusSince: wentDown,
+      lastPingAt: "2026-01-05T09:57:00Z",
+    });
+    expect(attention(stillFailing, NOW)?.since).toBe(wentDown);
+    const missed = aCheck({
+      status: "DOWN",
+      downReason: "MISSED",
+      statusSince: wentDown,
+      nextDueAt: "2026-01-05T08:00:00Z",
+    });
+    expect(attention(missed, NOW)?.since).toBe(wentDown);
+    const tooLong = aCheck({
+      status: "DOWN",
+      downReason: "RUNNING_TOO_LONG",
+      statusSince: wentDown,
+      lastStartAt: "2026-01-05T08:00:00Z",
+    });
+    expect(attention(tooLong, NOW)?.since).toBe(wentDown);
+  });
+
+  it("dates a pause from when it began, and nothing for a check that is fine", () => {
+    const paused = aCheck({ status: "PAUSED", statusSince: "2026-01-05T07:00:00Z" });
+    expect(stateSince(paused, NOW)).toBe("2026-01-05T07:00:00Z");
+    expect(stateSince(aCheck({ status: "PAUSED" }), NOW)).toBeNull();
+    expect(stateSince(aCheck({ statusSince: "2026-01-05T07:00:00Z" }), NOW)).toBeNull();
+    expect(stateSince(late, NOW)).toBe("2026-01-05T09:50:00Z");
+    const down = aCheck({
+      status: "DOWN",
+      downReason: "FAILED",
+      statusSince: "2026-01-05T08:58:00Z",
+    });
+    expect(stateSince(down, NOW)).toBe("2026-01-05T08:58:00Z");
   });
 
   it("orders what needs attention: down, then late, then never pinged", () => {

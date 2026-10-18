@@ -21,6 +21,11 @@ export interface Check {
   channels: string[] | null;
   status: CheckStatus;
   downReason: DownReason | null;
+  /**
+   * When the check entered its status: its latest status event. Null without one, e.g. a check
+   * that never changed status or had none since the status history began.
+   */
+  statusSince: string | null;
   lastPingAt: string | null;
   lastStartAt: string | null;
   lastSuccessAt: string | null;

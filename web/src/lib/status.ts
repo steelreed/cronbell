@@ -96,14 +96,16 @@ export interface Attention {
   tone: Tone;
   /** What happened, in a few words: "Run failed, exit 3", "Missed 02:00 run". */
   reason: string;
-  /** When it started, as far as the check's state tells. */
+  /** When it started: for a DOWN check when it went down, else as far as its state tells. */
   since: string | null;
 }
 
 /**
- * Why a check needs attention, or null when it does not. The time comes from the check's
- * own state (status changes are not stored): the failing ping, the missed run, the start of
- * the run that is taking too long, the overdue run, or the creation of a check never pinged.
+ * Why a check needs attention, or null when it does not. A DOWN check is down since its
+ * statusSince, when the server recorded the change; without one (a check older than the
+ * status history) the time comes from its state: the missed run, the start of the run that
+ * is taking too long, or the failing ping. A late check is late since the overdue run, a
+ * check never pinged since its creation.
  */
 export function attention(check: Check, now: number = Date.now()): Attention | null {
   const state = health(check, now);
@@ -117,7 +119,7 @@ export function attention(check: Check, now: number = Date.now()): Attention | n
           reason: check.nextDueAt
             ? t.attention.missed(formatClock(check.nextDueAt, now))
             : t.status.reasons.MISSED,
-          since: check.nextDueAt,
+          since: check.statusSince ?? check.nextDueAt,
         };
       case "RUNNING_TOO_LONG":
         return {
@@ -125,7 +127,7 @@ export function attention(check: Check, now: number = Date.now()): Attention | n
           health: state,
           tone: "problem",
           reason: t.attention.tooLong,
-          since: check.lastStartAt,
+          since: check.statusSince ?? check.lastStartAt,
         };
       default:
         return {
@@ -133,7 +135,7 @@ export function attention(check: Check, now: number = Date.now()): Attention | n
           health: state,
           tone: "problem",
           reason: t.attention.failed,
-          since: check.lastPingAt,
+          since: check.statusSince ?? check.lastPingAt,
         };
     }
   }
@@ -156,6 +158,15 @@ export function attention(check: Check, now: number = Date.now()): Attention | n
     };
   }
   return null;
+}
+
+/**
+ * Since when the check is in the state its page shows: a problem since it started (see
+ * attention), a pause since it began. Null for a check that is fine, or when not known.
+ */
+export function stateSince(check: Check, now: number = Date.now()): string | null {
+  if (check.status === "PAUSED") return check.statusSince;
+  return attention(check, now)?.since ?? null;
 }
 
 /** Checks that need attention, the worst first, then the longest-standing. */

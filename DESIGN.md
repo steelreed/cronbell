@@ -226,8 +226,11 @@ GET    /api/v1/schedules/next         next runs of a cron expression: {cron, tim
 ```
 
 A check has its definition, `channels` (the ids of the channels it picked, `null` for every
-channel), `status`, `downReason`, `lastPingAt`, `lastStartAt`, `lastSuccessAt`, `nextDueAt` and
-`nextRunAt`. `nextDueAt` is the run being waited for (§4), so for a late or missed
+channel), `status`, `downReason`, `statusSince`, `lastPingAt`, `lastStartAt`, `lastSuccessAt`,
+`nextDueAt` and `nextRunAt`. `statusSince` is when the check entered its status, the time of its
+latest status event (§4), so a check that keeps failing stays DOWN since its first failure, not its
+latest ping; `null` without one (a check that never changed status, or none since the history
+began). The list reads it for every check in one statement. `nextDueAt` is the run being waited for (§4), so for a late or missed
 run it stays in the past. `nextRunAt` is when the schedule next expects a run, seen from now:
 `nextDueAt` while that is ahead, else the next cron time after now; `null` for a period schedule
 that is overdue (it only moves on with a run), for a paused check and before the first ping. The
@@ -648,9 +651,9 @@ back to the overview or the checks); a page that fails to render shows its error
 |---|---|---|
 | Setup | `/setup` | first run only: admin email and password |
 | Sign in | `/signin` | email and password; shows the rate-limit wait |
-| Overview | `/` | counts (checks, down, late, up; each opens the filtered list); what needs attention (DOWN first, then late, then never pinged) with the reason and since when, from the check's state; the last 30 days in the browser's zone, one square per check and day (`stats/status`: DOWN at day end, failure or downtime, all runs fine, no runs or paused; the day's runs, failures, missed runs and downtime on hover), problems first, 12 checks then "show all"; the recent status changes of the project (`/events`) with the reason or how long the downtime lasted; above them while the project is being set up, its first steps (create a check, receive the first ping, add an alert channel and send a test, and for owners, optional, invite a teammate) with the next one open, until the first three are done (the third once a channel exists, since a test is not stored as a delivery); a project without checks shows only the steps |
+| Overview | `/` | counts (checks, down, late, up; each opens the filtered list); what needs attention (DOWN first, then late, then never pinged) with the reason and since when: for a DOWN check its `statusSince`, else (and without one) from the check's state; the last 30 days in the browser's zone, one square per check and day (`stats/status`: DOWN at day end, failure or downtime, all runs fine, no runs or paused; the day's runs, failures, missed runs and downtime on hover), problems first, 12 checks then "show all"; the recent status changes of the project (`/events`) with the reason or how long the downtime lasted; above them while the project is being set up, its first steps (create a check, receive the first ping, add an alert channel and send a test, and for owners, optional, invite a teammate) with the next one open, until the first three are done (the third once a channel exists, since a test is not stored as a delivery); a project without checks shows only the steps |
 | Checks | `/checks` | table: name and slug, schedule and time zone, status with reason (late = overdue within grace), the last 20 runs as ticks, last ping (relative, exact on hover), next run (a missed run by its time, with the next run); search, status filter with counts, sortable columns, problems first by default, 25 per page, all in the URL; row menu (open, pause or resume, copy ping URL, delete with confirmation); a list on phones; refreshed every 15 s; empty state: a button to create the first check, and behind "Using the API or the Spring Boot starter?" a ready `curl` to create and ping a check and the starter's two properties |
-| Check | `/checks/{slug}` | status and since when; uptime over 7 and 30 days and the average run over 7 days; the latest runs as ticks (90, 40 on phones; missed runs from the status history as hollow ticks) and run durations on an axis from 0 with the max runtime line; the history: each DOWN or pause, newest first, with the reason, start, end and duration, and where its alerts went, the channels the check alerted at the time (✓ delivered, ✗ failed, with the error on hover); recent runs, a start and its end paired as in the ping list, with result, duration and output (expand to read; cards on phones), or the raw pings with exit code and source; details, with where alerts go; ping URL with copy and snippets (crontab, shell, Kubernetes CronJob, Spring Boot starter); pause/resume, edit, delete (confirmed); a check without pings when its page opens leads with the ping URL, waiting for the first ping (refreshed every 3 s) with a test ping sent from the browser to the ping URL, then when it arrived and the next run; its runs, history and pings show once there are some |
+| Check | `/checks/{slug}` | status and since when (DOWN or paused since `statusSince`, late since the overdue run); uptime over 7 and 30 days and the average run over 7 days; the latest runs as ticks (90, 40 on phones; missed runs from the status history as hollow ticks) and run durations on an axis from 0 with the max runtime line; the history: each DOWN or pause, newest first, with the reason, start, end and duration, and where its alerts went, the channels the check alerted at the time (✓ delivered, ✗ failed, with the error on hover); recent runs, a start and its end paired as in the ping list, with result, duration and output (expand to read; cards on phones), or the raw pings with exit code and source; details, with where alerts go; ping URL with copy and snippets (crontab, shell, Kubernetes CronJob, Spring Boot starter); pause/resume, edit, delete (confirmed); a check without pings when its page opens leads with the ping URL, waiting for the first ping (refreshed every 3 s) with a test ping sent from the browser to the ping URL, then when it arrived and the next run; its runs, history and pings show once there are some |
 | New / edit check | `/checks/new`, `/checks/{slug}/edit` | slug, name, cron or period, time zone (searchable, common zones first, UTC offsets), the next five runs of a cron schedule (`/schedules/next`), grace, max runtime, alerts to all channels or to ticked ones (at least one) |
 | Channels | `/channels` | channels with type, target, last delivery or last error, how many checks picked it; add and edit in a dialog per type (secrets shown masked, kept unless replaced); send test; delete (confirmed, saying how many checks picked it and that a check left with none alerts every channel) |
 | API keys | `/keys` | keys by name and prefix; create in a dialog that shows the key once with copy; revoke (confirmed); create and revoke for owners only |
@@ -677,10 +680,10 @@ The cloud sells not having to run it, plus team features.
 | Channels | all | email, Telegram | all, incl. Slack, Discord, ntfy, webhook, Zalo later |
 | History | configurable (default 90 days) | 30 days | 1 year |
 | Members | unlimited | 1 | 10 |
+| Support | GitHub issues | GitHub issues | email |
 
 `CRONBELL_PROJECT_MAX_CHECKS` (§6, Projects and invites) is how a hosted instance caps checks per
 project before billing exists.
-| Support | GitHub issues | GitHub issues | email |
 
 Billing is not built in v0.1.
 
