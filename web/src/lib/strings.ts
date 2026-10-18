@@ -103,18 +103,39 @@ export const en = {
       "all reporting",
     downMeta: (n: number) => (n === 0 ? "nothing failing" : "need a look now"),
     lateMeta: (n: number) => (n === 0 ? "none overdue" : "overdue, within grace"),
-    upMeta: (n: number, total: number) =>
-      total === 0 ? "no checks" : `${Math.round((n / total) * 100)}% of checks`,
+    upMeta: "on schedule",
     attention: "Needs attention",
     allGood: "Every check is up or paused.",
     since: "since",
-    chart: "Runs, last 14 days",
-    chartLegendRuns: "Runs",
-    chartLegendFailures: "Failed",
-    chartSummary: (runs: number, failures: number) =>
-      `${plural(runs, "run", "runs")}, ${plural(failures, "failure", "failures")} in 14 days`,
-    chartEmpty: "No runs in the last 14 days.",
     viewAll: "View all checks",
+    strip: {
+      title: "Last 30 days",
+      lead: "One square per check and day",
+      states: {
+        OK: "all runs fine",
+        ISSUES: "failure or downtime",
+        DOWN: "down at day end",
+        NONE: "no runs or paused",
+      },
+      start: "30 days ago",
+      end: "Today",
+      runs: (runs: number, failures: number) =>
+        `${plural(runs, "run", "runs")}, ${failures.toLocaleString("en")} failed`,
+      noRuns: "no runs",
+      missed: (n: number) => `missed ${plural(n, "run", "runs")}`,
+      down: (duration: string) => `down ${duration}`,
+      summary: (ok: number, issues: number, down: number) =>
+        `${plural(ok, "good day", "good days")}, ${issues.toLocaleString("en")} with trouble, ${down.toLocaleString("en")} down`,
+      showAll: (n: number) => `Show all ${n} checks`,
+      showFewer: "Show fewer",
+    },
+    events: {
+      title: "Recent events",
+      empty: "No status changes yet.",
+      resumed: "resumed",
+      recoveredAfter: (duration: string) => `recovered after ${duration}`,
+      upAfterPause: "pinged after a pause",
+    },
   },
   checks: {
     title: "Checks",

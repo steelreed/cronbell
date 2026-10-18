@@ -64,6 +64,25 @@ export interface CheckAlert {
   createdAt: string;
   deliveredAt: string | null;
 }
+
+/** How a check spent a day: DOWN at its end, DOWN for a while or a failure, fine, or no data. */
+export type DayState = "DOWN" | "ISSUES" | "OK" | "NONE";
+
+export interface StatusDay {
+  date: string;
+  state: DayState;
+  runs: number;
+  failures: number;
+  /** How often the check went DOWN for a missed run that day. */
+  missed: number;
+  downMs: number;
+}
+
+/** One check of GET /stats/status, its days oldest first. */
+export interface CheckDays {
+  slug: string;
+  name: string;
+  days: StatusDay[];
 }
 
 export interface CheckDefinition {
@@ -179,13 +198,6 @@ export interface RecentRun {
 
 /** Slug to its latest finished runs, oldest first. */
 export type RecentRuns = Record<string, RecentRun[]>;
-
-/** One day of GET /stats/daily, in the zone asked for. */
-export interface DayStat {
-  date: string;
-  runs: number;
-  failures: number;
-}
 
 export interface NextRuns {
   cron: string;

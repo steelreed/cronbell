@@ -5,7 +5,7 @@ import type {
   Channel,
   Check,
   CheckAlert,
-  DayStat,
+  CheckDays,
   Invite,
   InviteOffer,
   Member,
@@ -80,6 +80,21 @@ export const checkAlertsQuery = (slug: string) =>
     refetchInterval: POLL_MS,
   });
 
+export const projectEventsQuery = (limit: number) =>
+  queryOptions({
+    queryKey: ["events", limit],
+    queryFn: () => api<StatusEvent[]>(`/events?limit=${limit}`),
+    refetchInterval: POLL_MS,
+  });
+
+export const statusDaysQuery = (timeZone: string, days = 30) =>
+  queryOptions({
+    queryKey: ["stats", "status", timeZone, days],
+    queryFn: () =>
+      api<CheckDays[]>(`/stats/status?days=${days}&tz=${encodeURIComponent(timeZone)}`),
+    refetchInterval: 60_000,
+  });
+
 /** Runs shown in each row of the checks list. */
 export const LIST_RUNS = 20;
 
@@ -88,13 +103,6 @@ export const recentRunsQuery = queryOptions({
   queryFn: () => api<RecentRuns>(`/runs/recent?limit=${LIST_RUNS}`),
   refetchInterval: POLL_MS,
 });
-
-export const dailyStatsQuery = (timeZone: string, days = 14) =>
-  queryOptions({
-    queryKey: ["stats", "daily", timeZone, days],
-    queryFn: () => api<DayStat[]>(`/stats/daily?days=${days}&tz=${encodeURIComponent(timeZone)}`),
-    refetchInterval: 60_000,
-  });
 
 export const nextRunsQuery = (cron: string, timeZone: string) =>
   queryOptions({

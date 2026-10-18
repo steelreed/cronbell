@@ -3,7 +3,7 @@ import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/rea
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { routeTree } from "@/routeTree.gen";
-import { aCheck, SESSION, stubFetch } from "@/test/fixtures";
+import { aCheck, anEvent, SESSION, stubFetch } from "@/test/fixtures";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -57,7 +57,30 @@ describe("auth guard", () => {
         "GET /api/v1/setup": () => [200, { required: false }],
         "GET /api/v1/session": () => [200, SESSION],
         "GET /api/v1/checks": () => [200, [aCheck({ status: "DOWN", downReason: "MISSED" })]],
-        "GET /api/v1/stats/daily": () => [200, [{ date: "2026-01-05", runs: 3, failures: 1 }]],
+        "GET /api/v1/stats/status": () => [
+          200,
+          [
+            {
+              slug: "nightly-backup",
+              name: "Nightly backup",
+              days: [
+                { date: "2026-01-04", state: "OK", runs: 1, failures: 0, missed: 0, downMs: 0 },
+                {
+                  date: "2026-01-05",
+                  state: "DOWN",
+                  runs: 0,
+                  failures: 0,
+                  missed: 1,
+                  downMs: 60_000,
+                },
+              ],
+            },
+          ],
+        ],
+        "GET /api/v1/events": () => [
+          200,
+          [anEvent("e1", "DOWN", "2026-01-04T20:31:00Z", { reason: "FAILED" })],
+        ],
       }),
     );
     const router = renderAt("/signin");
@@ -65,6 +88,16 @@ describe("auth guard", () => {
     expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
     expect((await screen.findAllByText("Nightly backup")).length).toBeGreaterThan(0);
     expect(screen.getByText(/Missed the .* run/)).toBeInTheDocument();
+    expect(
+      await screen.findByRole("img", {
+        name: "Nightly backup: 1 good day, 0 with trouble, 1 down",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByTitle(/· no runs · missed 1 run · down 1m$/)).toHaveAttribute(
+      "data-state",
+      "DOWN",
+    );
+    expect(await screen.findByText(/run failed ·/)).toBeInTheDocument();
   });
 
   it("lists checks with their status and run history", async () => {

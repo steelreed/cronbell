@@ -231,7 +231,7 @@ A ping in the list has `kind`, `exitCode`, `rid`, `body`, `receivedAt`, `remoteA
 and for a `success`/`fail` that closes a `start` seen in the same list, `durationMs` (matched by
 `rid`, else the latest open `start`).
 
-Runs and daily stats feed the dashboard's run bars and overview. A finished run is a `success`
+Runs feed the dashboard's run ticks, and `stats/daily` counts runs and failures per day. A finished run is a `success`
 or `fail` ping, so both only cover what pings recorded: a missed run leaves no ping and is not
 counted (the check's `status` and `downReason` say when the latest run was missed), and history
 older than the retention (§9) is gone. `runs/recent` reads the latest pings of each check through
@@ -590,7 +590,7 @@ its icon. Theme: dark (default), light or system.
 |---|---|---|
 | Setup | `/setup` | first run only: admin email and password |
 | Sign in | `/signin` | email and password; shows the rate-limit wait |
-| Overview | `/` | counts (checks, down, late, up; each opens the filtered list); what needs attention (DOWN first, then late, then never pinged) with the reason and since when, from the check's state; runs and failures per day for 14 days in the browser's zone; a first-check guide when there is no check |
+| Overview | `/` | counts (checks, down, late, up; each opens the filtered list); what needs attention (DOWN first, then late, then never pinged) with the reason and since when, from the check's state; the last 30 days in the browser's zone, one square per check and day (`stats/status`: DOWN at day end, failure or downtime, all runs fine, no runs or paused; the day's runs, failures, missed runs and downtime on hover), problems first, 12 checks then "show all"; the recent status changes of the project (`/events`) with the reason or how long the downtime lasted; a first-check guide when there is no check |
 | Checks | `/checks` | table: name and slug, schedule and time zone, status with reason (late = overdue within grace), the last 20 runs as ticks, last ping (relative, exact on hover), next run (a missed run by its time, with the next run); search, status filter with counts, sortable columns, problems first by default, 25 per page, all in the URL; row menu (open, pause or resume, copy ping URL, delete with confirmation); a list on phones; refreshed every 15 s; empty state with a ready `curl` to create and ping the first check |
 | Check | `/checks/{slug}` | status and since when; uptime over 7 and 30 days and the average run over 7 days; the latest runs as ticks (90, 40 on phones; missed runs from the status history as hollow ticks) and run durations on an axis from 0 with the max runtime line; the history: each DOWN or pause, newest first, with the reason, start, end and duration, and where its alerts went (✓ delivered, ✗ failed, with the error on hover); recent runs, a start and its end paired as in the ping list, with result, duration and output (expand to read; cards on phones), or the raw pings with exit code and source; details; ping URL with copy and snippets (crontab, shell, Kubernetes CronJob, Spring Boot starter); pause/resume, edit, delete (confirmed) |
 | New / edit check | `/checks/new`, `/checks/{slug}/edit` | slug, name, cron or period, time zone (searchable, common zones first, UTC offsets), the next five runs of a cron schedule (`/schedules/next`), grace, max runtime |
