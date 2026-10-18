@@ -97,6 +97,10 @@ All notable changes to Cronbell are listed here. The format follows
   the body echoed: the body was cut to 200 characters before secrets were replaced, so a secret
   across the cut no longer matched. Secrets, and the path of a webhook URL on its own, are now
   replaced first.
+- A rate-limited channel that sent both a `Retry-After` header and a `retry_after` in its body
+  (Telegram, Discord) was retried after the body's wait even when the header asked for longer,
+  for example after 30 s instead of 120 s. The longest of the header, the body and the usual
+  backoff now wins.
 
 ## [0.1.0-beta.2] - 2026-10-17
 

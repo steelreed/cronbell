@@ -547,8 +547,9 @@ Any 2xx answer is a success. Redirects are not followed.
 - **Timeouts.** Connect 5 s, read 10 s for HTTP; the same for SMTP. A stuck channel delays only
   its own deliveries.
 - **Retry.** Network errors, timeouts, `408`, `429` and `5xx` are retried after 30 s, then
-  doubling (1, 2, 4, 8 min…, at most 15 min), honouring `Retry-After` on `429` (Discord's
-  `retry_after` too). Other `4xx` (bad token, removed webhook) fail at once. A delivery not sent
+  doubling (1, 2, 4, 8 min…, at most 15 min). A receiver that asks for a wait, in a
+  `Retry-After` header or in its body (Discord's and Telegram's `retry_after`), gets the longest
+  of the three. Other `4xx` (bad token, removed webhook) fail at once. A delivery not sent
   within **1 hour** of the alert is given up. The latest error is kept on the row and shown on
   the channel.
 - **Errors** are plain sentences that say what to fix, never a URL, a secret or an exception

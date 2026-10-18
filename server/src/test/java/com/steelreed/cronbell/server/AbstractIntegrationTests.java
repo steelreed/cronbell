@@ -847,6 +847,28 @@ abstract class AbstractIntegrationTests {
 	}
 
 	@Test
+	void discordWaitsForTheLongerOfRetryAfterAndItsBody() {
+		Project project = newProject();
+		String path = "/discord/" + UUID.randomUUID();
+		RECEIVER.script(path,
+				new FakeReceiver.Response(429, "{\"message\":\"You are being rate limited.\",\"retry_after\":1}",
+						Map.of("Retry-After", "120"), Duration.ZERO),
+				FakeReceiver.Response.status(204));
+		insertWebhookUrlChannel(project, ChannelType.DISCORD, path);
+		goDown(project);
+		this.dispatcher.runOnce();
+		assertThat(RECEIVER.requests(path)).hasSize(1);
+
+		// Neither the body's 1 s nor the first 30 s backoff: the header's 120 s.
+		CLOCK.advance(Duration.ofSeconds(119));
+		this.dispatcher.runOnce();
+		assertThat(RECEIVER.requests(path)).hasSize(1);
+		CLOCK.advance(Duration.ofSeconds(1));
+		this.dispatcher.runOnce();
+		assertThat(RECEIVER.requests(path)).hasSize(2);
+	}
+
+	@Test
 	void unknownDiscordWebhookIsNotRetried() {
 		Project project = newProject();
 		String path = "/discord/" + UUID.randomUUID();

@@ -79,6 +79,9 @@ class HttpPoster {
 	 * are permanent. {@code detail}, often the receiver's body, is scrubbed of the
 	 * channel's secrets before it is put on one line and shortened, as a receiver may
 	 * echo a token or the webhook URL and a secret cut short would no longer match.
+	 * @param retryAfter the wait the receiver asked for in its body, or null; with a
+	 * {@code Retry-After} header too, the longer one is kept (the dispatcher then waits
+	 * at least its usual backoff)
 	 */
 	static DeliveryException failure(Response response, Channel channel, String receiver, String detail,
 			Duration retryAfter) {
@@ -87,8 +90,15 @@ class HttpPoster {
 		String message = "HTTP " + status + " from " + receiver
 				+ ((shown != null && !shown.isBlank()) ? ": " + oneLine(shown) : "");
 		boolean retryable = status == 408 || status == 429 || status >= 500;
-		Duration wait = (retryAfter != null) ? retryAfter : parseRetryAfter(response.retryAfter());
+		Duration wait = longer(retryAfter, parseRetryAfter(response.retryAfter()));
 		return new DeliveryException(message, retryable, retryable ? wait : null);
+	}
+
+	private static Duration longer(Duration a, Duration b) {
+		if (a == null || b == null) {
+			return (a != null) ? a : b;
+		}
+		return (a.compareTo(b) >= 0) ? a : b;
 	}
 
 	static Duration parseRetryAfter(String header) {

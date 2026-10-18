@@ -140,6 +140,20 @@ class ChannelConfigsTests {
 	}
 
 	@Test
+	void theLongestOfRetryAfterAndTheBodysWaitWins() {
+		Channel discord = channel(ChannelType.DISCORD, Map.of("webhookUrl", "https://discord.com/api/webhooks/1/abc"));
+		assertThat(HttpPoster
+			.failure(new HttpPoster.Response(429, "", "120"), discord, "Discord", null, Duration.ofSeconds(1))
+			.retryAfter()).isEqualTo(Duration.ofSeconds(120));
+		assertThat(HttpPoster
+			.failure(new HttpPoster.Response(429, "", "1"), discord, "Discord", null, Duration.ofMillis(45500))
+			.retryAfter()).isEqualTo(Duration.ofMillis(45500));
+		assertThat(HttpPoster
+			.failure(new HttpPoster.Response(429, "", "soon"), discord, "Discord", null, Duration.ofSeconds(2))
+			.retryAfter()).isEqualTo(Duration.ofSeconds(2));
+	}
+
+	@Test
 	void retryableStatuses() {
 		Channel slack = channel(ChannelType.SLACK, Map.of("webhookUrl", "https://hooks.slack.com/services/T0/B0/xyz"));
 		assertThat(HttpPoster.failure(new HttpPoster.Response(503, "", "7"), slack, "Slack", null, null).retryAfter())
