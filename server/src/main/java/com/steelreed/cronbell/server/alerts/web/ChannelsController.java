@@ -54,7 +54,7 @@ class ChannelsController {
 			.buildAndExpand(channel.id())
 			.toUri();
 		return ResponseEntity.created(location)
-			.body(ChannelResponse.of(channel, DeliveryRepository.ChannelStatus.NONE));
+			.body(ChannelResponse.of(channel, DeliveryRepository.ChannelStatus.NONE, 0));
 	}
 
 	@GetMapping("/{id}")
@@ -86,16 +86,21 @@ class ChannelsController {
 	record ChannelRequest(String type, String name, Map<String, Object> config) {
 	}
 
+	/**
+	 * {@code pickedBy}: checks that picked this channel, not those alerting every
+	 * channel.
+	 */
 	record ChannelResponse(String id, String type, String name, Map<String, String> config, Instant createdAt,
-			Instant updatedAt, Instant lastAttemptAt, Instant lastDeliveryAt, String lastError, int pendingDeliveries) {
+			Instant updatedAt, Instant lastAttemptAt, Instant lastDeliveryAt, String lastError, int pendingDeliveries,
+			int pickedBy) {
 
 		static ChannelResponse of(ChannelService.View view) {
-			return of(view.channel(), view.status());
+			return of(view.channel(), view.status(), view.pickedBy());
 		}
 
-		static ChannelResponse of(Channel c, DeliveryRepository.ChannelStatus s) {
+		static ChannelResponse of(Channel c, DeliveryRepository.ChannelStatus s, int pickedBy) {
 			return new ChannelResponse(c.id(), c.type().id(), c.name(), ChannelConfigs.masked(c), c.createdAt(),
-					c.updatedAt(), s.lastAttemptAt(), s.lastDeliveryAt(), s.lastError(), s.pending());
+					c.updatedAt(), s.lastAttemptAt(), s.lastDeliveryAt(), s.lastError(), s.pending(), pickedBy);
 		}
 
 	}

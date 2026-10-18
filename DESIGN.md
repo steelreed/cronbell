@@ -45,7 +45,7 @@ templates), on-call rotations, SSO.
 | **Grace** | How long after the due time a run may still arrive before it counts as missed. |
 | **Ping** | One message from a job: `start`, `success`, `fail`, or `log`. |
 | **Run** | A `start` followed by its `success` or `fail`, or a lone `success`/`fail`. |
-| **Channel** | Where alerts go: email, Telegram, Slack, Discord, ntfy, webhook. |
+| **Channel** | Where alerts go: email, Telegram, Slack, Discord, ntfy, webhook. A check alerts every channel of its project, or only the channels it picked (§8, Routing). |
 
 ## 3. Check states
 
@@ -178,7 +178,7 @@ GET    /api/v1/invites/{token}        what the link offers: kind, projectName, i
 POST   /api/v1/invites/{token}/accept {"email", "password", "projectName"} -> the new session (public)
 GET    /api/v1/checks                 checks of the project
 GET    /api/v1/checks/{slug}          one check
-PUT    /api/v1/checks/{slug}          create (201) or update (200); the ping key never changes
+PUT    /api/v1/checks/{slug}          create (201) or update (200); the ping key never changes; optional "channels" (§8, Routing)
 DELETE /api/v1/checks/{slug}          204; its pings and pending alerts go with it
 GET    /api/v1/checks/{slug}/pings    latest pings, newest first (?limit=, default 50, at most 200)
 POST   /api/v1/checks/{slug}/pause    PAUSED until the next ping
@@ -197,8 +197,9 @@ GET    /api/v1/stats/daily            finished runs and failures per day: [{date
 GET    /api/v1/schedules/next         next runs of a cron expression: {cron, timeZone, runs} (?cron=, ?timeZone=, default UTC; ?count=, default 5, at most 10)
 ```
 
-A check has its definition, `status`, `downReason`, `lastPingAt`, `lastStartAt`, `lastSuccessAt`,
-`nextDueAt` and `nextRunAt`. `nextDueAt` is the run being waited for (§4), so for a late or missed
+A check has its definition, `channels` (the ids of the channels it picked, `null` for every
+channel), `status`, `downReason`, `lastPingAt`, `lastStartAt`, `lastSuccessAt`, `nextDueAt` and
+`nextRunAt`. `nextDueAt` is the run being waited for (§4), so for a late or missed
 run it stays in the past. `nextRunAt` is when the schedule next expects a run, seen from now:
 `nextDueAt` while that is ahead, else the next cron time after now; `null` for a period schedule
 that is overdue (it only moves on with a run), for a paused check and before the first ping. The
@@ -392,8 +393,8 @@ With Actuator, `/actuator/info` shows the registered checks, dropped pings and t
 ## 8. Alerts
 
 Channels: email, Telegram bot, Slack incoming webhook, Discord webhook, ntfy (ntfy.sh or
-self-hosted), generic webhook (JSON POST).
-Every alert goes to **every channel of the check's project** (no per-check routing in v0.1).
+self-hosted), generic webhook (JSON POST). An alert goes to **every channel of the check's
+project**, unless the check picked some (Routing below).
 
 ### Channels
 
@@ -414,7 +415,26 @@ URLs as `https://host/…`. On `PUT`, a secret field that is omitted, `null`, or
 value keeps the stored value, so a client can round-trip what it read; an empty optional secret
 removes it. Other fields are replaced (an omitted `name` returns to the default). Unknown config
 fields are `400`. Each channel in a response also has `lastAttemptAt`, `lastDeliveryAt` (last success),
-`lastError` (of the latest attempt, `null` if it succeeded) and `pendingDeliveries`.
+`lastError` (of the latest attempt, `null` if it succeeded), `pendingDeliveries`, and `pickedBy`
+(the checks that picked it; checks alerting every channel are not counted).
+
+### Routing
+
+A check alerts every channel of its project until it picks some; then it alerts only those. On
+`PUT /api/v1/checks/{slug}`, `channels` is:
+
+- left out: a new check alerts every channel; an update keeps the current selection, so the
+  starter, which registers its checks at start-up without `channels`, never resets what was
+  picked in the dashboard;
+- `null` or `[]`: every channel, now and added later;
+- a list of channel ids: only those (duplicates are dropped). An id that is not a channel of the
+  project, another project's included, is `400` (`channels: no channel with id … in this
+  project`), the same answer either way.
+
+Deleting a channel removes it from every selection. A check whose picked channels are all deleted
+alerts every channel again rather than none, and its `channels` reads `null`: a check that alerts
+no one is worse than one that alerts too many. The selection lives in the checks module
+(`check_channels`), which asks the alerts module for the project's channel ids to validate it.
 
 ### Messages
 
@@ -472,7 +492,7 @@ Any 2xx answer is a success. Redirects are not followed.
 
 ### Delivery
 
-- **Outbox.** On UP → DOWN and DOWN → UP, one delivery row per channel of the project is written
+- **Outbox.** On UP → DOWN and DOWN → UP, one delivery row per channel the check alerts is written
   in the same transaction as the state change, with the rendered alert. Nothing is lost on a
   restart; a crash during a send repeats it (at least once; webhooks carry `Cronbell-Delivery`).
 - **Sender.** Every 5 s (`cronbell.notifier.interval`), and right after a commit that queued
@@ -488,7 +508,7 @@ Any 2xx answer is a success. Redirects are not followed.
   within **1 hour** of the alert is given up. The latest error is kept on the row and shown on
   the channel.
 - **Errors** are plain sentences that say what to fix, never a URL, a secret or an exception
-  name: `Could not resolve hooks.example.com`, `Connection refused by hooks.example.com:8080`,
+  name: `Could not resolve hooks.example.com`, `Connection refused by ntfy.internal:8080`,
   `Timed out after 10 s waiting for hooks.example.com`, `TLS handshake with host:443 failed`,
   `HTTP 401 from Telegram: check the bot token`, `HTTP 404 from Discord: the webhook was deleted
   or its URL is wrong`, `HTTP 403 from ntfy: the topic needs an access token`, `HTTP 500 from
@@ -616,6 +636,6 @@ Billing is not built in v0.1.
 - Password reset for self-hosted: today only by deleting the account row and running setup again,
   or by a future `cronbell admin reset-password` command.
 - Billing provider usable from Vietnam.
-- Alert routing: per-check channel selection and reminders while DOWN (v0.2?).
+- Reminders while a check stays DOWN (v0.2?).
 - Channel secrets at rest: encrypt with a server key (`CRONBELL_SECRET_KEY`) before the cloud
   launch? The cloud also needs webhook targets limited to public addresses (SSRF).

@@ -509,6 +509,7 @@ abstract class AbstractProjectsIntegrationTests extends AbstractIntegrationTests
 		jdbc.sql("""
 				INSERT INTO channels (id, project_id, type, name, config, created_at, updated_at)
 				VALUES ('ch2', 'p1', 'NTFY', 'ntfy', '{}', 1, 1)""").update();
+		jdbc.sql("INSERT INTO check_channels (check_id, channel_id) VALUES ('c1', 'ch2')").update();
 		assertThat(jdbc.sql("SELECT instance_admin FROM accounts WHERE id = 'a1'").query(Integer.class).single())
 			.isEqualTo(1);
 		assertThat(jdbc.sql("SELECT session_version FROM accounts WHERE id = 'a1'").query(Integer.class).single())

@@ -1,4 +1,5 @@
--- Discord and ntfy channels (DESIGN.md §8). Portable types only, as in V1.
+-- Discord and ntfy channels, and the channels each check alerts (DESIGN.md §8). Portable types
+-- only, as in V1.
 
 -- SQLite cannot change a CHECK constraint, so channels is rebuilt with the new types, and
 -- deliveries with it: dropping channels while deliveries refers to it would delete them. The
@@ -56,3 +57,13 @@ SELECT id, channel_id, check_id, event, payload, status, attempts, next_attempt_
 
 DROP TABLE deliveries_copy;
 DROP TABLE channels_copy;
+
+-- The channels a check picked; a check without rows alerts every channel of its project.
+-- Owned by the checks module. Deleting a channel removes it from every selection.
+CREATE TABLE check_channels (
+    check_id   VARCHAR(36) NOT NULL REFERENCES checks (id) ON DELETE CASCADE,
+    channel_id VARCHAR(36) NOT NULL REFERENCES channels (id) ON DELETE CASCADE,
+    PRIMARY KEY (check_id, channel_id)
+);
+
+CREATE INDEX check_channels_channel ON check_channels (channel_id);

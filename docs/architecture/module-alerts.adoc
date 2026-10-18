@@ -22,7 +22,7 @@ _Repositories_
 
 _Event listeners_
 
-* `c.s.c.s.a.internal.AlertOutbox` -- Queues one delivery per channel of the project when a check changes status (DESIGN.md §8). Runs before the commit, in the transaction that changed the check, so the alert is stored if and only if the change is.
+* `c.s.c.s.a.internal.AlertOutbox` -- Queues one delivery per channel the check alerts when it changes status (DESIGN.md §8): the channels it picked, or every channel of the project. Runs before the commit, in the transaction that changed the check, so the alert is stored if and only if the change is.
 * `c.s.c.s.a.internal.DeliveryScheduler` -- Runs the `c.s.c.s.a.internal.DeliveryDispatcher` every `cronbell.notifier.interval`, and right after a status change is committed so alerts leave at once. Runs never overlap on one instance. Off when `cronbell.scheduling.enabled=false` (tests run it by hand).
 
 _Configuration properties_
@@ -39,6 +39,7 @@ _Others_
 * `c.s.c.s.a.internal.ChannelSender` (via `c.s.c.s.a.internal.EmailSender` -- Plain-text email through the server's SMTP settings (`CRONBELL_SMTP_*`).)
 * `c.s.c.s.a.internal.HttpPoster` -- POSTs JSON for the HTTP channels with short timeouts, so a stuck receiver cannot hold up alerts. Redirects are not followed. Error messages never contain the URL.
 * `c.s.c.s.a.internal.ChannelSender` (via `c.s.c.s.a.internal.NtfySender` -- ntfy: a JSON message published to the channel's server (ntfy.sh or a self-hosted one), with its access token when it has one.)
+* `c.s.c.s.a.internal.ProjectAlertChannels` -- Tells the checks module which channels a check of the project may pick.
 * `c.s.c.s.a.internal.Senders` -- Picks the sender of a channel's type, and makes sure no error message carries a secret of the channel.
 * `c.s.c.s.a.internal.ChannelSender` (via `c.s.c.s.a.internal.SlackSender` -- Slack incoming webhook: `{"text": …`} in mrkdwn.)
 * `c.s.c.s.a.internal.ChannelSender` (via `c.s.c.s.a.internal.TelegramSender` -- Telegram Bot API `sendMessage` with `parse_mode=HTML`.)

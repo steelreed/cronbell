@@ -865,6 +865,96 @@ abstract class AbstractIntegrationTests {
 			.isEqualTo("Could not resolve hooks.example.invalid");
 	}
 
+	// --- Alert routing ---
+
+	@Test
+	void aCheckAlertsOnlyThePickedChannels() {
+		Project project = newProject();
+		String picked = "/hook/" + UUID.randomUUID();
+		String pickedId = createChannel(project,
+				"{\"type\":\"webhook\",\"config\":{\"url\":\"" + RECEIVER.url(picked) + "\"}}");
+		String other = "/hook/" + UUID.randomUUID();
+		String otherId = createChannel(project,
+				"{\"type\":\"webhook\",\"config\":{\"url\":\"" + RECEIVER.url(other) + "\"}}");
+		String slug = uniqueSlug();
+		ResponseEntity<String> created = exchange(HttpMethod.PUT, "/api/v1/checks/" + slug,
+				"{\"cron\":\"0 * * * *\",\"channels\":[\"" + pickedId + "\",\"" + pickedId + "\"]}", project.key());
+		assertThat(created.getStatusCode().value()).as(created.getBody()).isEqualTo(201);
+		assertThat((List<String>) JsonPath.read(created.getBody(), "$.channels")).containsExactly(pickedId);
+		goDown((String) JsonPath.read(created.getBody(), "$.pingKey"));
+		this.dispatcher.runOnce();
+		assertThat(RECEIVER.requests(picked)).hasSize(1);
+		assertThat(RECEIVER.requests(other)).isEmpty();
+
+		String channels = exchange(HttpMethod.GET, "/api/v1/channels", null, project.key()).getBody();
+		assertThat((List<Integer>) JsonPath.read(channels, "$[?(@.id == '" + pickedId + "')].pickedBy"))
+			.containsExactly(1);
+		assertThat((List<Integer>) JsonPath.read(channels, "$[?(@.id == '" + otherId + "')].pickedBy"))
+			.containsExactly(0);
+		assertThat((List<String>) field(project.key(), slug, "channels")).containsExactly(pickedId);
+	}
+
+	@Test
+	void leavingChannelsOutKeepsTheSelectionAndNullResetsIt() {
+		Project project = newProject();
+		String channel = createChannel(project, "{\"type\":\"email\",\"config\":{\"address\":\"a@example.com\"}}");
+		String slug = uniqueSlug();
+		createCheck(project, slug, "{\"cron\":\"0 * * * *\"}");
+		assertThat(field(project.key(), slug, "channels")).isNull();
+		String path = "/api/v1/checks/" + slug;
+		exchange(HttpMethod.PUT, path, "{\"cron\":\"0 * * * *\",\"channels\":[\"" + channel + "\"]}", project.key());
+
+		// The starter registers its checks at start-up without channels.
+		ResponseEntity<String> registered = exchange(HttpMethod.PUT, path, "{\"cron\":\"5 * * * *\"}", project.key());
+		assertThat((List<String>) JsonPath.read(registered.getBody(), "$.channels")).containsExactly(channel);
+
+		ResponseEntity<String> reset = exchange(HttpMethod.PUT, path, "{\"cron\":\"5 * * * *\",\"channels\":null}",
+				project.key());
+		assertThat((Object) JsonPath.read(reset.getBody(), "$.channels")).isNull();
+		exchange(HttpMethod.PUT, path, "{\"cron\":\"5 * * * *\",\"channels\":[\"" + channel + "\"]}", project.key());
+		ResponseEntity<String> empty = exchange(HttpMethod.PUT, path, "{\"cron\":\"5 * * * *\",\"channels\":[]}",
+				project.key());
+		assertThat((Object) JsonPath.read(empty.getBody(), "$.channels")).isNull();
+	}
+
+	@Test
+	void aCheckCannotPickAnotherProjectsChannel() {
+		Project project = newProject();
+		Project other = newProject();
+		String foreign = createChannel(other, "{\"type\":\"email\",\"config\":{\"address\":\"a@example.com\"}}");
+		String slug = uniqueSlug();
+		Map<String, String> invalid = Map.of("[\"" + foreign + "\"]",
+				"channels: no channel with id " + foreign + " in this project", "[\"nope\"]",
+				"channels: no channel with id nope in this project", "\"" + foreign + "\"",
+				"channels must be a list of channel ids", "[1]", "channels must be a list of channel ids");
+		invalid.forEach((channels, detail) -> {
+			ResponseEntity<String> response = exchange(HttpMethod.PUT, "/api/v1/checks/" + slug,
+					"{\"cron\":\"0 * * * *\",\"channels\":" + channels + "}", project.key());
+			assertThat(response.getStatusCode().value()).as(channels).isEqualTo(400);
+			assertThat((String) JsonPath.read(response.getBody(), "$.detail")).as(channels).contains(detail);
+		});
+		assertThat(exchange(HttpMethod.GET, "/api/v1/checks/" + slug, null, project.key()).getStatusCode().value())
+			.isEqualTo(404);
+	}
+
+	@Test
+	void deletingTheLastPickedChannelFallsBackToEveryChannel() {
+		Project project = newProject();
+		String picked = createChannel(project,
+				"{\"type\":\"webhook\",\"config\":{\"url\":\"" + RECEIVER.url("/hook/" + UUID.randomUUID()) + "\"}}");
+		String rest = "/hook/" + UUID.randomUUID();
+		createChannel(project, "{\"type\":\"webhook\",\"config\":{\"url\":\"" + RECEIVER.url(rest) + "\"}}");
+		String slug = uniqueSlug();
+		String key = createCheck(project, slug, "{\"cron\":\"0 * * * *\",\"channels\":[\"" + picked + "\"]}");
+		assertThat(
+				exchange(HttpMethod.DELETE, "/api/v1/channels/" + picked, null, project.key()).getStatusCode().value())
+			.isEqualTo(204);
+		assertThat(field(project.key(), slug, "channels")).isNull();
+		goDown(key);
+		this.dispatcher.runOnce();
+		assertThat(RECEIVER.requests(rest)).hasSize(1);
+	}
+
 	// --- Accounts and sessions ---
 
 	static final String ADMIN_EMAIL = "admin@example.com";

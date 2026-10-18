@@ -18,6 +18,7 @@ _Services_
 
 _Repositories_
 
+* `c.s.c.s.c.internal.CheckChannelRepository` -- The channels each check picked (DESIGN.md §8, Routing). No rows: every channel.
 * `c.s.c.s.c.internal.CheckRepository`
 
 _Event listeners_

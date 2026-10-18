@@ -11,6 +11,10 @@ All notable changes to Cronbell are listed here. The format follows
 - Discord and ntfy alert channels. Discord gets an embed (red for DOWN, green for UP, mentions
   off) and its rate limits are retried after `retry_after`; ntfy posts to ntfy.sh or a self-hosted
   server, with an optional access token, high priority for DOWN, tags and a link to the check.
+- Per-check alert channels: a check alerts every channel of its project, or only the channels it
+  picked (`"channels": [ids]` on `PUT /api/v1/checks/{slug}`, `null` for every channel; left out,
+  an update keeps the selection, so the starter does not reset it). A check whose picked channels
+  are all deleted alerts every channel again. Channels report `pickedBy`.
 
 ### Fixed
 
