@@ -405,12 +405,16 @@ abstract class AbstractProjectsIntegrationTests extends AbstractIntegrationTests
 		assertThat((List<String>) JsonPath.read(b.get("/api/v1/checks").body(), "$[*].slug")).doesNotContain(slug);
 		assertThat(b.get("/api/v1/checks/" + slug).statusCode()).isEqualTo(404);
 		assertThat(b.get("/api/v1/checks/" + slug + "/pings").statusCode()).isEqualTo(404);
+		assertThat(b.get("/api/v1/checks/" + slug + "/events").statusCode()).isEqualTo(404);
+		assertThat(b.get("/api/v1/checks/" + slug + "/alerts").statusCode()).isEqualTo(404);
 		assertThat(b.call("POST", "/api/v1/checks/" + slug + "/pause", null).statusCode()).isEqualTo(404);
 		assertThat(b.call("POST", "/api/v1/checks/" + slug + "/resume", null).statusCode()).isEqualTo(404);
 		assertThat(b.call("DELETE", "/api/v1/checks/" + slug, null).statusCode()).isEqualTo(404);
 		assertThat(b.get("/api/v1/runs/recent").body()).doesNotContain(slug);
 		assertThat((List<Integer>) JsonPath.read(b.get("/api/v1/stats/daily?days=1").body(), "$[*].runs"))
 			.containsExactly(0);
+		assertThat(b.get("/api/v1/events").body()).doesNotContain(slug);
+		assertThat(b.get("/api/v1/stats/status?days=1").body()).doesNotContain(slug);
 		assertThat(b.get("/api/v1/channels").body()).doesNotContain(channel);
 		assertThat(b.get("/api/v1/channels/" + channel).statusCode()).isEqualTo(404);
 		assertThat(b.call("PUT", "/api/v1/channels/" + channel, channelBody).statusCode()).isEqualTo(404);
@@ -431,7 +435,9 @@ abstract class AbstractProjectsIntegrationTests extends AbstractIntegrationTests
 
 		// By B's API key.
 		assertThat(exchange(HttpMethod.GET, "/api/v1/checks", null, bKey).getBody()).doesNotContain(slug);
+		assertThat(exchange(HttpMethod.GET, "/api/v1/events", null, bKey).getBody()).doesNotContain(slug);
 		for (String path : List.of("/api/v1/checks/" + slug, "/api/v1/checks/" + slug + "/pings",
+				"/api/v1/checks/" + slug + "/events", "/api/v1/checks/" + slug + "/alerts",
 				"/api/v1/channels/" + channel)) {
 			assertThat(exchange(HttpMethod.GET, path, null, bKey).getStatusCode().value()).as(path).isEqualTo(404);
 		}
@@ -471,13 +477,16 @@ abstract class AbstractProjectsIntegrationTests extends AbstractIntegrationTests
 			.value()).isEqualTo(200);
 		assertThat(a.get("/api/v1/invites").body()).contains(aInvite);
 		assertThat(a.get("/api/v1/stats/daily?days=1").body()).contains("\"runs\":1");
+		assertThat(a.get("/api/v1/events").body()).contains(slug);
+		assertThat(a.get("/api/v1/stats/status?days=1").body()).contains(slug);
 	}
 
 	// --- Upgrade ---
 
 	/**
 	 * The V5 migration on a database of 0.1.0-beta.1 (one admin, the Default project,
-	 * checks, a channel, keys): the setup account becomes the instance admin.
+	 * checks, a channel, keys): the setup account becomes the instance admin. V6 starts
+	 * the status history of the checks that are DOWN or paused.
 	 */
 	void upgradeFromBeta1MakesTheSetupAccountInstanceAdmin(Flyway beta1, Flyway latest, JdbcClient jdbc) {
 		beta1.migrate();
@@ -496,6 +505,15 @@ abstract class AbstractProjectsIntegrationTests extends AbstractIntegrationTests
 				                    status, created_at, updated_at)
 				VALUES ('c1', 'k-1', 'p1', 'backup', 'backup', 'CRON', '0 3 * * *', 3600, 'NEW', 1, 1)""").update();
 		jdbc.sql("""
+				INSERT INTO checks (id, ping_key, project_id, slug, name, schedule_kind, cron_expression, grace_seconds,
+				                    status, down_reason, next_due_at, created_at, updated_at)
+				VALUES ('c2', 'k-2', 'p1', 'report', 'report', 'CRON', '0 3 * * *', 600, 'DOWN', 'MISSED', 10800000,
+				        1, 11400000)""").update();
+		jdbc.sql("""
+				INSERT INTO checks (id, ping_key, project_id, slug, name, schedule_kind, cron_expression, grace_seconds,
+				                    status, created_at, updated_at)
+				VALUES ('c3', 'k-3', 'p1', 'sync', 'sync', 'CRON', '0 3 * * *', 600, 'PAUSED', 1, 5000)""").update();
+		jdbc.sql("""
 				INSERT INTO channels (id, project_id, type, name, config, created_at, updated_at)
 				VALUES ('ch1', 'p1', 'WEBHOOK', 'hook', '{}', 1, 1)""").update();
 		latest.migrate();
@@ -505,7 +523,12 @@ abstract class AbstractProjectsIntegrationTests extends AbstractIntegrationTests
 			.isZero();
 		assertThat(jdbc.sql("SELECT COUNT(*) FROM invites").query(Long.class).single()).isZero();
 		assertThat(jdbc.sql("SELECT COUNT(*) FROM checks WHERE project_id = 'p1'").query(Long.class).single())
-			.isEqualTo(1);
+			.isEqualTo(3);
+		assertThat(jdbc.sql("SELECT check_id, kind, reason, run_at, at FROM status_events ORDER BY check_id")
+			.query((rs, row) -> List.of(rs.getString(1), rs.getString(2), String.valueOf(rs.getString(3)),
+					String.valueOf(rs.getObject(4)), rs.getLong(5)))
+			.list()).containsExactly(List.of("c2", "DOWN", "MISSED", "10800000", 11400000L),
+					List.of("c3", "PAUSED", "null", "null", 5000L));
 	}
 
 	// --- Helpers ---

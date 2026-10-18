@@ -11,6 +11,7 @@ import java.util.function.Supplier;
 
 import com.steelreed.cronbell.server.checks.Check;
 import com.steelreed.cronbell.server.checks.CheckState;
+import com.steelreed.cronbell.server.checks.StatusEvent;
 import com.steelreed.cronbell.server.checks.internal.domain.CheckStateMachine;
 import com.steelreed.cronbell.server.checks.internal.domain.Schedule;
 import org.slf4j.Logger;
@@ -49,6 +50,8 @@ public class Detector {
 
 	private final DetectorHeartbeat heartbeat;
 
+	private final StatusEventRepository history;
+
 	private final ApplicationEventPublisher events;
 
 	private final TransactionTemplate transactions;
@@ -57,10 +60,11 @@ public class Detector {
 
 	private boolean downtimeHandled;
 
-	public Detector(CheckRepository checks, DetectorHeartbeat heartbeat, ApplicationEventPublisher events,
-			TransactionTemplate transactions, Clock clock) {
+	public Detector(CheckRepository checks, DetectorHeartbeat heartbeat, StatusEventRepository history,
+			ApplicationEventPublisher events, TransactionTemplate transactions, Clock clock) {
 		this.checks = checks;
 		this.heartbeat = heartbeat;
+		this.history = history;
 		this.events = events;
 		this.transactions = transactions;
 		this.clock = clock;
@@ -133,7 +137,8 @@ public class Detector {
 				continue;
 			}
 			this.checks.updateState(check.id(), outcome.state(), now);
-			this.events.publishEvent(outcome.toEvent(check, now));
+			StatusEvent recorded = this.history.record(check, StatusEvent.Kind.DOWN, outcome.state(), now);
+			this.events.publishEvent(outcome.toEvent(check, now, recorded.id()));
 			changed++;
 		}
 		return changed;

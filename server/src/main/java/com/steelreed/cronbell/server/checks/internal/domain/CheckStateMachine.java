@@ -38,14 +38,16 @@ public final class CheckStateMachine {
 		}
 
 		/**
-		 * The event this outcome publishes for {@code check} at {@code at}.
+		 * The event this outcome publishes for {@code check} at {@code at}, with the
+		 * status event recorded for it.
 		 * @throws IllegalArgumentException if nothing changed for alerting
 		 */
-		public CheckEvent toEvent(Check check, Instant at) {
+		public CheckEvent toEvent(Check check, Instant at, String statusEventId) {
 			return switch (this.change) {
-				case WENT_DOWN ->
-					new CheckEvent.WentDown(check.id(), check.projectId(), check.slug(), this.state.downReason(), at);
-				case RECOVERED -> new CheckEvent.Recovered(check.id(), check.projectId(), check.slug(), at);
+				case WENT_DOWN -> new CheckEvent.WentDown(check.id(), check.projectId(), check.slug(),
+						this.state.downReason(), at, statusEventId);
+				case RECOVERED ->
+					new CheckEvent.Recovered(check.id(), check.projectId(), check.slug(), at, statusEventId);
 				case NONE -> throw new IllegalArgumentException("no event for NONE");
 			};
 		}

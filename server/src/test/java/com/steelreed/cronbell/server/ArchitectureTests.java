@@ -6,6 +6,7 @@ import java.util.GregorianCalendar;
 
 import com.steelreed.cronbell.server.checks.CheckNotFoundException;
 import com.steelreed.cronbell.server.checks.CheckService;
+import com.steelreed.cronbell.server.checks.StatusHistory;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.importer.ImportOption;
@@ -41,7 +42,7 @@ class ArchitectureTests {
 
 	/** The value types of the checks API: records, enums and the event. */
 	private static final DescribedPredicate<JavaClass> CHECK_MODEL = resideInAPackage(CHECKS)
-		.and(not(belongToAnyOf(CheckService.class, CheckNotFoundException.class)))
+		.and(not(belongToAnyOf(CheckService.class, CheckNotFoundException.class, StatusHistory.class)))
 		.and(not(simpleName("package-info")))
 		.as("the check model");
 

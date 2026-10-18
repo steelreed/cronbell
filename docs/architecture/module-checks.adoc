@@ -11,6 +11,7 @@ API: the check model, `c.s.c.s.c.CheckEvent` and `c.s.c.s.c.CheckService`.
 
 * `c.s.c.s.c.web.ChecksController` -- Management API for checks (DESIGN.md §6). Scoped to the project of the API key.
 * `c.s.c.s.c.web.SchedulesController` -- Previews a cron schedule before a check is saved (DESIGN.md §6): the next runs, computed by the same code as the detector, so the form shows exactly what the server will expect.
+* `c.s.c.s.c.web.StatusHistoryController` -- The status history (DESIGN.md §6): the status changes of a check or of the whole project, and how each check spent its last days, for the overview's status strip.
 
 _Services_
 
@@ -20,6 +21,7 @@ _Repositories_
 
 * `c.s.c.s.c.internal.CheckRepository`
 * `c.s.c.s.c.internal.DetectorHeartbeat` -- When the detector last ran, on any instance: the one row of `detector_heartbeat`. After a start, the time since tells how long the server was away (DESIGN.md §4, Downtime).
+* `c.s.c.s.c.internal.StatusEventRepository` -- The status history of checks: one row per status change (DESIGN.md §4).
 
 _Event listeners_
 
@@ -31,6 +33,7 @@ _Configuration properties_
 
 _Others_
 
+* `c.s.c.s.c.StatusHistory` -- The status events of checks, as history pruning deletes them.
 * `c.s.c.s.c.internal.Detector` -- Marks UP checks DOWN when a run is missed or runs too long (DESIGN.md §4). Runs every 15 s by default (`cronbell.detector.interval`). Each run leaves a heartbeat; the first run after a start gives a new deadline to the checks that could have reported while the server was away, so downtime does not turn into alerts.  
 +
 Each batch is claimed and updated in one transaction. On PostgreSQL the claim uses `FOR UPDATE SKIP LOCKED`, so several instances can run the detector at once without double-processing a check.

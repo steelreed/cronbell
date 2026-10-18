@@ -2,8 +2,8 @@ package com.steelreed.cronbell.server.pings.web;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import com.steelreed.cronbell.server.accounts.ProjectPrincipal;
 import com.steelreed.cronbell.server.checks.Check;
@@ -11,6 +11,7 @@ import com.steelreed.cronbell.server.checks.CheckService;
 import com.steelreed.cronbell.server.checks.PingKind;
 import com.steelreed.cronbell.server.pings.Ping;
 import com.steelreed.cronbell.server.pings.internal.PingRepository;
+import com.steelreed.cronbell.server.pings.internal.RunPairing;
 import com.steelreed.cronbell.server.shared.web.ManagementApi;
 
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -54,30 +55,19 @@ class PingsController {
 			String remoteAddr, String userAgent, Long durationMs) {
 
 		/**
-		 * Pairs each {@code success}/{@code fail} with its {@code start}: the one with
-		 * the same rid, else the latest start not yet closed.
+		 * Each ping with the duration of the run it finishes, when its start is in the
+		 * list ({@link RunPairing}).
 		 * @param newestFirst pings, newest first
 		 */
 		static List<PingResponse> of(List<Ping> newestFirst) {
-			List<Ping> open = new ArrayList<>();
-			List<PingResponse> result = new ArrayList<>(newestFirst.size());
-			for (Ping ping : newestFirst.reversed()) {
-				Long duration = null;
-				if (ping.kind() == PingKind.START) {
-					open.add(ping);
-				}
-				else if (ping.kind() != PingKind.LOG && !open.isEmpty()) {
-					Ping start = open.stream()
-						.filter((candidate) -> ping.rid() != null && ping.rid().equals(candidate.rid()))
-						.findFirst()
-						.orElse(open.getLast());
-					open.remove(start);
-					duration = Duration.between(start.receivedAt(), ping.receivedAt()).toMillis();
-				}
-				result.add(new PingResponse(ping.id(), ping.kind(), ping.exitCode(), ping.rid(), ping.body(),
-						ping.receivedAt(), ping.remoteAddr(), ping.userAgent(), duration));
-			}
-			return result.reversed();
+			Map<String, Ping> starts = RunPairing.startsByFinish(newestFirst);
+			return newestFirst.stream().map((ping) -> {
+				Ping start = starts.get(ping.id());
+				Long duration = (start != null) ? Duration.between(start.receivedAt(), ping.receivedAt()).toMillis()
+						: null;
+				return new PingResponse(ping.id(), ping.kind(), ping.exitCode(), ping.rid(), ping.body(),
+						ping.receivedAt(), ping.remoteAddr(), ping.userAgent(), duration);
+			}).toList();
 		}
 
 	}

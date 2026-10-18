@@ -16,13 +16,17 @@ public sealed interface CheckEvent {
 
 	Instant at();
 
+	/** The {@link StatusEvent} recorded for the change. */
+	String statusEventId();
+
 	/** The check went DOWN for {@code reason}. */
-	record WentDown(String checkId, String projectId, String slug, DownReason reason,
-			Instant at) implements CheckEvent {
+	record WentDown(String checkId, String projectId, String slug, DownReason reason, Instant at,
+			String statusEventId) implements CheckEvent {
 	}
 
 	/** A successful run brought the check back UP. */
-	record Recovered(String checkId, String projectId, String slug, Instant at) implements CheckEvent {
+	record Recovered(String checkId, String projectId, String slug, Instant at,
+			String statusEventId) implements CheckEvent {
 	}
 
 }

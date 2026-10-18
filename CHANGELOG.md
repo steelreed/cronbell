@@ -6,6 +6,18 @@ All notable changes to Cronbell are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Status history: every change of a check (UP, DOWN with its reason and run, paused, resumed) is
+  stored with the status change and pruned with the rest of the history, keeping each check's
+  latest. `GET /api/v1/checks/{slug}/events` and `GET /api/v1/events` (the whole project) list
+  them; `GET /api/v1/checks/{slug}/alerts` lists the deliveries of each change per channel.
+  Existing checks that are DOWN or paused start their history at upgrade.
+- `GET /api/v1/checks/{slug}` has `stats`: uptime over 7 and 30 days (paused time left out) and
+  the average run duration over 7 days.
+- `GET /api/v1/stats/status`: how each check spent each of the last days (DOWN, issues, OK or no
+  data), with runs, failures, missed runs and time DOWN.
+
 ### Fixed
 
 - No more alert storm after the server was down (outage, upgrade, host reboot). Every overdue check

@@ -116,6 +116,14 @@ Rules:
   late; this is documented. On UP → DOWN and DOWN → UP the server publishes an internal
   `CheckEvent`; the notifier (§8) queues its deliveries before the transaction commits and sends
   them after.
+- **Status history.** Every status change is stored as a status event, in the transaction that
+  makes it: `UP` (the first run, a run after a pause, a recovery), `DOWN` with its reason and the
+  run it is about (the missed due time, or the start of the run that ran too long), `PAUSED` and
+  `RESUMED`. Its time is when Cronbell saw the change; for a missed run, when the detector noticed
+  (up to 15 s after `due + grace`). The `CheckEvent` of a DOWN or a recovery carries its event,
+  and every delivery it queues keeps it, so the history shows where each alert went. Upgrading
+  starts the history with one event per check that is DOWN or paused, timed as well as the check
+  row knows.
 - Detection must be safe to run on several server instances: it claims due checks with
   `SELECT … FOR UPDATE SKIP LOCKED`.
 - **Downtime.** Every detector run leaves a heartbeat in the database (`detector_heartbeat`). When
@@ -192,6 +200,8 @@ GET    /api/v1/checks/{slug}          one check
 PUT    /api/v1/checks/{slug}          create (201) or update (200); the ping key never changes
 DELETE /api/v1/checks/{slug}          204; its pings and pending alerts go with it
 GET    /api/v1/checks/{slug}/pings    latest pings, newest first (?limit=, default 50, at most 200)
+GET    /api/v1/checks/{slug}/events   status changes, newest first (?limit=, default 50, at most 200)
+GET    /api/v1/checks/{slug}/alerts   deliveries of its alerts with eventId, channel and status, newest first (?limit=, default 50, at most 200)
 POST   /api/v1/checks/{slug}/pause    PAUSED until the next ping
 POST   /api/v1/checks/{slug}/resume   ends a pause (§3)
 GET    /api/v1/channels               alert channels of the project (§8)
@@ -205,6 +215,8 @@ POST   /api/v1/keys                   {"name"} -> 201 with the key, shown this o
 DELETE /api/v1/keys/{id}              204, the key stops working at once (session only)
 GET    /api/v1/runs/recent            latest finished runs per check: {slug: [{at, ok, exitCode}]}, oldest first (?limit=, default 20, at most 90)
 GET    /api/v1/stats/daily            finished runs and failures per day: [{date, runs, failures}], oldest first (?days=, default 14, at most 90; ?tz=, default UTC)
+GET    /api/v1/events                 status changes of every check, newest first, with slug and name (?limit=, default 50, at most 200)
+GET    /api/v1/stats/status           how each check spent each day: [{slug, name, days: [{date, state, runs, failures, missed, downMs}]}], oldest day first (?days=, default 30, at most 90; ?tz=, default UTC)
 GET    /api/v1/schedules/next         next runs of a cron expression: {cron, timeZone, runs} (?cron=, ?timeZone=, default UTC; ?count=, default 5, at most 10)
 ```
 
@@ -225,10 +237,21 @@ counted (the check's `status` and `downReason` say when the latest run was misse
 older than the retention (§9) is gone. `runs/recent` reads the latest pings of each check through
 the `(check_id, received_at)` index, one short query per check. `stats/daily` cuts days at
 midnight in `tz` (the browser's zone), so a day can be 23 or 25 hours long around a DST change, and
-counts them in one statement. Status changes (DOWN, recovered) are not stored apart from the alert
-outbox, so there is no incident history yet. `schedules/next` lets the check form preview a cron
+counts them in one statement. `schedules/next` lets the check form preview a cron
 schedule with the detector's own code (DST rules included); it returns `400` for an invalid
 expression or zone, or one that never fires (30 February).
+
+The status history (§4) gives the rest. An event has `kind` (the status entered), `reason` and
+`runAt` for a DOWN, and `at`. `GET /checks/{slug}` (not the list) adds `stats`: `uptime7d` and
+`uptime30d`, the share of the last 7 or 30 days, or since the check was created, that it was not
+DOWN, paused time left out (`null` when no time is left); and `averageDurationMs7d`, the average of
+the runs that started and finished in the last 7 days, paired as in the ping list (it reads at
+most the latest 2,000 pings, about 1,000 runs; `null` when none was timed). Time before the oldest
+kept event counts as not DOWN. In `stats/status` a day (cut as in `stats/daily`, today up to now)
+is `DOWN` if the check was DOWN at its end, `ISSUES` if it was DOWN for a while or had a failed
+run, `OK` if it had runs and neither, and `NONE` otherwise (no run, paused, or before the check
+existed); `missed` counts how often it went DOWN for a missed run that day, `downMs` how long it
+was DOWN.
 
 API keys can read and change checks and channels but cannot manage keys: a leaked key cannot mint
 new ones or revoke the owner's. Key management needs a signed-in session.
@@ -520,15 +543,17 @@ starter/  Java 17 library for user applications (later)
 
 ### History
 
-Pings and finished deliveries are kept for `cronbell.history.retention`
+Pings, status events and finished deliveries are kept for `cronbell.history.retention`
 (`CRONBELL_HISTORY_RETENTION`, a duration such as `90d` or `P90D`, default 90 days; §10). Zero or
 negative is rejected at startup.
 
-- **What is pruned.** Pings received before `now - retention`, and deliveries that are `DELIVERED`
-  or `FAILED` and were created before it. `PENDING` deliveries are never deleted.
+- **What is pruned.** Pings received before `now - retention`, status events before it, and
+  deliveries that are `DELIVERED` or `FAILED` and were created before it. `PENDING` deliveries are
+  never deleted.
 - **What is kept anyway.** Per check: its latest ping, its latest ping with a body (the log
   excerpt of a DOWN alert, §8), and every ping of the open run (received at or after
-  `run_started_at`). The state itself (`status`, `last_ping_at`, `last_success_at`, `next_due_at`,
+  `run_started_at`); and its latest status event before the cutoff, so its history and uptime
+  still know the status it was in. The state itself (`status`, `last_ping_at`, `last_success_at`, `next_due_at`,
   the open run) lives on the check row, so pruning never changes a check's state.
 - **When.** Once a day, and once a minute after the server starts.
 - **Batches.** Rows are deleted at most 5,000 per statement (`cronbell.history.batch-size`), each
@@ -538,7 +563,8 @@ negative is rejected at startup.
   update (`locked_until <= now`), renewed after each batch and released at the end. An instance
   that cannot take it skips the run. Two runs at once would only waste work: deletes are
   idempotent.
-- One INFO log line per run gives the cutoff and the number of pings and deliveries deleted.
+- One INFO log line per run gives the cutoff and the number of pings, status events and
+  deliveries deleted.
 - **SQLite space.** The database runs without `auto_vacuum`, so deleted pages are reused for new
   rows and the file stops growing once the retention window is full, but it does not shrink. To
   return the space, stop the server and run `VACUUM` (not done automatically: it rewrites the
