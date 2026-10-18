@@ -125,7 +125,8 @@ Rules:
   starts the history with one event per check that is DOWN or paused, timed as well as the check
   row knows. The events of a check are ordered by time, then by the order they were written (a
   per-check sequence taken under the check's row lock), so two changes in one millisecond keep
-  their order in the history, the uptime and pruning.
+  their order in the history, the uptime and pruning. Pings, pauses and resumes of one check lock
+  its row, so each applies to the state the previous one left.
 - Detection must be safe to run on several server instances: it claims due checks with
   `SELECT … FOR UPDATE SKIP LOCKED`.
 - **Downtime.** Every detector run leaves a heartbeat in the database (`detector_heartbeat`). When

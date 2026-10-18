@@ -161,11 +161,12 @@ public class CheckService {
 	/**
 	 * Ends a pause without a ping (DESIGN.md §3): back to NEW if never pinged, else UP
 	 * with no open run and the next due time computed from now. A check that is not
-	 * paused is left alone.
+	 * paused is left alone. The check is locked first, as for a ping, so a concurrent
+	 * pause, resume or ping is applied before or after, never on a stale state.
 	 */
 	@Transactional
 	public Check resume(String projectId, String slug) {
-		Check check = get(projectId, slug);
+		Check check = lockBySlug(projectId, slug);
 		CheckState s = check.state();
 		if (s.status() != CheckStatus.PAUSED) {
 			return check;
@@ -180,10 +181,13 @@ public class CheckService {
 		return check.withState(resumed);
 	}
 
-	/** Pauses a check: no alerts until its next ping, which returns it to UP. */
+	/**
+	 * Pauses a check: no alerts until its next ping, which returns it to UP. Locks the
+	 * check first, as {@link #resume} does.
+	 */
 	@Transactional
 	public Check pause(String projectId, String slug) {
-		Check check = this.checks.findBySlug(projectId, slug).orElseThrow(() -> new CheckNotFoundException(slug));
+		Check check = lockBySlug(projectId, slug);
 		CheckState s = check.state();
 		CheckState paused = new CheckState(CheckStatus.PAUSED, null, s.lastPingAt(), s.lastStartAt(), s.lastSuccessAt(),
 				s.nextDueAt(), s.runStartedAt(), s.runRid());
@@ -191,6 +195,10 @@ public class CheckService {
 		this.checks.updateState(check.id(), paused, now);
 		this.history.recordChange(check, paused, now);
 		return check.withState(paused);
+	}
+
+	private Check lockBySlug(String projectId, String slug) {
+		return this.checks.findBySlugForUpdate(projectId, slug).orElseThrow(() -> new CheckNotFoundException(slug));
 	}
 
 	private static Check validate(String projectId, String slug, Definition d, Instant now) {

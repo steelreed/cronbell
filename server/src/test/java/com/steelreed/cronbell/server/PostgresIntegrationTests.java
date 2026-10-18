@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -12,6 +13,8 @@ import java.util.concurrent.TimeUnit;
 
 import javax.sql.DataSource;
 
+import com.jayway.jsonpath.JsonPath;
+import com.steelreed.cronbell.server.checks.CheckService;
 import com.steelreed.cronbell.server.shared.database.Database;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
@@ -20,14 +23,17 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** The same tests on PostgreSQL, plus multi-instance claims and a row-lock race. */
+/** The same tests on PostgreSQL, plus multi-instance claims and row-lock races. */
 @Testcontainers
 class PostgresIntegrationTests extends AbstractProjectsIntegrationTests {
 
@@ -39,6 +45,12 @@ class PostgresIntegrationTests extends AbstractProjectsIntegrationTests {
 
 	@Autowired
 	DataSource dataSource;
+
+	@Autowired
+	CheckService checkService;
+
+	@Autowired
+	TransactionTemplate transactions;
 
 	@DynamicPropertySource
 	static void datasource(DynamicPropertyRegistry registry) {
@@ -117,6 +129,31 @@ class PostgresIntegrationTests extends AbstractProjectsIntegrationTests {
 		assertThat(field(slug, "status")).isEqualTo("UP");
 		assertThat(field(slug, "nextDueAt")).isEqualTo("2026-01-05T15:00:00Z");
 		assertThat(this.events.forSlug(slug)).isEmpty();
+	}
+
+	@Test
+	@SuppressWarnings("unchecked")
+	void aPauseWaitingForAResumeStillRecordsItsEvent() throws Exception {
+		String slug = uniqueSlug();
+		String key = createCheck(slug, "{\"cron\":\"0 * * * *\"}");
+		get("/ping/" + key);
+		exchange(HttpMethod.POST, "/api/v1/checks/" + slug + "/pause", null, API_KEY);
+		String projectId = this.projects.findProjectIdByApiKey(API_KEY).orElseThrow();
+		// A resume is being committed while a pause comes in.
+		try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+			Future<ResponseEntity<String>> pause = this.transactions.execute((status) -> {
+				this.checkService.resume(projectId, slug);
+				Future<ResponseEntity<String>> request = executor
+					.submit(() -> exchange(HttpMethod.POST, "/api/v1/checks/" + slug + "/pause", null, API_KEY));
+				awaitLockWait(request);
+				return request;
+			});
+			assertThat(pause.get(10, TimeUnit.SECONDS).getStatusCode().value()).isEqualTo(200);
+		}
+		assertThat(field(slug, "status")).isEqualTo("PAUSED");
+		String events = exchange(HttpMethod.GET, "/api/v1/checks/" + slug + "/events", null, API_KEY).getBody();
+		assertThat((List<String>) JsonPath.read(events, "$[*].kind")).containsExactly("PAUSED", "RESUMED", "PAUSED",
+				"UP");
 	}
 
 	private static void lockCheck(Connection connection, String key) throws SQLException {

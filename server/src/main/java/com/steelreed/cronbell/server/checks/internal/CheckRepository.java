@@ -70,6 +70,21 @@ public class CheckRepository {
 			.optional();
 	}
 
+	/**
+	 * Finds a check by slug and, on PostgreSQL, locks its row until the transaction ends,
+	 * for a read-modify-write of its state.
+	 */
+	public Optional<Check> findBySlugForUpdate(String projectId, String slug) {
+		return this.jdbc.sql("""
+				SELECT %s
+				  FROM checks
+				 WHERE project_id = ? AND slug = ?%s""".formatted(COLUMNS, this.database.forUpdate()))
+			.param(projectId)
+			.param(slug)
+			.query(MAPPER)
+			.optional();
+	}
+
 	public List<Check> findAllByProject(String projectId) {
 		return this.jdbc.sql("""
 				SELECT %s
