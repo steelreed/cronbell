@@ -6,16 +6,26 @@ describe("headerFor", () => {
     expect(headerFor("/")).toEqual({ title: "Overview" });
     expect(headerFor("/checks")).toEqual({ title: "Checks" });
     expect(headerFor("/keys")).toEqual({ title: "API keys" });
-    expect(headerFor("/checks/nightly-backup")).toEqual({
-      crumbs: [{ label: "Checks", href: "/checks" }],
+    expect(headerFor("/checks/new")).toEqual({
+      crumbs: [{ label: "Checks", href: "/checks" }, { label: "New check" }],
     });
-    expect(headerFor("/checks/nightly-backup/edit")).toEqual({
+  });
+
+  it("names the check in the breadcrumb, by its slug until the list is loaded", () => {
+    const checks = [{ slug: "nightly-backup", name: "Nightly backup" }];
+    expect(headerFor("/checks/nightly-backup", checks)).toEqual({
+      crumbs: [{ label: "Checks", href: "/checks" }, { label: "Nightly backup" }],
+    });
+    expect(headerFor("/checks/nightly-backup/edit", checks)).toEqual({
       crumbs: [
         { label: "Checks", href: "/checks" },
-        { label: "nightly-backup", href: "/checks/nightly-backup" },
+        { label: "Nightly backup", href: "/checks/nightly-backup" },
+        { label: "Edit" },
       ],
     });
-    expect(headerFor("/checks/new")).toEqual({ crumbs: [{ label: "Checks", href: "/checks" }] });
+    expect(headerFor("/checks/nightly-backup")).toEqual({
+      crumbs: [{ label: "Checks", href: "/checks" }, { label: "nightly-backup" }],
+    });
   });
 
   it("titles the settings pages", () => {

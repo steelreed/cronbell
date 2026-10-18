@@ -11,6 +11,8 @@ All notable changes to Cronbell are listed here. The format follows
 - One "not found" page for unknown addresses and checks, inside the app with the sidebar and a
   link back (the global one had no sidebar, a missing check was a bare line). A page that fails to
   load or render shows the error with a retry instead of the router's raw message.
+- The header's breadcrumb ends with the page itself and names the check: "Checks / Nightly backup",
+  "Checks / Nightly backup / Edit", "Checks / New check" (it showed only "Checks").
 
 ### Fixed
 

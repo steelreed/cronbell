@@ -1,5 +1,5 @@
 import { t } from "./strings";
-import type { Session } from "./types";
+import type { Check, Session } from "./types";
 
 export type NavTo = "/" | "/checks" | "/channels" | "/keys" | "/members" | "/invites" | "/account";
 
@@ -38,27 +38,32 @@ export function navFor(session: Pick<Session, "account">): NavItem[] {
 
 export interface Crumb {
   label: string;
-  /** A route path; the crumb is a link to it. */
-  href: string;
+  /** A route path; the crumb is a link to it. The current page has none. */
+  href?: string;
 }
 
 /**
  * What the header bar shows for a path. Top-level pages have no page header: the bar's title
- * is their <h1>. Deeper pages (a check, its form) have their own <h1>, so the bar shows only
- * the parents as a breadcrumb.
+ * is their <h1>. Deeper pages (a check, its form) show the way there as a breadcrumb, ending
+ * with the page itself; a check is named as in the list, by its slug until the list is loaded.
  */
-export function headerFor(path: string): { title: string } | { crumbs: Crumb[] } {
+export function headerFor(
+  path: string,
+  checks: Pick<Check, "slug" | "name">[] = [],
+): { title: string } | { crumbs: Crumb[] } {
   const top = NAV.find((item) => item.to === path || `${item.to}/` === path);
   if (top) return { title: top.label };
+  const parent: Crumb = { label: t.nav.checks, href: "/checks" };
+  if (/^\/checks\/new\/?$/.test(path)) return { crumbs: [parent, { label: t.form.newTitle }] };
   const check = /^\/checks\/([^/]+)(\/edit)?\/?$/.exec(path);
-  if (check && check[1] !== "new") {
-    const crumbs: Crumb[] = [{ label: t.nav.checks, href: "/checks" }];
-    if (check[2]) {
-      const slug = decodeURIComponent(check[1]);
-      crumbs.push({ label: slug, href: `/checks/${check[1]}` });
-    }
-    return { crumbs };
+  if (check) {
+    const slug = decodeURIComponent(check[1]);
+    const label = checks.find((item) => item.slug === slug)?.name ?? slug;
+    return {
+      crumbs: check[2]
+        ? [parent, { label, href: `/checks/${check[1]}` }, { label: t.common.edit }]
+        : [parent, { label }],
+    };
   }
-  if (path.startsWith("/checks/new")) return { crumbs: [{ label: t.nav.checks, href: "/checks" }] };
   return { title: "" };
 }
