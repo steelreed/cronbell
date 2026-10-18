@@ -4,6 +4,7 @@ import type {
   ApiKey,
   Channel,
   Check,
+  CheckAlert,
   DayStat,
   Invite,
   InviteOffer,
@@ -13,6 +14,7 @@ import type {
   RecentRuns,
   Session,
   SetupStatus,
+  StatusEvent,
 } from "./types";
 
 /** The detector runs every 15 s (DESIGN.md §4), so polling faster shows nothing new. */
@@ -57,6 +59,24 @@ export const pingsQuery = (slug: string) =>
   queryOptions({
     queryKey: ["checks", slug, "pings"],
     queryFn: () => api<Ping[]>(`/checks/${encodeURIComponent(slug)}/pings?limit=${PING_LIMIT}`),
+    refetchInterval: POLL_MS,
+  });
+
+export const checkEventsQuery = (slug: string) =>
+  queryOptions({
+    queryKey: ["checks", slug, "events"],
+    queryFn: () => api<StatusEvent[]>(`/checks/${encodeURIComponent(slug)}/events`),
+    refetchInterval: POLL_MS,
+  });
+
+/** Enough for the alerts of every event the check page reads, to a few channels each. */
+export const ALERT_LIMIT = 200;
+
+export const checkAlertsQuery = (slug: string) =>
+  queryOptions({
+    queryKey: ["checks", slug, "alerts"],
+    queryFn: () =>
+      api<CheckAlert[]>(`/checks/${encodeURIComponent(slug)}/alerts?limit=${ALERT_LIMIT}`),
     refetchInterval: POLL_MS,
   });
 

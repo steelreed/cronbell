@@ -90,12 +90,21 @@ export function formatSeconds(total: number): string {
   return parts.slice(0, 2).join(" ");
 }
 
-/** Run duration from milliseconds: "850 ms", "12.4 s", "3m 5s". */
+/**
+ * A duration from milliseconds, in the style of {@link formatSeconds} so every duration on a
+ * page reads alike: "0s", "850ms", "12.4s", "40s", "3m 5s", "5h 46m".
+ */
 export function formatDuration(ms: number | null): string {
   if (ms === null) return "";
-  if (ms < 1000) return `${ms} ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)} s`;
+  if (ms === 0) return "0s";
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  if (ms < 60_000) return `${Number((ms / 1000).toFixed(1))}s`;
   return formatSeconds(Math.round(ms / 1000));
+}
+
+/** A share from 0 to 1 as a percentage, rounded down so only a full 1 reads "100%": "99.9%". */
+export function formatPercent(share: number): string {
+  return `${Math.floor(share * 1000) / 10}%`;
 }
 
 export function formatSchedule(check: Pick<Check, "scheduleKind" | "cron" | "periodSeconds">) {

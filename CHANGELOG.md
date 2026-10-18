@@ -17,6 +17,16 @@ All notable changes to Cronbell are listed here. The format follows
   the average run duration over 7 days.
 - `GET /api/v1/stats/status`: how each check spent each of the last days (DOWN, issues, OK or no
   data), with runs, failures, missed runs and time DOWN.
+- Check page: a History panel with each downtime and pause (why, from when to when, how long) and
+  where its alerts went, delivered or failed; uptime over 7 and 30 days and the average run; missed
+  runs among the run ticks.
+
+### Changed
+
+- The check page lists recent runs, a start and its end in one row with result, duration and
+  output; "Raw pings" shows every ping as before.
+- Durations read the same everywhere ("850ms", "12.4s", "1m 17s", "5h 46m"), and the duration
+  chart's axis starts at 0.
 
 ### Fixed
 

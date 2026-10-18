@@ -1,7 +1,9 @@
 import { ChevronRightIcon } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Toggle } from "@/components/ui/toggle";
 import { formatDuration } from "@/lib/format";
+import { groupRuns, type RunGroup, type RunResult } from "@/lib/runs";
 import { t } from "@/lib/strings";
 import type { Ping, PingKind } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -17,53 +19,51 @@ const KIND_TONE: Record<PingKind, string> = {
   LOG: "text-muted-foreground",
 };
 
-/** Latest pings, newest first: a table from md up, cards on phones; output on demand. */
+const RESULT_TONE: Record<RunResult, string> = {
+  ok: "text-ok",
+  fail: "text-problem",
+  running: "text-muted-foreground",
+  unfinished: "text-muted-foreground",
+  log: "text-muted-foreground",
+};
+
+/**
+ * Latest runs, newest first, each a start with its finish; or every ping, raw. A table from md
+ * up, cards on phones; output on demand.
+ */
 export function PingsPanel({ pings, now }: { pings: Ping[]; now: number }) {
+  const [raw, setRaw] = useState(false);
   const [shown, setShown] = useState(STEP);
-  const visible = pings.slice(0, shown);
+  const runs = useMemo(() => groupRuns(pings), [pings]);
+  const total = raw ? pings.length : runs.length;
   return (
-    <Panel title={t.check.pings} flush>
+    <Panel
+      title={raw ? t.check.pings : t.check.recentRuns}
+      flush
+      action={
+        pings.length > 0 && (
+          <Toggle
+            variant="outline"
+            size="sm"
+            pressed={raw}
+            onPressedChange={setRaw}
+            title={t.check.rawPingsHint}
+          >
+            {t.check.rawPings}
+          </Toggle>
+        )
+      }
+    >
       {pings.length === 0 ? (
         <EmptyLine>{t.check.noPings}</EmptyLine>
       ) : (
         <>
-          <div className="hidden border-t md:block">
-            <table className="w-full table-fixed text-sm">
-              <thead className="border-b">
-                <tr className="text-left text-muted-foreground text-xs">
-                  <th scope="col" className="h-10 w-32 px-4 font-medium sm:pl-5">
-                    {t.check.pingColumns.time}
-                  </th>
-                  <th scope="col" className="w-20 px-2 font-medium">
-                    {t.check.pingColumns.kind}
-                  </th>
-                  <th scope="col" className="w-14 px-2 text-right font-medium">
-                    {t.check.pingColumns.exit}
-                  </th>
-                  <th scope="col" className="w-24 px-2 text-right font-medium">
-                    {t.check.pingColumns.duration}
-                  </th>
-                  <th scope="col" className="hidden w-44 px-4 font-medium xl:table-cell">
-                    {t.check.pingColumns.source}
-                  </th>
-                  <th scope="col" className="px-4 font-medium sm:pr-5">
-                    {t.check.pingColumns.body}
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {visible.map((ping) => (
-                  <PingRow key={ping.id} ping={ping} now={now} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <ul className="divide-y border-t md:hidden">
-            {visible.map((ping) => (
-              <PingItem key={ping.id} ping={ping} now={now} />
-            ))}
-          </ul>
-          {pings.length > shown && (
+          {raw ? (
+            <PingList pings={pings.slice(0, shown)} now={now} />
+          ) : (
+            <RunList runs={runs.slice(0, shown)} now={now} />
+          )}
+          {total > shown && (
             <div className="border-t px-2 py-2 sm:px-3">
               <Button variant="ghost" size="sm" onClick={() => setShown(shown + STEP)}>
                 {t.common.showMore}
@@ -76,21 +76,164 @@ export function PingsPanel({ pings, now }: { pings: Ping[]; now: number }) {
   );
 }
 
+function RunList({ runs, now }: { runs: RunGroup[]; now: number }) {
+  return (
+    <>
+      <div className="hidden border-t md:block">
+        <table className="w-full table-fixed text-sm">
+          <thead className="border-b">
+            <tr className="text-left text-muted-foreground text-xs">
+              <th scope="col" className="h-10 w-32 px-4 font-medium sm:pl-5">
+                {t.check.runColumns.started}
+              </th>
+              <th scope="col" className="w-36 px-2 font-medium">
+                {t.check.runColumns.result}
+              </th>
+              <th scope="col" className="w-24 px-2 text-right font-medium">
+                {t.check.runColumns.duration}
+              </th>
+              <th scope="col" className="px-4 font-medium sm:pr-5">
+                {t.check.runColumns.output}
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {runs.map((run) => (
+              <RunRow key={run.id} run={run} now={now} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <ul className="divide-y border-t md:hidden">
+        {runs.map((run) => (
+          <RunItem key={run.id} run={run} now={now} />
+        ))}
+      </ul>
+    </>
+  );
+}
+
+function RunResultText({ run }: { run: RunGroup }) {
+  return (
+    <span className={cn("font-mono text-xs", RESULT_TONE[run.result])}>
+      {t.check.runResults[run.result]}
+      {run.result === "fail" && run.exitCode !== null && ` · ${t.runs.exit(run.exitCode)}`}
+    </span>
+  );
+}
+
+function RunRow({ run, now }: { run: RunGroup; now: number }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <tr className={cn(open && "border-b-0")}>
+        <td className="px-4 py-2.5 sm:pl-5">
+          <Time iso={run.startedAt} now={now} />
+        </td>
+        <td className="px-2 py-2.5">
+          <RunResultText run={run} />
+        </td>
+        <td className="px-2 py-2.5 text-right text-xs tabular-nums">
+          {formatDuration(run.durationMs)}
+        </td>
+        <td className="px-4 py-2.5 sm:pr-5">
+          <OutputToggle body={run.output} open={open} onToggle={() => setOpen(!open)} />
+        </td>
+      </tr>
+      {open && run.output && (
+        <tr>
+          <td colSpan={4} className="px-4 pt-0 pb-3 sm:px-5">
+            <Output body={run.output} />
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+/** One run on a phone: result, duration and start time; output below, on demand. */
+function RunItem({ run, now }: { run: RunGroup; now: number }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <li className="space-y-1.5 px-4 py-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="min-w-0 truncate text-xs">
+          <RunResultText run={run} />
+          {run.durationMs !== null && (
+            <span className="text-muted-foreground tabular-nums">
+              {" · "}
+              {formatDuration(run.durationMs)}
+            </span>
+          )}
+        </span>
+        <span className="shrink-0 text-muted-foreground text-xs">
+          <Time iso={run.startedAt} now={now} />
+        </span>
+      </div>
+      {run.output && <OutputToggle body={run.output} open={open} onToggle={() => setOpen(!open)} />}
+      {open && run.output && <Output body={run.output} />}
+    </li>
+  );
+}
+
+function PingList({ pings, now }: { pings: Ping[]; now: number }) {
+  return (
+    <>
+      <div className="hidden border-t md:block">
+        <table className="w-full table-fixed text-sm">
+          <thead className="border-b">
+            <tr className="text-left text-muted-foreground text-xs">
+              <th scope="col" className="h-10 w-32 px-4 font-medium sm:pl-5">
+                {t.check.pingColumns.time}
+              </th>
+              <th scope="col" className="w-20 px-2 font-medium">
+                {t.check.pingColumns.kind}
+              </th>
+              <th scope="col" className="w-14 px-2 text-right font-medium">
+                {t.check.pingColumns.exit}
+              </th>
+              <th scope="col" className="w-24 px-2 text-right font-medium">
+                {t.check.pingColumns.duration}
+              </th>
+              <th scope="col" className="hidden w-44 px-4 font-medium xl:table-cell">
+                {t.check.pingColumns.source}
+              </th>
+              <th scope="col" className="px-4 font-medium sm:pr-5">
+                {t.check.pingColumns.body}
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {pings.map((ping) => (
+              <PingRow key={ping.id} ping={ping} now={now} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <ul className="divide-y border-t md:hidden">
+        {pings.map((ping) => (
+          <PingItem key={ping.id} ping={ping} now={now} />
+        ))}
+      </ul>
+    </>
+  );
+}
+
 /** The last non-empty line of a ping's output: usually the result or the error. */
 function lastLine(body: string) {
   return body.split("\n").findLast((line) => line.trim()) ?? body;
 }
 
 function OutputToggle({
-  ping,
+  body,
   open,
   onToggle,
 }: {
-  ping: Ping;
+  body: string | null;
   open: boolean;
   onToggle: () => void;
 }) {
-  if (!ping.body) return <span className="text-muted-foreground">—</span>;
+  if (!body) return <span className="text-muted-foreground">—</span>;
   return (
     <button
       type="button"
@@ -106,7 +249,7 @@ function OutputToggle({
           open && "rotate-90",
         )}
       />
-      <span className="truncate">{lastLine(ping.body)}</span>
+      <span className="truncate">{lastLine(body)}</span>
     </button>
   );
 }
@@ -154,7 +297,7 @@ function PingRow({ ping, now }: { ping: Ping; now: number }) {
           {source(ping)}
         </td>
         <td className="px-4 py-2.5 sm:pr-5">
-          <OutputToggle ping={ping} open={open} onToggle={() => setOpen(!open)} />
+          <OutputToggle body={ping.body} open={open} onToggle={() => setOpen(!open)} />
         </td>
       </tr>
       {open && ping.body && (
@@ -196,7 +339,7 @@ function PingItem({ ping, now }: { ping: Ping; now: number }) {
           <Time iso={ping.receivedAt} now={now} />
         </span>
       </div>
-      {ping.body && <OutputToggle ping={ping} open={open} onToggle={() => setOpen(!open)} />}
+      {ping.body && <OutputToggle body={ping.body} open={open} onToggle={() => setOpen(!open)} />}
       {open && ping.body && <Output body={ping.body} />}
     </li>
   );

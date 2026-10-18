@@ -1,7 +1,7 @@
 import { Bar, BarChart, Cell, ReferenceLine, XAxis, YAxis } from "recharts";
 import { type ChartConfig, ChartContainer, ChartTooltip } from "@/components/ui/chart";
-import { formatDuration, formatExact } from "@/lib/format";
-import { type Run, runTicks } from "@/lib/runs";
+import { formatDuration, formatExact, formatPercent } from "@/lib/format";
+import { axisTop, type Run, runTicks } from "@/lib/runs";
 import { t } from "@/lib/strings";
 import type { Check } from "@/lib/types";
 import { EmptyLine, Panel } from "../page";
@@ -15,25 +15,69 @@ const config = {
   duration: { label: t.check.durations, color: "var(--chart-1)" },
 } satisfies ChartConfig;
 
-/** Run history as ticks, then how long the recent runs took. */
-export function RunsPanel({ check, runs }: { check: Check; runs: Run[] }) {
-  const shown = Math.min(DESKTOP_TICKS, Math.max(runs.length, 1));
+/**
+ * Run history as ticks (with the runs it missed, from `missed`), the check's uptime and
+ * average run, then how long the recent runs took.
+ */
+export function RunsPanel({
+  check,
+  runs,
+  missed,
+}: {
+  check: Check;
+  runs: Run[];
+  missed: string[];
+}) {
+  const shown = Math.min(DESKTOP_TICKS, Math.max(runs.length + missed.length, 1));
   return (
     <Panel title={t.check.runs} lead={runs.length > 0 ? t.check.runsLead : undefined}>
       {runs.length === 0 && check.status !== "DOWN" ? (
         <EmptyLine>{t.check.noPings}</EmptyLine>
       ) : (
         <>
+          <Figures check={check} />
           <RunBar
-            ticks={runTicks(runs, check, Math.max(shown, 30))}
+            ticks={runTicks(runs, check, Math.max(shown, 30), missed)}
             size="lg"
             className="hidden sm:flex"
           />
-          <RunBar ticks={runTicks(runs, check, PHONE_TICKS)} size="lg" className="sm:hidden" />
+          <RunBar
+            ticks={runTicks(runs, check, PHONE_TICKS, missed)}
+            size="lg"
+            className="sm:hidden"
+          />
           <Durations check={check} runs={runs} />
         </>
       )}
     </Panel>
+  );
+}
+
+function Figures({ check }: { check: Check }) {
+  const stats = check.stats;
+  if (!stats) return null;
+  const figures = [
+    {
+      label: t.check.stats.uptime7d,
+      value: stats.uptime7d !== null ? formatPercent(stats.uptime7d) : null,
+    },
+    {
+      label: t.check.stats.uptime30d,
+      value: stats.uptime30d !== null ? formatPercent(stats.uptime30d) : null,
+    },
+    { label: t.check.stats.averageRun, value: formatDuration(stats.averageDurationMs7d) || null },
+  ];
+  return (
+    <dl className="mb-4 grid grid-cols-3 gap-4 sm:flex sm:gap-10">
+      {figures.map((figure) => (
+        <div key={figure.label} className="min-w-0">
+          <dt className="text-muted-foreground text-xs">{figure.label}</dt>
+          <dd className="mt-0.5 font-medium text-base tabular-nums">
+            {figure.value ?? <span className="text-muted-foreground">—</span>}
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -46,6 +90,7 @@ function Durations({ check, runs }: { check: Check; runs: Run[] }) {
     check.maxRuntimeSeconds !== null && check.maxRuntimeSeconds * 1000 <= longest * 2
       ? check.maxRuntimeSeconds * 1000
       : null;
+  const top = axisTop(Math.max(longest, limitMs ?? 0));
   return (
     <div className="mt-6 border-t pt-4">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
@@ -65,7 +110,7 @@ function Durations({ check, runs }: { check: Check; runs: Run[] }) {
         >
           <BarChart
             data={timed.map((run) => ({ ...run, duration: run.durationMs ?? 0 }))}
-            margin={{ top: 8, right: 4, bottom: 0, left: 0 }}
+            margin={{ top: 8, right: 4, bottom: 8, left: 0 }}
             barCategoryGap="20%"
           >
             <XAxis dataKey="at" hide />
@@ -73,9 +118,10 @@ function Durations({ check, runs }: { check: Check; runs: Run[] }) {
               width={56}
               axisLine={false}
               tickLine={false}
-              tickCount={3}
+              ticks={[0, top / 2, top]}
+              interval={0}
               tickFormatter={(value: number) => formatDuration(value)}
-              domain={[0, (max: number) => Math.max(max, limitMs ?? 0) * 1.1]}
+              domain={[0, top]}
             />
             <ChartTooltip
               cursor={{ fill: "var(--accent)" }}

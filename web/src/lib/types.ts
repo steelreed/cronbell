@@ -26,6 +26,44 @@ export interface Check {
   /** When the schedule next expects a run; past nextDueAt for a late or missed run. */
   nextRunAt: string | null;
   createdAt: string;
+  /** Only from GET /checks/{slug}. */
+  stats?: CheckStats | null;
+}
+
+/** Uptime is a share from 0 to 1, paused time left out; null when not known. */
+export interface CheckStats {
+  uptime7d: number | null;
+  uptime30d: number | null;
+  averageDurationMs7d: number | null;
+}
+
+export type StatusEventKind = "UP" | "DOWN" | "PAUSED" | "RESUMED";
+
+/** A status change: the status entered, and for a DOWN why and the run it is about. */
+export interface StatusEvent {
+  id: string;
+  slug: string;
+  name: string;
+  kind: StatusEventKind;
+  reason: DownReason | null;
+  runAt: string | null;
+  at: string;
+}
+
+export type DeliveryStatus = "PENDING" | "DELIVERED" | "FAILED";
+
+/** One alert of a check to one channel, for the status event that raised it. */
+export interface CheckAlert {
+  id: string;
+  eventId: string | null;
+  channelId: string;
+  channelName: string;
+  channelType: ChannelType;
+  status: DeliveryStatus;
+  lastError: string | null;
+  createdAt: string;
+  deliveredAt: string | null;
+}
 }
 
 export interface CheckDefinition {
