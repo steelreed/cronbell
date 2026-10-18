@@ -103,8 +103,7 @@ export const en = {
       "all reporting",
     downMeta: (n: number) => (n === 0 ? "nothing failing" : "need a look now"),
     lateMeta: (n: number) => (n === 0 ? "none overdue" : "overdue, within grace"),
-    upMeta: (n: number, total: number) =>
-      total === 0 ? "no checks" : `${Math.round((n / total) * 100)}% of checks`,
+    upMeta: "on schedule",
     attention: "Needs attention",
     allGood: "Every check is up or paused.",
     since: "since",

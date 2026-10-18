@@ -538,8 +538,8 @@ negative is rejected at startup.
 The web app is served at `/` by the same server, same origin, so it uses the session cookie and
 CSRF header and never sees an API key except when one is created. Look: the Steelreed design
 system (black and white, dark by default with a light mode, colour only for state: UP green, DOWN
-red, warnings and PAUSED amber; system fonts; status is coloured text with a small dot, no
-badges). Dense and calm, data first. English in v0.1; strings live in one module so Vietnamese
+red, late runs and other warnings amber; NEW and PAUSED grey, since a pause is deliberate; system
+fonts; status is coloured text with a small dot, no badges). Dense and calm, data first. English in v0.1; strings live in one module so Vietnamese
 can follow.
 
 The shell is a collapsible left sidebar (the project switcher at the top; Overview, Checks, Alert

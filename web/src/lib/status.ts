@@ -53,7 +53,7 @@ export function statusView(check: StatusFields, now: number = Date.now()): Statu
         tone: "problem",
       };
     case "paused":
-      return { label: t.status.PAUSED, reason: null, tone: "warn" };
+      return { label: t.status.PAUSED, reason: null, tone: "muted" };
     default: {
       const stale = now - new Date(check.createdAt).getTime() > STALE_NEW_MS;
       return {

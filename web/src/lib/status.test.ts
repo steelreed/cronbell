@@ -25,8 +25,12 @@ describe("statusView", () => {
     expect(statusView(stale, NOW)).toMatchObject({ tone: "warn", reason: "no ping in 24 h" });
   });
 
-  it("shows PAUSED as a warning", () => {
-    expect(statusView(aCheck({ status: "PAUSED" }), NOW).tone).toBe("warn");
+  it("shows PAUSED muted: a pause is deliberate, not a warning", () => {
+    expect(statusView(aCheck({ status: "PAUSED" }), NOW)).toEqual({
+      label: "paused",
+      reason: null,
+      tone: "muted",
+    });
   });
 });
 

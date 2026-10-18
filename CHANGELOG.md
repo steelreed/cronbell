@@ -14,6 +14,9 @@ All notable changes to Cronbell are listed here. The format follows
   zero seconds field, which crontab does not have.
 - Ping sources read `0:0:0:0:0:0:0:1`; IPv6 addresses are now compressed (`::1`) and
   IPv4-mapped ones shown as IPv4.
+- Paused checks were amber like late ones. A pause is deliberate, so it is grey everywhere; amber
+  is left for late runs and checks waiting too long for their first ping.
+- The Up tile of the overview said "38% of checks"; it now says "on schedule".
 
 ## [0.1.0-beta.2] - 2026-10-17
 
