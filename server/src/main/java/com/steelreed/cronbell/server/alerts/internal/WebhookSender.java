@@ -44,9 +44,10 @@ final class WebhookSender implements ChannelSender {
 		if (secret != null) {
 			headers.put(WebhookSigner.SIGNATURE_HEADER, WebhookSigner.sign(secret, timestamp, body));
 		}
-		HttpPoster.Response response = this.http.post(URI.create(channel.get(ChannelConfigs.URL)), headers, body);
+		URI uri = URI.create(channel.get(ChannelConfigs.URL));
+		HttpPoster.Response response = this.http.post(uri, headers, body);
 		if (!response.successful()) {
-			throw HttpPoster.failure(response, response.body(), null);
+			throw HttpPoster.failure(response, uri.getHost(), response.body(), null);
 		}
 	}
 

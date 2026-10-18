@@ -6,6 +6,13 @@ All notable changes to Cronbell are listed here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Channel errors are plain sentences that say what to fix ("Could not resolve
+  hooks.example.com", "Connection refused by localhost:8080", "Timed out after 10 s waiting for
+  …", "HTTP 401 from Telegram: check the bot token") instead of exception names such as
+  `UnresolvedAddressException`.
+
 ## [0.1.0-beta.2] - 2026-10-17
 
 ### Added

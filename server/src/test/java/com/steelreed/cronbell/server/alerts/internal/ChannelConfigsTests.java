@@ -102,16 +102,24 @@ class ChannelConfigsTests {
 
 	@Test
 	void retryableStatuses() {
-		assertThat(HttpPoster.failure(new HttpPoster.Response(503, "", "7"), null, null).retryAfter())
+		assertThat(HttpPoster.failure(new HttpPoster.Response(503, "", "7"), "Slack", null, null).retryAfter())
 			.isEqualTo(Duration.ofSeconds(7));
-		assertThat(HttpPoster.failure(new HttpPoster.Response(429, "", null), "slow down", Duration.ofSeconds(3)))
+		assertThat(HttpPoster.failure(new HttpPoster.Response(429, "", null), "Telegram", "slow down",
+				Duration.ofSeconds(3)))
 			.satisfies((ex) -> {
 				assertThat(ex.retryable()).isTrue();
-				assertThat(ex.getMessage()).isEqualTo("HTTP 429: slow down");
+				assertThat(ex.getMessage()).isEqualTo("HTTP 429 from Telegram: slow down");
+				assertThat(ex.retryAfter()).isEqualTo(Duration.ofSeconds(3));
 			});
-		assertThat(HttpPoster.failure(new HttpPoster.Response(408, "", null), null, null).retryable()).isTrue();
-		assertThat(HttpPoster.failure(new HttpPoster.Response(404, "no_service", null), "no_service", null).retryable())
-			.isFalse();
+		assertThat(HttpPoster.failure(new HttpPoster.Response(408, "", null), "Slack", null, null).retryable())
+			.isTrue();
+		assertThat(HttpPoster.failure(new HttpPoster.Response(404, "no_service", null), "Slack", "no_service", null))
+			.satisfies((ex) -> {
+				assertThat(ex.retryable()).isFalse();
+				assertThat(ex.getMessage()).isEqualTo("HTTP 404 from Slack: no_service");
+			});
+		assertThat(HttpPoster.failure(new HttpPoster.Response(500, "", null), "hooks.example.com", "  ", null)
+			.getMessage()).isEqualTo("HTTP 500 from hooks.example.com");
 	}
 
 	private static Channel channel(ChannelType type, Map<String, String> config) {

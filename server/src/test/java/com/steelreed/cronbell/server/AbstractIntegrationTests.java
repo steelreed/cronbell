@@ -541,7 +541,7 @@ abstract class AbstractIntegrationTests {
 		this.dispatcher.runOnce();
 		assertThat(RECEIVER.requests(hook)).hasSize(1);
 		String status = exchange(HttpMethod.GET, "/api/v1/channels/" + channel, null, project.key()).getBody();
-		assertThat((String) JsonPath.read(status, "$.lastError")).isEqualTo("HTTP 500: oops");
+		assertThat((String) JsonPath.read(status, "$.lastError")).isEqualTo("HTTP 500 from localhost: oops");
 		assertThat((Integer) JsonPath.read(status, "$.pendingDeliveries")).isEqualTo(1);
 		assertThat((Object) JsonPath.read(status, "$.lastDeliveryAt")).isNull();
 
@@ -586,7 +586,7 @@ abstract class AbstractIntegrationTests {
 			.isLessThan(raised.plus(Duration.ofHours(1)).toEpochMilli());
 		String status = exchange(HttpMethod.GET, "/api/v1/channels/" + channel, null, project.key()).getBody();
 		assertThat((String) JsonPath.read(status, "$.lastError"))
-			.isEqualTo("gave up after 8 attempts in 60 min: HTTP 503");
+			.isEqualTo("Gave up after 8 attempts in 60 min: HTTP 503 from localhost");
 		assertThat((Integer) JsonPath.read(status, "$.pendingDeliveries")).isZero();
 	}
 
@@ -603,7 +603,7 @@ abstract class AbstractIntegrationTests {
 		this.dispatcher.runOnce();
 		assertThat(RECEIVER.requests(hook)).hasSize(1);
 		String status = exchange(HttpMethod.GET, "/api/v1/channels/" + channel, null, project.key()).getBody();
-		assertThat((String) JsonPath.read(status, "$.lastError")).isEqualTo("HTTP 410: gone");
+		assertThat((String) JsonPath.read(status, "$.lastError")).isEqualTo("HTTP 410 from localhost: gone");
 	}
 
 	@Test
@@ -641,7 +641,8 @@ abstract class AbstractIntegrationTests {
 		this.dispatcher.runOnce();
 		assertThat(RECEIVER.requests(fast)).hasSize(1);
 		String status = exchange(HttpMethod.GET, "/api/v1/channels/" + slowChannel, null, project.key()).getBody();
-		assertThat((String) JsonPath.read(status, "$.lastError")).isEqualTo("timed out");
+		assertThat((String) JsonPath.read(status, "$.lastError"))
+			.isEqualTo("Timed out after 1 s waiting for localhost");
 		assertThat((Integer) JsonPath.read(status, "$.pendingDeliveries")).isEqualTo(1);
 	}
 
@@ -751,8 +752,21 @@ abstract class AbstractIntegrationTests {
 		ResponseEntity<String> failed = exchange(HttpMethod.POST, "/api/v1/channels/" + bad + "/test", null,
 				project.key());
 		assertThat(failed.getStatusCode().value()).isEqualTo(502);
-		assertThat((String) JsonPath.read(failed.getBody(), "$.detail")).isEqualTo("HTTP 401: Unauthorized");
+		assertThat((String) JsonPath.read(failed.getBody(), "$.detail"))
+			.isEqualTo("HTTP 401 from Telegram: check the bot token");
 		assertThat(failed.getBody()).doesNotContain(badToken);
+	}
+
+	@Test
+	void unreachableChannelsGetAPlainReason() {
+		Project project = newProject();
+		String channel = createChannel(project,
+				"{\"type\":\"webhook\",\"config\":{\"url\":\"https://hooks.example.invalid/secret-path\"}}");
+		ResponseEntity<String> failed = exchange(HttpMethod.POST, "/api/v1/channels/" + channel + "/test", null,
+				project.key());
+		assertThat(failed.getStatusCode().value()).isEqualTo(502);
+		assertThat((String) JsonPath.read(failed.getBody(), "$.detail"))
+			.isEqualTo("Could not resolve hooks.example.invalid");
 	}
 
 	// --- Accounts and sessions ---

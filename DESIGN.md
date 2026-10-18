@@ -475,8 +475,15 @@ Any 2xx answer is a success. Redirects are not followed.
 - **Retry.** Network errors, timeouts, `408`, `429` and `5xx` are retried after 30 s, then
   doubling (1, 2, 4, 8 min…, at most 15 min), honouring `Retry-After` on `429`. Other `4xx`
   (bad token, removed webhook) fail at once. A delivery not sent within **1 hour** of the alert
-  is given up. The latest error is kept on the row (status code and a short reason, never the
-  URL or a secret) and shown on the channel.
+  is given up. The latest error is kept on the row and shown on the channel.
+- **Errors** are plain sentences that say what to fix, never a URL, a secret or an exception
+  name: `Could not resolve hooks.example.com`, `Connection refused by hooks.example.com:8080`,
+  `Timed out after 10 s waiting for hooks.example.com`, `TLS handshake with host:443 failed`,
+  `HTTP 401 from Telegram: check the bot token`, `HTTP 404 from Slack: the webhook was deleted
+  or its URL is wrong`, `HTTP 500 from hooks.example.com: <first 200 characters of the body>`,
+  `SMTP server smtp.example.com rejected the user name or password (…)`. A network error names
+  the host and port only, since a webhook URL can itself be a secret; a given-up delivery reads
+  `Gave up after 8 attempts in 60 min: …`.
 - **Rate limits.** Alerts are only sent on transitions, so there is no per-channel limit in
   v0.1. `POST /channels/{id}/test` is limited to one call per 10 s per channel (`429`).
 - Finished deliveries are kept for history and pruned with the pings (§10).

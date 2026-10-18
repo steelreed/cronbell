@@ -2,11 +2,8 @@ package com.steelreed.cronbell.server.alerts.internal;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.ConnectException;
 import java.net.URI;
-import java.net.UnknownHostException;
 import java.net.http.HttpClient;
-import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
@@ -38,6 +35,8 @@ class HttpPoster {
 
 	private final RestClient client;
 
+	private final NotifierProperties properties;
+
 	HttpPoster(NotifierProperties properties) {
 		HttpClient http = HttpClient.newBuilder()
 			.connectTimeout(properties.connectTimeout())
@@ -49,6 +48,7 @@ class HttpPoster {
 			.requestFactory(factory)
 			.defaultHeader(HttpHeaders.USER_AGENT, "Cronbell")
 			.build();
+		this.properties = properties;
 	}
 
 	/**
@@ -66,17 +66,22 @@ class HttpPoster {
 						read(response.getBody()), response.getHeaders().getFirst(HttpHeaders.RETRY_AFTER)));
 		}
 		catch (RestClientException ex) {
-			throw DeliveryException.retryable(describe(ex));
+			// The exception's own message holds the URL; its causes do not.
+			int port = (uri.getPort() != -1) ? uri.getPort() : ("http".equalsIgnoreCase(uri.getScheme()) ? 80 : 443);
+			throw DeliveryException.retryable(DeliveryErrors.network(ex.getCause(), uri.getHost(), port,
+					this.properties.connectTimeout(), this.properties.readTimeout()));
 		}
 	}
 
 	/**
-	 * Turns a non-2xx response into a delivery error: 408, 429 and 5xx are retried, other
-	 * statuses are permanent.
+	 * Turns a non-2xx response into a delivery error that names the receiver ("HTTP 401
+	 * from Telegram: check the bot token"): 408, 429 and 5xx are retried, other statuses
+	 * are permanent.
 	 */
-	static DeliveryException failure(Response response, String detail, Duration retryAfter) {
+	static DeliveryException failure(Response response, String receiver, String detail, Duration retryAfter) {
 		int status = response.status();
-		String message = "HTTP " + status + ((detail != null && !detail.isBlank()) ? ": " + oneLine(detail) : "");
+		String message = "HTTP " + status + " from " + receiver
+				+ ((detail != null && !detail.isBlank()) ? ": " + oneLine(detail) : "");
 		boolean retryable = status == 408 || status == 429 || status >= 500;
 		Duration wait = (retryAfter != null) ? retryAfter : parseRetryAfter(response.retryAfter());
 		return new DeliveryException(message, retryable, retryable ? wait : null);
@@ -105,26 +110,6 @@ class HttpPoster {
 			return "";
 		}
 		return new String(body.readNBytes(4096), StandardCharsets.UTF_8);
-	}
-
-	/** The cause without the request line, which holds the URL. */
-	private static String describe(RestClientException ex) {
-		Throwable cause = ex.getMostSpecificCause();
-		if (cause == ex) {
-			return "request failed";
-		}
-		String type = cause.getClass().getSimpleName();
-		String message = cause.getMessage();
-		if (cause instanceof HttpTimeoutException || type.contains("Timeout")) {
-			return "timed out";
-		}
-		if (cause instanceof ConnectException) {
-			return "connection refused or unreachable";
-		}
-		if (cause instanceof UnknownHostException) {
-			return "unknown host";
-		}
-		return type + ((message != null) ? ": " + oneLine(message) : "");
 	}
 
 }

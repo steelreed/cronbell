@@ -41,7 +41,7 @@ class Senders {
 		catch (RuntimeException ex) {
 			// Log the type only: the message of an unexpected exception may hold a URL.
 			logger.warn("Unexpected {} sending to {}", ex.getClass().getName(), channel);
-			throw DeliveryException.retryable("internal error: " + ex.getClass().getSimpleName());
+			throw DeliveryException.retryable("Unexpected error while sending, see the server log");
 		}
 	}
 
