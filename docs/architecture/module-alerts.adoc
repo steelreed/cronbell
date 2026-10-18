@@ -35,8 +35,10 @@ _Others_
 * `c.s.c.s.a.DeliveryHistory` -- The stored alert deliveries, as history pruning deletes them.
 * `c.s.c.s.a.internal.AlertFactory` -- Builds the `c.s.c.s.a.internal.Alert` for a status change from the check and its latest pings (DESIGN.md §8). Runs inside the transaction that changed the check.
 * `c.s.c.s.a.internal.DeliveryDispatcher` -- Sends queued deliveries (DESIGN.md §8). Due rows are claimed and leased in a short transaction, then sent outside any transaction, in parallel on virtual threads. Failed sends are retried with exponential backoff for `RETRY_WINDOW` after the alert.
+* `c.s.c.s.a.internal.ChannelSender` (via `c.s.c.s.a.internal.DiscordSender` -- Discord webhook: one embed per alert.)
 * `c.s.c.s.a.internal.ChannelSender` (via `c.s.c.s.a.internal.EmailSender` -- Plain-text email through the server's SMTP settings (`CRONBELL_SMTP_*`).)
 * `c.s.c.s.a.internal.HttpPoster` -- POSTs JSON for the HTTP channels with short timeouts, so a stuck receiver cannot hold up alerts. Redirects are not followed. Error messages never contain the URL.
+* `c.s.c.s.a.internal.ChannelSender` (via `c.s.c.s.a.internal.NtfySender` -- ntfy: a JSON message published to the channel's server (ntfy.sh or a self-hosted one), with its access token when it has one.)
 * `c.s.c.s.a.internal.Senders` -- Picks the sender of a channel's type, and makes sure no error message carries a secret of the channel.
 * `c.s.c.s.a.internal.ChannelSender` (via `c.s.c.s.a.internal.SlackSender` -- Slack incoming webhook: `{"text": …`} in mrkdwn.)
 * `c.s.c.s.a.internal.ChannelSender` (via `c.s.c.s.a.internal.TelegramSender` -- Telegram Bot API `sendMessage` with `parse_mode=HTML`.)

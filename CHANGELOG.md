@@ -6,6 +6,12 @@ All notable changes to Cronbell are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Discord and ntfy alert channels. Discord gets an embed (red for DOWN, green for UP, mentions
+  off) and its rate limits are retried after `retry_after`; ntfy posts to ntfy.sh or a self-hosted
+  server, with an optional access token, high priority for DOWN, tags and a link to the check.
+
 ### Fixed
 
 - Channel errors are plain sentences that say what to fix ("Could not resolve

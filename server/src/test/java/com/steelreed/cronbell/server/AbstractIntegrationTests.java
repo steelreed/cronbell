@@ -449,7 +449,7 @@ abstract class AbstractIntegrationTests {
 	void deliversDownAndUpToEveryChannelOfTheProject() throws Exception {
 		Project project = newProject();
 		String slack = "/slack/" + UUID.randomUUID();
-		insertSlackChannel(project, slack);
+		insertWebhookUrlChannel(project, ChannelType.SLACK, slack);
 		String hook = "/hook/" + UUID.randomUUID();
 		createChannel(project, "{\"type\":\"webhook\",\"name\":\"Hook\",\"config\":{\"url\":\"" + RECEIVER.url(hook)
 				+ "\",\"secret\":\"" + WEBHOOK_SECRET + "\"}}");
@@ -755,6 +755,102 @@ abstract class AbstractIntegrationTests {
 		assertThat((String) JsonPath.read(failed.getBody(), "$.detail"))
 			.isEqualTo("HTTP 401 from Telegram: check the bot token");
 		assertThat(failed.getBody()).doesNotContain(badToken);
+	}
+
+	@Test
+	void discordGetsAnEmbedAndIsRetriedWhenRateLimited() {
+		Project project = newProject();
+		String path = "/discord/" + UUID.randomUUID();
+		RECEIVER.script(path,
+				FakeReceiver.Response.of(429, "{\"message\":\"You are being rate limited.\",\"retry_after\":45.5}"),
+				FakeReceiver.Response.status(204));
+		String channel = insertWebhookUrlChannel(project, ChannelType.DISCORD, path);
+		goDown(project);
+		this.dispatcher.runOnce();
+		String status = exchange(HttpMethod.GET, "/api/v1/channels/" + channel, null, project.key()).getBody();
+		assertThat((String) JsonPath.read(status, "$.lastError"))
+			.isEqualTo("HTTP 429 from Discord: You are being rate limited.");
+
+		// Discord's retry_after is longer than the first 30 s backoff, so it wins.
+		CLOCK.advance(Duration.ofSeconds(45));
+		this.dispatcher.runOnce();
+		assertThat(RECEIVER.requests(path)).hasSize(1);
+		CLOCK.advance(Duration.ofSeconds(1));
+		this.dispatcher.runOnce();
+		assertThat(RECEIVER.requests(path)).hasSize(2);
+		String body = RECEIVER.requests(path).getLast().body();
+		assertThat((String) JsonPath.read(body, "$.username")).isEqualTo("Cronbell");
+		assertThat((List<Object>) JsonPath.read(body, "$.allowed_mentions.parse")).isEmpty();
+		assertThat((String) JsonPath.read(body, "$.embeds[0].title")).endsWith(" is DOWN: run failed");
+		assertThat((Integer) JsonPath.read(body, "$.embeds[0].color")).isEqualTo(0xD92D20);
+		assertThat((String) JsonPath.read(body, "$.embeds[0].url")).startsWith("https://cronbell.example.com/checks/");
+		status = exchange(HttpMethod.GET, "/api/v1/channels/" + channel, null, project.key()).getBody();
+		assertThat((Object) JsonPath.read(status, "$.lastError")).isNull();
+	}
+
+	@Test
+	void unknownDiscordWebhookIsNotRetried() {
+		Project project = newProject();
+		String path = "/discord/" + UUID.randomUUID();
+		RECEIVER.always(path, FakeReceiver.Response.of(404, "{\"message\":\"Unknown Webhook\",\"code\":10015}"));
+		String channel = insertWebhookUrlChannel(project, ChannelType.DISCORD, path);
+		goDown(project);
+		this.dispatcher.runOnce();
+		CLOCK.advance(Duration.ofMinutes(10));
+		this.dispatcher.runOnce();
+		assertThat(RECEIVER.requests(path)).hasSize(1);
+		String status = exchange(HttpMethod.GET, "/api/v1/channels/" + channel, null, project.key()).getBody();
+		assertThat((String) JsonPath.read(status, "$.lastError"))
+			.isEqualTo("HTTP 404 from Discord: the webhook was deleted or its URL is wrong");
+	}
+
+	@Test
+	void ntfyGetsTitlePriorityTagsAndClickWithTheAccessToken() {
+		Project project = newProject();
+		String server = "/ntfy/" + UUID.randomUUID();
+		String token = "tk_" + UUID.randomUUID().toString().replace("-", "");
+		ResponseEntity<String> created = exchange(HttpMethod.POST, "/api/v1/channels", "{\"type\":\"ntfy\",\"config\":"
+				+ "{\"serverUrl\":\"" + RECEIVER.url(server) + "/\",\"topic\":\"ops\",\"token\":\"" + token + "\"}}",
+				project.key());
+		assertThat(created.getStatusCode().value()).as(created.getBody()).isEqualTo(201);
+		assertThat(created.getBody()).doesNotContain(token);
+		assertThat((String) JsonPath.read(created.getBody(), "$.config.serverUrl")).isEqualTo(RECEIVER.url(server));
+		String slug = uniqueSlug();
+		String key = createCheck(project, slug, "{\"cron\":\"0 * * * *\"}");
+		goDown(key);
+		this.dispatcher.runOnce();
+
+		FakeReceiver.Request down = RECEIVER.requests(server).getFirst();
+		assertThat(down.header("Authorization")).isEqualTo("Bearer " + token);
+		assertThat((String) JsonPath.read(down.body(), "$.topic")).isEqualTo("ops");
+		assertThat((String) JsonPath.read(down.body(), "$.title"))
+			.isEqualTo("[Cronbell] " + slug + " is DOWN: run failed");
+		assertThat((Integer) JsonPath.read(down.body(), "$.priority")).isEqualTo(4);
+		assertThat((List<String>) JsonPath.read(down.body(), "$.tags")).containsExactly("rotating_light");
+		assertThat((String) JsonPath.read(down.body(), "$.click"))
+			.isEqualTo("https://cronbell.example.com/checks/" + slug);
+
+		CLOCK.advance(Duration.ofMinutes(1));
+		get("/ping/" + key);
+		this.dispatcher.runOnce();
+		FakeReceiver.Request up = RECEIVER.requests(server).getLast();
+		assertThat((Integer) JsonPath.read(up.body(), "$.priority")).isEqualTo(3);
+		assertThat((List<String>) JsonPath.read(up.body(), "$.tags")).containsExactly("white_check_mark");
+	}
+
+	@Test
+	void ntfyRefusalsSayWhatToFix() {
+		Project project = newProject();
+		String server = "/ntfy/" + UUID.randomUUID();
+		RECEIVER.always(server, FakeReceiver.Response.of(403,
+				"{\"code\":40301,\"http\":403,\"error\":\"forbidden\",\"link\":\"https://ntfy.sh/docs/publish/#authentication\"}"));
+		String open = createChannel(project,
+				"{\"type\":\"ntfy\",\"config\":{\"serverUrl\":\"" + RECEIVER.url(server) + "\",\"topic\":\"ops\"}}");
+		ResponseEntity<String> failed = exchange(HttpMethod.POST, "/api/v1/channels/" + open + "/test", null,
+				project.key());
+		assertThat(failed.getStatusCode().value()).isEqualTo(502);
+		assertThat((String) JsonPath.read(failed.getBody(), "$.detail"))
+			.isEqualTo("HTTP 403 from ntfy: the topic needs an access token");
 	}
 
 	@Test
@@ -1388,12 +1484,15 @@ abstract class AbstractIntegrationTests {
 	}
 
 	/**
-	 * Slack needs https, so a channel pointing at the local receiver is stored directly.
+	 * Slack and Discord need https, so a channel pointing at the local receiver is stored
+	 * directly. Returns its id.
 	 */
-	void insertSlackChannel(Project project, String path) {
+	String insertWebhookUrlChannel(Project project, ChannelType type, String path) {
 		Instant now = CLOCK.instant();
-		this.channelRepository.insert(new Channel(UUID.randomUUID().toString(), project.id(), ChannelType.SLACK,
-				"slack", Map.of("webhookUrl", RECEIVER.url(path)), now, now));
+		String id = UUID.randomUUID().toString();
+		this.channelRepository
+			.insert(new Channel(id, project.id(), type, type.id(), Map.of("webhookUrl", RECEIVER.url(path)), now, now));
+		return id;
 	}
 
 	String createChannel(Project project, String json) {
@@ -1410,7 +1509,11 @@ abstract class AbstractIntegrationTests {
 
 	/** Creates a check in the project, pings it, then fails it. Returns its ping key. */
 	String goDown(Project project) {
-		String key = createCheck(project, uniqueSlug(), "{\"cron\":\"0 * * * *\"}");
+		return goDown(createCheck(project, uniqueSlug(), "{\"cron\":\"0 * * * *\"}"));
+	}
+
+	/** Pings the check, then fails it. Returns its ping key. */
+	String goDown(String key) {
 		get("/ping/" + key);
 		CLOCK.advance(Duration.ofMinutes(1));
 		post("/ping/" + key + "/fail");

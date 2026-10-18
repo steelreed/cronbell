@@ -27,6 +27,14 @@ public final class ChannelConfigs {
 
 	static final String SECRET = "secret";
 
+	static final String SERVER_URL = "serverUrl";
+
+	static final String TOPIC = "topic";
+
+	static final String TOKEN = "token";
+
+	static final String NTFY_SERVER = "https://ntfy.sh";
+
 	private static final int MAX_URL_LENGTH = 2000;
 
 	private static final Pattern EMAIL = Pattern
@@ -36,13 +44,24 @@ public final class ChannelConfigs {
 
 	private static final Pattern CHAT_ID_FORMAT = Pattern.compile("-?\\d{1,20}|@[A-Za-z][A-Za-z0-9_]{4,31}");
 
+	/** What ntfy accepts as a topic name. */
+	private static final Pattern TOPIC_FORMAT = Pattern.compile("[A-Za-z0-9_-]{1,64}");
+
 	private enum Kind {
 
 		PLAIN, TOKEN, URL
 
 	}
 
-	private record Field(String name, Kind kind, boolean required) {
+	/**
+	 * A config field; {@code defaultValue} is stored when an optional field is left
+	 * empty.
+	 */
+	private record Field(String name, Kind kind, boolean required, String defaultValue) {
+
+		Field(String name, Kind kind, boolean required) {
+			this(name, kind, required, null);
+		}
 
 		boolean secret() {
 			return this.kind != Kind.PLAIN;
@@ -57,7 +76,9 @@ public final class ChannelConfigs {
 		return switch (type) {
 			case EMAIL -> List.of(new Field(ADDRESS, Kind.PLAIN, true));
 			case TELEGRAM -> List.of(new Field(BOT_TOKEN, Kind.TOKEN, true), new Field(CHAT_ID, Kind.PLAIN, true));
-			case SLACK -> List.of(new Field(WEBHOOK_URL, Kind.URL, true));
+			case SLACK, DISCORD -> List.of(new Field(WEBHOOK_URL, Kind.URL, true));
+			case NTFY -> List.of(new Field(SERVER_URL, Kind.PLAIN, false, NTFY_SERVER),
+					new Field(TOPIC, Kind.PLAIN, true), new Field(TOKEN, Kind.TOKEN, false));
 			case WEBHOOK -> List.of(new Field(URL, Kind.URL, true), new Field(SECRET, Kind.TOKEN, false));
 		};
 	}
@@ -86,7 +107,10 @@ public final class ChannelConfigs {
 				value = stored;
 			}
 			if (value == null || value.isEmpty()) {
-				if (field.required()) {
+				if (field.defaultValue() != null) {
+					result.put(field.name(), field.defaultValue());
+				}
+				else if (field.required()) {
 					throw new IllegalArgumentException("config." + field.name() + " is required for " + type.id());
 				}
 				continue;
@@ -115,11 +139,30 @@ public final class ChannelConfigs {
 							"config.chatId must be a numeric chat id (groups are negative) or @channelname");
 				}
 			}
-			case WEBHOOK_URL -> checkUrl(name, value, false);
+			case WEBHOOK_URL -> {
+				URI uri = checkUrl(name, value, false);
+				if (type == ChannelType.DISCORD && !isDiscordWebhook(uri)) {
+					throw new IllegalArgumentException(
+							"config.webhookUrl must be a Discord webhook URL (https://discord.com/api/webhooks/…)");
+				}
+			}
 			case URL -> checkUrl(name, value, type == ChannelType.WEBHOOK);
-			case SECRET -> {
+			case SERVER_URL -> {
+				if (checkUrl(name, value, true).getRawUserInfo() != null) {
+					throw new IllegalArgumentException(
+							"config.serverUrl must not hold a user name or password; use config.token");
+				}
+				return value.replaceAll("/+$", "");
+			}
+			case TOPIC -> {
+				if (!TOPIC_FORMAT.matcher(value).matches()) {
+					throw new IllegalArgumentException(
+							"config.topic must be 1 to 64 letters, digits, '_' or '-' (ntfy topic names)");
+				}
+			}
+			case SECRET, TOKEN -> {
 				if (value.length() > 200) {
-					throw new IllegalArgumentException("config.secret must be at most 200 characters");
+					throw new IllegalArgumentException("config." + name + " must be at most 200 characters");
 				}
 			}
 			default -> throw new IllegalStateException("unexpected field " + name);
@@ -128,10 +171,10 @@ public final class ChannelConfigs {
 	}
 
 	/**
-	 * Slack needs https. Generic webhooks may use http too: self-hosted installs post to
-	 * services on their own network (DESIGN.md §8).
+	 * Slack and Discord need https. Generic webhooks and ntfy servers may use http too:
+	 * self-hosted installs post to services on their own network (DESIGN.md §8).
 	 */
-	private static void checkUrl(String name, String value, boolean allowHttp) {
+	private static URI checkUrl(String name, String value, boolean allowHttp) {
 		String schemes = allowHttp ? "an http:// or https://" : "an https://";
 		URI uri;
 		try {
@@ -145,6 +188,15 @@ public final class ChannelConfigs {
 		if (!schemeOk || uri.getHost() == null || uri.getHost().isEmpty() || value.length() > MAX_URL_LENGTH) {
 			throw new IllegalArgumentException("config." + name + " must be " + schemes + " URL");
 		}
+		return uri;
+	}
+
+	/** discord.com, its ptb. and canary. hosts, or the older discordapp.com. */
+	private static boolean isDiscordWebhook(URI uri) {
+		String host = uri.getHost().toLowerCase(Locale.ROOT);
+		boolean discord = host.equals("discord.com") || host.endsWith(".discord.com") || host.equals("discordapp.com")
+				|| host.endsWith(".discordapp.com");
+		return discord && uri.getRawPath() != null && uri.getRawPath().startsWith("/api/webhooks/");
 	}
 
 	/** The config as the API returns it: secret fields masked. */

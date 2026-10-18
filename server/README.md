@@ -97,7 +97,7 @@ Any Spring Boot property works too, for example `SPRING_DATASOURCE_URL`, which w
 | `cronbell.scheduling.enabled` | `true` | Turns the detector and the notifier's timer off (tests drive them by hand). |
 | `cronbell.history.batch-size` | `5000` | Rows the daily pruning deletes per statement (one short transaction each). |
 | `cronbell.notifier.interval` | `PT5S` | How often the notifier looks for alerts to send or retry. |
-| `cronbell.notifier.connect-timeout` | `PT5S` | Connect timeout for Slack, Telegram, webhooks and SMTP. |
+| `cronbell.notifier.connect-timeout` | `PT5S` | Connect timeout for Slack, Telegram, Discord, ntfy, webhooks and SMTP. |
 | `cronbell.notifier.read-timeout` | `PT10S` | Read timeout for the same. |
 | `cronbell.notifier.telegram-api-url` | `https://api.telegram.org` | Telegram Bot API base URL (tests point it at a local stub). |
 
@@ -163,8 +163,9 @@ curl -X POST localhost:8080/api/v1/channels \
 curl -X POST localhost:8080/api/v1/channels/<id>/test -H "Authorization: Bearer $KEY"
 ```
 
-Channel types and their config are in [`DESIGN.md` §8](../DESIGN.md#8-alerts). Secrets (bot
-tokens, webhook URLs and secrets) are returned masked. Webhook receivers can check the
+Channel types (email, Telegram, Slack, Discord, ntfy, webhook) and their config are in
+[`DESIGN.md` §8](../DESIGN.md#8-alerts). Secrets (bot tokens, webhook URLs, ntfy tokens and
+signing secrets) are returned masked. Webhook receivers can check the
 `Cronbell-Signature` header: `sha256=` + hex HMAC-SHA256 of `<Cronbell-Timestamp>.<body>`.
 
 ## Layout

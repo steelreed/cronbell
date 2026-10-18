@@ -104,11 +104,11 @@ class ChannelConfigsTests {
 	void retryableStatuses() {
 		assertThat(HttpPoster.failure(new HttpPoster.Response(503, "", "7"), "Slack", null, null).retryAfter())
 			.isEqualTo(Duration.ofSeconds(7));
-		assertThat(HttpPoster.failure(new HttpPoster.Response(429, "", null), "Telegram", "slow down",
+		assertThat(HttpPoster.failure(new HttpPoster.Response(429, "", null), "Discord", "slow down",
 				Duration.ofSeconds(3)))
 			.satisfies((ex) -> {
 				assertThat(ex.retryable()).isTrue();
-				assertThat(ex.getMessage()).isEqualTo("HTTP 429 from Telegram: slow down");
+				assertThat(ex.getMessage()).isEqualTo("HTTP 429 from Discord: slow down");
 				assertThat(ex.retryAfter()).isEqualTo(Duration.ofSeconds(3));
 			});
 		assertThat(HttpPoster.failure(new HttpPoster.Response(408, "", null), "Slack", null, null).retryable())
@@ -120,6 +120,58 @@ class ChannelConfigsTests {
 			});
 		assertThat(HttpPoster.failure(new HttpPoster.Response(500, "", null), "hooks.example.com", "  ", null)
 			.getMessage()).isEqualTo("HTTP 500 from hooks.example.com");
+	}
+
+	@Test
+	void discordWebhookUrls() {
+		for (String url : new String[] { "https://discord.com/api/webhooks/1/abc",
+				"https://canary.discord.com/api/webhooks/1/abc", "https://discordapp.com/api/webhooks/1/abc" }) {
+			assertThat(ChannelConfigs.validate(ChannelType.DISCORD, Map.of("webhookUrl", url), null))
+				.containsEntry("webhookUrl", url);
+		}
+		for (String url : new String[] { "http://discord.com/api/webhooks/1/abc", "https://discord.com/channels/1/2",
+				"https://evil-discord.com/api/webhooks/1/abc", "https://discord.com.example.com/api/webhooks/1/abc" }) {
+			assertThatIllegalArgumentException()
+				.isThrownBy(() -> ChannelConfigs.validate(ChannelType.DISCORD, Map.of("webhookUrl", url), null))
+				.withMessageContaining("webhookUrl");
+		}
+	}
+
+	@Test
+	void ntfyDefaultsToNtfyShAndTakesSelfHostedServers() {
+		assertThat(ChannelConfigs.validate(ChannelType.NTFY, Map.of("topic", "cronbell-ops"), null))
+			.containsEntry("serverUrl", "https://ntfy.sh")
+			.containsEntry("topic", "cronbell-ops")
+			.doesNotContainKey("token");
+		assertThat(
+				ChannelConfigs.validate(ChannelType.NTFY,
+						Map.of("serverUrl", "http://ntfy.internal:8080/", "topic", "ops", "token",
+								"tk_abcdefghijklmnop"),
+						null))
+			.containsEntry("serverUrl", "http://ntfy.internal:8080")
+			.containsEntry("token", "tk_abcdefghijklmnop");
+	}
+
+	@Test
+	void ntfyRejectsBadTopicsAndPasswords() {
+		for (String topic : new String[] { "", "ops/alerts", "has space", "x".repeat(65) }) {
+			assertThatIllegalArgumentException()
+				.isThrownBy(() -> ChannelConfigs.validate(ChannelType.NTFY, Map.of("topic", topic), null))
+				.withMessageContaining("topic");
+		}
+		assertThatIllegalArgumentException()
+			.isThrownBy(() -> ChannelConfigs.validate(ChannelType.NTFY,
+					Map.of("serverUrl", "https://phil:secret@ntfy.example.com", "topic", "ops"), null))
+			.withMessageContaining("config.token");
+	}
+
+	@Test
+	void masksNtfyToken() {
+		Channel channel = channel(ChannelType.NTFY,
+				Map.of("serverUrl", "https://ntfy.sh", "topic", "ops", "token", "tk_abcdefghijklmnop"));
+		assertThat(ChannelConfigs.masked(channel)).containsEntry("serverUrl", "https://ntfy.sh")
+			.containsEntry("topic", "ops")
+			.containsEntry("token", "tk…op");
 	}
 
 	private static Channel channel(ChannelType type, Map<String, String> config) {

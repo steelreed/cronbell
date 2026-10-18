@@ -45,7 +45,7 @@ templates), on-call rotations, SSO.
 | **Grace** | How long after the due time a run may still arrive before it counts as missed. |
 | **Ping** | One message from a job: `start`, `success`, `fail`, or `log`. |
 | **Run** | A `start` followed by its `success` or `fail`, or a lone `success`/`fail`. |
-| **Channel** | Where alerts go: email, Telegram, Slack, webhook. |
+| **Channel** | Where alerts go: email, Telegram, Slack, Discord, ntfy, webhook. |
 
 ## 3. Check states
 
@@ -391,7 +391,8 @@ With Actuator, `/actuator/info` shows the registered checks, dropped pings and t
 
 ## 8. Alerts
 
-Channels in v0.1: email, Telegram bot, Slack incoming webhook, generic webhook (JSON POST).
+Channels: email, Telegram bot, Slack incoming webhook, Discord webhook, ntfy (ntfy.sh or
+self-hosted), generic webhook (JSON POST).
 Every alert goes to **every channel of the check's project** (no per-check routing in v0.1).
 
 ### Channels
@@ -403,6 +404,8 @@ A channel is `{"type", "name", "config"}`; `name` defaults to the type. Config p
 | `email` | `address` | — | one address; needs server SMTP settings (`CRONBELL_SMTP_*`), else `400` |
 | `telegram` | `botToken`, `chatId` | `botToken` | token `<digits>:<35+ chars>`; chat id is an integer (groups are negative) or `@channelname` |
 | `slack` | `webhookUrl` | `webhookUrl` | `https://` only (Slack-compatible receivers such as Mattermost work too) |
+| `discord` | `webhookUrl` | `webhookUrl` | `https://discord.com/api/webhooks/…` (also `discordapp.com` and the `ptb.`/`canary.` hosts) |
+| `ntfy` | `serverUrl` (optional), `topic`, `token` (optional) | `token` | server `https://` or `http://`, default `https://ntfy.sh`, no user name or password in it (a trailing `/` is dropped); topic 1-64 letters, digits, `_`, `-`; an access token, sent as `Authorization: Bearer`. User and password logins are not supported. |
 | `webhook` | `url`, `secret` (optional) | `url`, `secret` | `https://` or `http://`: self-hosted installs post to services on their own network. The cloud will restrict this to public `https://`. |
 
 Secrets are stored as given (the database already holds the ping keys, which are secrets too) and
@@ -438,6 +441,13 @@ last 1,000 characters.
 - **Email**: subject is the first line, body the rest, plain text.
 - **Telegram**: Bot API `sendMessage`, `parse_mode=HTML`, `&`, `<`, `>` escaped, log in `<pre>`.
 - **Slack**: `{"text": …}` with mrkdwn (`&`, `<`, `>` escaped), log in a code block.
+- **Discord**: one embed: the first line as title linking to the check, the rest as description
+  (markdown characters escaped, the log in a code block), red for DOWN, green for UP, the alert
+  time as timestamp; posted as "Cronbell" with mentions off (`allowed_mentions.parse: []`), so a
+  log line with `@everyone` pings no one.
+- **ntfy**: JSON publish to the server's root URL: `topic`, `title` (the first line), `message`
+  (the rest, plain text), `priority` 4 (high) for DOWN and 3 (default) otherwise, `tags`
+  (`rotating_light`, `white_check_mark`, `bell` for a test) and `click` (the check's link).
 - **Webhook**: `POST`, `Content-Type: application/json`, body:
 
   ```json
@@ -473,17 +483,18 @@ Any 2xx answer is a success. Redirects are not followed.
 - **Timeouts.** Connect 5 s, read 10 s for HTTP; the same for SMTP. A stuck channel delays only
   its own deliveries.
 - **Retry.** Network errors, timeouts, `408`, `429` and `5xx` are retried after 30 s, then
-  doubling (1, 2, 4, 8 min…, at most 15 min), honouring `Retry-After` on `429`. Other `4xx`
-  (bad token, removed webhook) fail at once. A delivery not sent within **1 hour** of the alert
-  is given up. The latest error is kept on the row and shown on the channel.
+  doubling (1, 2, 4, 8 min…, at most 15 min), honouring `Retry-After` on `429` (Discord's
+  `retry_after` too). Other `4xx` (bad token, removed webhook) fail at once. A delivery not sent
+  within **1 hour** of the alert is given up. The latest error is kept on the row and shown on
+  the channel.
 - **Errors** are plain sentences that say what to fix, never a URL, a secret or an exception
   name: `Could not resolve hooks.example.com`, `Connection refused by hooks.example.com:8080`,
   `Timed out after 10 s waiting for hooks.example.com`, `TLS handshake with host:443 failed`,
-  `HTTP 401 from Telegram: check the bot token`, `HTTP 404 from Slack: the webhook was deleted
-  or its URL is wrong`, `HTTP 500 from hooks.example.com: <first 200 characters of the body>`,
-  `SMTP server smtp.example.com rejected the user name or password (…)`. A network error names
-  the host and port only, since a webhook URL can itself be a secret; a given-up delivery reads
-  `Gave up after 8 attempts in 60 min: …`.
+  `HTTP 401 from Telegram: check the bot token`, `HTTP 404 from Discord: the webhook was deleted
+  or its URL is wrong`, `HTTP 403 from ntfy: the topic needs an access token`, `HTTP 500 from
+  hooks.example.com: <first 200 characters of the body>`, `SMTP server smtp.example.com rejected
+  the user name or password (…)`. A network error names the host and port only, since a webhook
+  URL can itself be a secret; a given-up delivery reads `Gave up after 8 attempts in 60 min: …`.
 - **Rate limits.** Alerts are only sent on transitions, so there is no per-channel limit in
   v0.1. `POST /channels/{id}/test` is limited to one call per 10 s per channel (`429`).
 - Finished deliveries are kept for history and pruned with the pings (§10).
@@ -586,7 +597,7 @@ The cloud sells not having to run it, plus team features.
 | | Self-hosted | Cloud Free | Cloud Team (planned ~$9/mo) |
 |---|---|---|---|
 | Checks | unlimited | 20 | 200 |
-| Channels | all | email, Telegram | all, incl. Slack, webhook, Zalo later |
+| Channels | all | email, Telegram | all, incl. Slack, Discord, ntfy, webhook, Zalo later |
 | History | configurable (default 90 days) | 30 days | 1 year |
 | Members | unlimited | 1 | 10 |
 

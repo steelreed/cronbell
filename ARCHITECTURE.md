@@ -19,7 +19,7 @@ Each direct sub-package of `com.steelreed.cronbell.server` is a module:
 |---|---|---|
 | Checks | `checks` | Checks and their schedules (cron with time zones, periods), the state machine (DESIGN.md §3, §4), the detector, `CheckEvent` |
 | Pings | `pings` | The `/ping` endpoint (Healthchecks.io compatible), its rate limit, ping storage, the recent pings of a check |
-| Alerts | `alerts` | Channels (email, Telegram, Slack, webhooks), the delivery outbox, the dispatcher and retries, message rendering per channel type |
+| Alerts | `alerts` | Channels (email, Telegram, Slack, Discord, ntfy, webhooks), the delivery outbox, the dispatcher and retries, message rendering per channel type, plain error messages |
 | Accounts | `accounts` | Accounts and setup, projects, members and roles, invites, API keys, sessions and the current project, the security filter chain |
 | History | `history` | Daily pruning of old pings and finished deliveries |
 | Shared | `shared` | Database support and web plumbing that every module uses and that depends on no module |
