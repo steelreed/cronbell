@@ -3,7 +3,9 @@ package com.steelreed.cronbell.server.checks.internal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import com.steelreed.cronbell.server.checks.Check;
@@ -81,6 +83,38 @@ public class StatusEventRepository {
 			.param(limit)
 			.query(StatusEventRepository::map)
 			.list();
+	}
+
+	/**
+	 * When the check entered its current status: the time of its latest event. Every
+	 * status change is recorded and pruning keeps the latest event of each check, so it
+	 * is empty only for a check that never changed status since the history began.
+	 */
+	public Optional<Instant> findStatusSince(String checkId) {
+		return this.jdbc.sql("SELECT MAX(at) FROM status_events WHERE check_id = ?")
+			.param(checkId)
+			.query(Long.class)
+			.optional()
+			.map(Instant::ofEpochMilli);
+	}
+
+	/**
+	 * {@link #findStatusSince} for every check of a project in one statement: check id to
+	 * the time, for the checks that have events. Each check's latest time is read through
+	 * the {@code (check_id, at, seq)} index, not by scanning the project's history.
+	 */
+	public Map<String, Instant> findStatusSinceByProject(String projectId) {
+		Map<String, Instant> since = new HashMap<>();
+		this.jdbc.sql("""
+				SELECT c.id, (SELECT MAX(e.at) FROM status_events e WHERE e.check_id = c.id) AS since
+				  FROM checks c
+				 WHERE c.project_id = ?""").param(projectId).query((ResultSet rs) -> {
+			long at = rs.getLong("since");
+			if (!rs.wasNull()) {
+				since.put(rs.getString("id"), Instant.ofEpochMilli(at));
+			}
+		});
+		return since;
 	}
 
 	/**
