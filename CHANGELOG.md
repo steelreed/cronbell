@@ -22,6 +22,9 @@ All notable changes to Cronbell are listed here. The format follows
   check", which opens the form and then the new check's page. The `curl` recipe for scripts, now
   with the Spring Boot starter's two properties, sits behind "Using the API or the Spring Boot
   starter?".
+- The README no longer says every Healthchecks.io script keeps working: it lists what does (UUID
+  ping URLs with `/start`, `/fail`, `/log`, exit codes and `rid`) and what does not (slug URLs,
+  `?create=1`, bodies beyond 10 KB), and how to watch Cronbell itself.
 - One "not found" page for unknown addresses and checks, inside the app with the sidebar and a
   link back (the global one had no sidebar, a missing check was a bare line). A page that fails to
   load or render shows the error with a retry instead of the router's raw message.

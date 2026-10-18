@@ -28,8 +28,10 @@ usually hear about them from a customer. Cronbell turns "nothing happened" into 
 3. When a run is missed, fails or takes too long, Cronbell alerts you by email, Telegram, Slack or
    webhook.
 
-The ping API is compatible with Healthchecks.io (`/ping/<key>`, `/start`, `/fail`, exit codes), so
-existing scripts keep working.
+The ping API follows the UUID ping URLs of Healthchecks.io: `/ping/<key>` with `/start`, `/fail`,
+`/log`, an exit code (`/ping/<key>/$?`) and `?rid=`. Scripts that use those work once the base URL
+and the key are changed. Slug URLs (`/ping/<ping-key>/<slug>`) and creating a check on its first
+ping (`?create=1`) are not supported, and a ping body is cut at 10 KB (send the tail of a long log).
 
 **Spring Boot teams** can use
 [`cronbell-spring-boot-starter`](https://github.com/steelreed/cronbell-spring-boot-starter) (beta):
@@ -48,6 +50,9 @@ Open `http://localhost:8080` and create the admin account.
 For a server with your own domain and HTTPS (Docker Compose with Caddy, backups, upgrades), follow
 [`docs/self-hosting.md`](docs/self-hosting.md). See [`server/README.md`](server/README.md) for
 every setting.
+
+**Who watches Cronbell?** If Cronbell itself is down, nothing alerts you: point an external uptime
+check at `https://<your-cronbell>/actuator/health`.
 
 ## Repository layout
 

@@ -121,7 +121,8 @@ Rules:
 
 ## 5. Ping API
 
-Compatible with the Healthchecks.io URL shape, so moving over is a host change.
+The UUID ping URLs of Healthchecks.io, so a script that uses them moves over by changing the host
+and the key. Its slug URLs (`/ping/{pingKey}/{slug}`) and `?create=1` are not supported.
 
 ```
 GET|POST /ping/{pingKey}              success
