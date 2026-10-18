@@ -1523,6 +1523,42 @@ abstract class AbstractIntegrationTests {
 	}
 
 	@Test
+	void statusSinceIsWhenTheCheckEnteredItsStatusNotItsLastPing() {
+		Project project = newProject();
+		String slug = uniqueSlug();
+		String key = createCheck(project, slug, "{\"cron\":\"0 * * * *\"}");
+		String unpinged = uniqueSlug();
+		createCheck(project, unpinged, "{\"cron\":\"0 * * * *\"}");
+		assertThat(field(project.key(), unpinged, "statusSince")).isNull();
+
+		goDown(key);
+		CLOCK.advance(Duration.ofHours(1));
+		post("/ping/" + key + "/fail");
+		assertThat(field(project.key(), slug, "lastPingAt")).isEqualTo("2026-01-05T11:01:00Z");
+		assertThat(field(project.key(), slug, "statusSince")).isEqualTo("2026-01-05T10:01:00Z");
+		assertThat((String) JsonPath
+			.read(exchange(HttpMethod.GET, "/api/v1/checks/" + slug, null, project.key()).getBody(), "$.statusSince"))
+			.isEqualTo("2026-01-05T10:01:00Z");
+
+		CLOCK.advance(Duration.ofMinutes(4));
+		assertThat((String) JsonPath.read(
+				exchange(HttpMethod.POST, "/api/v1/checks/" + slug + "/pause", null, project.key()).getBody(),
+				"$.statusSince"))
+			.isEqualTo("2026-01-05T11:05:00Z");
+		assertThat(field(project.key(), slug, "statusSince")).isEqualTo("2026-01-05T11:05:00Z");
+
+		// A check with no history yet, as before the upgrade that started it.
+		this.jdbc
+			.sql("DELETE FROM status_events WHERE check_id = (SELECT id FROM checks WHERE project_id = ? AND slug = ?)")
+			.params(project.id(), slug)
+			.update();
+		assertThat(field(project.key(), slug, "statusSince")).isNull();
+		assertThat((Object) JsonPath
+			.read(exchange(HttpMethod.GET, "/api/v1/checks/" + slug, null, project.key()).getBody(), "$.statusSince"))
+			.isNull();
+	}
+
+	@Test
 	void theCheckHasItsUptimeAndAverageRunDuration() {
 		Project project = newProject();
 		String slug = uniqueSlug();

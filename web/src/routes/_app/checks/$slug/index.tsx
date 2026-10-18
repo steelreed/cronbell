@@ -30,7 +30,7 @@ import {
   pingsQuery,
 } from "@/lib/queries";
 import { runsFromPings } from "@/lib/runs";
-import { attention } from "@/lib/status";
+import { stateSince } from "@/lib/status";
 import { t } from "@/lib/strings";
 import type { Check } from "@/lib/types";
 import { useNow } from "@/lib/use-now";
@@ -186,7 +186,7 @@ function CheckHeader({ check, now }: { check: Check; now: number }) {
   const navigate = useNavigate();
   const { toggle } = useCheckActions(check);
   const paused = check.status === "PAUSED";
-  const issue = attention(check, now);
+  const since = stateSince(check, now);
   return (
     <div className="mb-4">
       <PageHeader
@@ -194,9 +194,9 @@ function CheckHeader({ check, now }: { check: Check; now: number }) {
         meta={
           <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <StatusText check={check} now={now} />
-            {issue?.since && (
+            {since && (
               <span className="text-muted-foreground">
-                {t.check.since} <Time iso={issue.since} now={now} />
+                {t.check.since} <Time iso={since} now={now} />
               </span>
             )}
             {check.name !== check.slug && <span className="font-mono text-xs">{check.slug}</span>}

@@ -106,6 +106,11 @@ All notable changes to Cronbell are listed here. The format follows
   (Telegram, Discord) was retried after the body's wait even when the header asked for longer,
   for example after 30 s instead of 120 s. The longest of the header, the body and the usual
   backoff now wins.
+- A check that kept failing showed "down since 3 min ago" (its latest ping) in its page header and
+  in the overview's "Needs attention", while its history said it had been down for an hour. The
+  check resource now has `statusSince`, when the check entered its status (its latest status
+  event), and the dashboard dates DOWN checks of every reason and paused checks from it, falling
+  back to the check's state for checks without history.
 
 ## [0.1.0-beta.2] - 2026-10-17
 

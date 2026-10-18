@@ -17,6 +17,7 @@ export function aCheck(overrides: Partial<Check> = {}): Check {
     channels: null,
     status: "UP",
     downReason: null,
+    statusSince: null,
     lastPingAt: "2026-01-04T20:01:00Z",
     lastStartAt: null,
     lastSuccessAt: "2026-01-04T20:01:00Z",
