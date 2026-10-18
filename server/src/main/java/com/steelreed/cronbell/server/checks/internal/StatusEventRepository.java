@@ -15,7 +15,14 @@ import com.steelreed.cronbell.server.shared.database.Ids;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
-/** The status history of checks: one row per status change (DESIGN.md §4). */
+/**
+ * The status history of checks: one row per status change (DESIGN.md §4).
+ *
+ * <p>
+ * The events of a check are ordered by {@code (at, seq)}: {@code seq} counts them up per
+ * check as they are written, under the check's row lock, so changes in the same
+ * millisecond keep their order wherever the history is read or pruned.
+ */
 @Repository
 public class StatusEventRepository {
 
@@ -27,11 +34,19 @@ public class StatusEventRepository {
 		this.jdbc = jdbc;
 	}
 
-	/** Records that {@code check} entered {@code state} at {@code at}. */
+	/**
+	 * Records that {@code check} entered {@code state} at {@code at}. The caller holds
+	 * the check's row lock (on PostgreSQL), which keeps the check's events numbered in
+	 * order.
+	 */
 	public StatusEvent record(Check check, StatusEvent.Kind kind, CheckState state, Instant at) {
 		StatusEvent event = StatusEvent.of(Ids.newId(), check, kind, state, at);
-		this.jdbc.sql("INSERT INTO status_events (%s) VALUES (?, ?, ?, ?, ?, ?, ?)".formatted(COLUMNS))
-			.params(event.id(), event.checkId(), event.projectId(), event.kind().name(),
+		long seq = this.jdbc.sql("SELECT COALESCE(MAX(seq), 0) + 1 FROM status_events WHERE check_id = ?")
+			.param(check.id())
+			.query(Long.class)
+			.single();
+		this.jdbc.sql("INSERT INTO status_events (seq, %s) VALUES (?, ?, ?, ?, ?, ?, ?, ?)".formatted(COLUMNS))
+			.params(seq, event.id(), event.checkId(), event.projectId(), event.kind().name(),
 					(event.reason() != null) ? event.reason().name() : null,
 					(event.runAt() != null) ? event.runAt().toEpochMilli() : null, at.toEpochMilli())
 			.update();
@@ -50,7 +65,7 @@ public class StatusEventRepository {
 	public List<StatusEvent> findRecentByCheck(String checkId, int limit) {
 		return this.jdbc.sql("""
 				SELECT %s FROM status_events
-				 WHERE check_id = ? ORDER BY at DESC, id DESC LIMIT ?""".formatted(COLUMNS))
+				 WHERE check_id = ? ORDER BY at DESC, seq DESC LIMIT ?""".formatted(COLUMNS))
 			.param(checkId)
 			.param(limit)
 			.query(StatusEventRepository::map)
@@ -61,7 +76,7 @@ public class StatusEventRepository {
 	public List<StatusEvent> findRecentByProject(String projectId, int limit) {
 		return this.jdbc.sql("""
 				SELECT %s FROM status_events
-				 WHERE project_id = ? ORDER BY at DESC, id DESC LIMIT ?""".formatted(COLUMNS))
+				 WHERE project_id = ? ORDER BY at DESC, seq DESC, id DESC LIMIT ?""".formatted(COLUMNS))
 			.param(projectId)
 			.param(limit)
 			.query(StatusEventRepository::map)
@@ -88,8 +103,8 @@ public class StatusEventRepository {
 				   AND (e.at > :from
 				        OR NOT EXISTS (SELECT 1 FROM status_events n
 				                        WHERE n.check_id = e.check_id AND n.at <= :from
-				                          AND (n.at > e.at OR (n.at = e.at AND n.id > e.id))))
-				 ORDER BY e.at, e.id""".formatted(COLUMNS, column))
+				                          AND (n.at > e.at OR (n.at = e.at AND n.seq > e.seq))))
+				 ORDER BY e.at, e.seq""".formatted(COLUMNS, column))
 			.param("value", value)
 			.param("from", from.toEpochMilli())
 			.query(StatusEventRepository::map)
@@ -108,7 +123,7 @@ public class StatusEventRepository {
 				   WHERE e.at < :cutoff
 				     AND EXISTS (SELECT 1 FROM status_events n
 				                  WHERE n.check_id = e.check_id AND n.at < :cutoff
-				                    AND (n.at > e.at OR (n.at = e.at AND n.id > e.id)))
+				                    AND (n.at > e.at OR (n.at = e.at AND n.seq > e.seq)))
 				   LIMIT :limit)""").param("cutoff", cutoff.toEpochMilli()).param("limit", limit).update();
 	}
 

@@ -123,7 +123,9 @@ Rules:
   (up to 15 s after `due + grace`). The `CheckEvent` of a DOWN or a recovery carries its event,
   and every delivery it queues keeps it, so the history shows where each alert went. Upgrading
   starts the history with one event per check that is DOWN or paused, timed as well as the check
-  row knows.
+  row knows. The events of a check are ordered by time, then by the order they were written (a
+  per-check sequence taken under the check's row lock), so two changes in one millisecond keep
+  their order in the history, the uptime and pruning.
 - Detection must be safe to run on several server instances: it claims due checks with
   `SELECT … FOR UPDATE SKIP LOCKED`.
 - **Downtime.** Every detector run leaves a heartbeat in the database (`detector_heartbeat`). When

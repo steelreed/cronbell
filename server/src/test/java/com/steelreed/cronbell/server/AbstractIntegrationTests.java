@@ -1369,6 +1369,53 @@ abstract class AbstractIntegrationTests {
 		assertThat((String) JsonPath.read(events, "$[1].at")).isEqualTo("2026-01-05T10:02:00Z");
 	}
 
+	@Test
+	@SuppressWarnings("unchecked")
+	void changesInTheSameMillisecondKeepTheirOrder() {
+		Project project = newProject();
+		String slug = uniqueSlug();
+		String key = createCheck(project, slug, "{\"cron\":\"0 * * * *\"}");
+		get("/ping/" + key);
+		CLOCK.advance(Duration.ofMinutes(1));
+		// DOWN, then UP again, in the same millisecond.
+		post("/ping/" + key + "/fail");
+		get("/ping/" + key);
+		// UUIDv7 ids are random within a millisecond: give the later event the smaller
+		// id.
+		List<String> ids = this.jdbc.sql("""
+				SELECT e.id FROM status_events e JOIN checks c ON c.id = e.check_id
+				 WHERE c.ping_key = ? AND e.at = ? ORDER BY e.seq""")
+			.params(key, CLOCK.instant().toEpochMilli())
+			.query(String.class)
+			.list();
+		assertThat(ids).hasSize(2);
+		String low = (ids.get(0).compareTo(ids.get(1)) < 0) ? ids.get(0) : ids.get(1);
+		String high = low.equals(ids.get(0)) ? ids.get(1) : ids.get(0);
+		String swap = UUID.randomUUID().toString();
+		this.jdbc.sql("UPDATE status_events SET id = ? WHERE id = ?").params(swap, ids.get(0)).update();
+		this.jdbc.sql("UPDATE status_events SET id = ? WHERE id = ?").params(low, ids.get(1)).update();
+		this.jdbc.sql("UPDATE status_events SET id = ? WHERE id = ?").params(high, swap).update();
+
+		String events = exchange(HttpMethod.GET, "/api/v1/checks/" + slug + "/events", null, project.key()).getBody();
+		assertThat((List<String>) JsonPath.read(events, "$[*].kind")).containsExactly("UP", "DOWN", "UP");
+		assertThat((List<String>) JsonPath
+			.read(exchange(HttpMethod.GET, "/api/v1/events?limit=2", null, project.key()).getBody(), "$[*].kind"))
+			.containsExactly("UP", "DOWN");
+		CLOCK.set("2026-01-06T10:00:00Z");
+		assertThat((Double) stat(project, slug, "uptime7d")).isEqualTo(1.0);
+		assertThat((List<String>) JsonPath.read(
+				exchange(HttpMethod.GET, "/api/v1/stats/status?days=1", null, project.key()).getBody(),
+				"$[0].days[*].state"))
+			.containsExactly("NONE");
+
+		// Pruning keeps the latest of the two, the one that tells the status.
+		CLOCK.advance(Duration.ofDays(100));
+		this.pruner.runOnce();
+		events = exchange(HttpMethod.GET, "/api/v1/checks/" + slug + "/events", null, project.key()).getBody();
+		assertThat((List<String>) JsonPath.read(events, "$[*].kind")).containsExactly("UP");
+		assertThat((String) JsonPath.read(events, "$[0].at")).isEqualTo("2026-01-05T10:01:00Z");
+	}
+
 	void removeAccounts() {
 		this.jdbc.sql("DELETE FROM accounts").update();
 	}

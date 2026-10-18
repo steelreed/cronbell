@@ -154,7 +154,9 @@ between batches.
 
 ### Status history and uptime
 
-`status_events` holds one row per status change (DESIGN.md §4). The check page's uptime and the
+`status_events` holds one row per status change (DESIGN.md §4), ordered per check by `(at, seq)`:
+`seq` is taken under the check's row lock, as every writer (ping, detector, pause, resume) holds
+it, so changes in the same millisecond keep their order. The check page's uptime and the
 overview's status strip are computed when asked, by the pure `StatusTimeline`, from a check's
 events since the window start plus the latest one before it; the strip reads every check of the
 project in one query, and its runs per day through `RunStats.countPerBucket`.
