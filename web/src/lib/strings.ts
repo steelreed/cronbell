@@ -206,6 +206,16 @@ export const en = {
     pingUrl: "Ping URL",
     integrate: "Send pings",
     integrateLead: "Report start, exit code and the last 10 KB of output.",
+    firstPing: {
+      waiting: "Waiting for the first ping…",
+      received: "First ping received",
+      next: "next run",
+      test: "Send a test ping",
+      testing: "Sending…",
+      testBody: "Test ping from the Cronbell dashboard",
+      rateLimited: "Too many pings at once. Try again in a second.",
+      failed: (status: number) => `The ping was refused (HTTP ${status}).`,
+    },
     snippets: {
       crontab: "crontab",
       shell: "Shell",

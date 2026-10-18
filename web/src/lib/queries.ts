@@ -43,11 +43,18 @@ export const checksQuery = queryOptions({
   refetchInterval: POLL_MS,
 });
 
+/**
+ * A ping changes the check at once, with no detector in between: while a check waits for its
+ * first ping, its page polls this often so the ping shows up as it arrives.
+ */
+export const FIRST_PING_POLL_MS = 3_000;
+
 export const checkQuery = (slug: string) =>
   queryOptions({
     queryKey: ["checks", slug],
     queryFn: () => api<Check>(`/checks/${encodeURIComponent(slug)}`),
-    refetchInterval: POLL_MS,
+    refetchInterval: (query) =>
+      query.state.data?.lastPingAt === null ? FIRST_PING_POLL_MS : POLL_MS,
   });
 
 /** The detail page reads the most pings the API gives: enough for ~90 runs with their starts. */

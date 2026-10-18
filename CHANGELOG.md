@@ -6,6 +6,13 @@ All notable changes to Cronbell are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A check that has never pinged opens on its ping URL, waiting for the first ping (refreshed
+  every 3 seconds), with a **Send a test ping** button that pings it from the browser; then it
+  says when the ping arrived and when the next run is due. Its empty Runs and Recent pings panels
+  stay hidden until there is a ping.
+
 ### Changed
 
 - With no checks, the overview and the checks list lead with one button, "Create your first
