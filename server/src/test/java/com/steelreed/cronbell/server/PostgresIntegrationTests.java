@@ -78,6 +78,11 @@ class PostgresIntegrationTests extends AbstractProjectsIntegrationTests {
 				Flyway.configure()
 					.dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
 					.schemas(schema)
+					.target("6")
+					.load(),
+				Flyway.configure()
+					.dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
+					.schemas(schema)
 					.load(),
 				JdbcClient.create(new DriverManagerDataSource(url, postgres.getUsername(), postgres.getPassword())));
 	}

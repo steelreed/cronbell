@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { aCheck, stubFetch } from "@/test/fixtures";
+import { aChannel, aCheck, stubFetch } from "@/test/fixtures";
 import { CheckForm } from "./check-form";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -16,6 +16,13 @@ function renderForm(props: Partial<Parameters<typeof CheckForm>[0]> = {}) {
       "GET /api/v1/schedules/next": () => [
         200,
         { cron: "0 3 * * *", timeZone: "UTC", runs: ["2026-01-06T03:00:00Z"] },
+      ],
+      "GET /api/v1/channels": () => [
+        200,
+        [
+          aChannel(),
+          aChannel({ id: "ch-pager", type: "ntfy", name: "Pager", config: { topic: "ops" } }),
+        ],
       ],
     }),
   );
@@ -73,8 +80,35 @@ describe("CheckForm", () => {
       periodSeconds: 900,
       timeZone: "UTC",
       graceSeconds: 1800,
+      channels: null,
     });
   }, 15_000);
+
+  it("sends alerts to the ticked channels only", async () => {
+    const user = userEvent.setup();
+    const onSubmit = renderForm();
+    await user.type(screen.getByLabelText(/^Slug/), "nightly-backup");
+    await user.click(screen.getByRole("radio", { name: "Chosen channels" }));
+    const first = await screen.findByRole("checkbox", { name: /Ops chat/ });
+    await user.click(screen.getByRole("button", { name: "Create check" }));
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByText(/Tick at least one channel/)).toBeInTheDocument();
+    expect(first).toHaveFocus();
+
+    await user.click(screen.getByRole("checkbox", { name: /Pager/ }));
+    await user.click(screen.getByRole("button", { name: "Create check" }));
+    expect(onSubmit).toHaveBeenCalledWith(
+      "nightly-backup",
+      expect.objectContaining({ channels: ["ch-pager"] }),
+    );
+  });
+
+  it("shows the channels an existing check picked", async () => {
+    renderForm({ check: aCheck({ channels: ["ch-ops"] }) });
+    expect(screen.getByRole("radio", { name: "Chosen channels" })).toBeChecked();
+    expect(await screen.findByRole("checkbox", { name: /Ops chat/ })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /Pager/ })).not.toBeChecked();
+  });
 
   it("makes the slug from the name until the slug is edited", async () => {
     const user = userEvent.setup();

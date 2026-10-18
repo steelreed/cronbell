@@ -97,7 +97,7 @@ Any Spring Boot property works too, for example `SPRING_DATASOURCE_URL`, which w
 | `cronbell.scheduling.enabled` | `true` | Turns the detector and the notifier's timer off (tests drive them by hand). |
 | `cronbell.history.batch-size` | `5000` | Rows the daily pruning deletes per statement (one short transaction each). |
 | `cronbell.notifier.interval` | `PT5S` | How often the notifier looks for alerts to send or retry. |
-| `cronbell.notifier.connect-timeout` | `PT5S` | Connect timeout for Slack, Telegram, webhooks and SMTP. |
+| `cronbell.notifier.connect-timeout` | `PT5S` | Connect timeout for Slack, Telegram, Discord, ntfy, webhooks and SMTP. |
 | `cronbell.notifier.read-timeout` | `PT10S` | Read timeout for the same. |
 | `cronbell.notifier.telegram-api-url` | `https://api.telegram.org` | Telegram Bot API base URL (tests point it at a local stub). |
 
@@ -154,17 +154,23 @@ curl -fsS --data-raw "$(tail -c 10000 backup.log)" localhost:8080/ping/<pingKey>
 
 curl -H "Authorization: Bearer $KEY" localhost:8080/api/v1/checks
 
-# Alerts: every channel of the project gets every DOWN and UP alert.
+# Alerts: every channel of the project gets every DOWN and UP alert, unless a check picks some.
 curl -X POST localhost:8080/api/v1/channels \
   -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' \
   -d '{"type": "telegram", "name": "Ops", "config": {"botToken": "<token>", "chatId": "-100123"}}'
 # -> 201 {"id": "…", "type": "telegram", "config": {"botToken": "12…yz", "chatId": "-100123"}, …}
 
 curl -X POST localhost:8080/api/v1/channels/<id>/test -H "Authorization: Bearer $KEY"
+
+# Only this channel gets the alerts of nightly-backup ("channels": null for every channel again).
+curl -X PUT localhost:8080/api/v1/checks/nightly-backup \
+  -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' \
+  -d '{"cron": "0 3 * * *", "timeZone": "Asia/Ho_Chi_Minh", "channels": ["<id>"]}'
 ```
 
-Channel types and their config are in [`DESIGN.md` §8](../DESIGN.md#8-alerts). Secrets (bot
-tokens, webhook URLs and secrets) are returned masked. Webhook receivers can check the
+Channel types (email, Telegram, Slack, Discord, ntfy, webhook), their config and routing are in
+[`DESIGN.md` §8](../DESIGN.md#8-alerts). Secrets (bot tokens, webhook URLs, ntfy tokens and
+signing secrets) are returned masked. Webhook receivers can check the
 `Cronbell-Signature` header: `sha256=` + hex HMAC-SHA256 of `<Cronbell-Timestamp>.<body>`.
 
 ## Layout

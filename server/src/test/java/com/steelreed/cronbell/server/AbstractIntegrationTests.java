@@ -507,7 +507,7 @@ abstract class AbstractIntegrationTests {
 	void deliversDownAndUpToEveryChannelOfTheProject() throws Exception {
 		Project project = newProject();
 		String slack = "/slack/" + UUID.randomUUID();
-		insertSlackChannel(project, slack);
+		insertWebhookUrlChannel(project, ChannelType.SLACK, slack);
 		String hook = "/hook/" + UUID.randomUUID();
 		createChannel(project, "{\"type\":\"webhook\",\"name\":\"Hook\",\"config\":{\"url\":\"" + RECEIVER.url(hook)
 				+ "\",\"secret\":\"" + WEBHOOK_SECRET + "\"}}");
@@ -599,7 +599,7 @@ abstract class AbstractIntegrationTests {
 		this.dispatcher.runOnce();
 		assertThat(RECEIVER.requests(hook)).hasSize(1);
 		String status = exchange(HttpMethod.GET, "/api/v1/channels/" + channel, null, project.key()).getBody();
-		assertThat((String) JsonPath.read(status, "$.lastError")).isEqualTo("HTTP 500: oops");
+		assertThat((String) JsonPath.read(status, "$.lastError")).isEqualTo("HTTP 500 from localhost: oops");
 		assertThat((Integer) JsonPath.read(status, "$.pendingDeliveries")).isEqualTo(1);
 		assertThat((Object) JsonPath.read(status, "$.lastDeliveryAt")).isNull();
 
@@ -644,7 +644,7 @@ abstract class AbstractIntegrationTests {
 			.isLessThan(raised.plus(Duration.ofHours(1)).toEpochMilli());
 		String status = exchange(HttpMethod.GET, "/api/v1/channels/" + channel, null, project.key()).getBody();
 		assertThat((String) JsonPath.read(status, "$.lastError"))
-			.isEqualTo("gave up after 8 attempts in 60 min: HTTP 503");
+			.isEqualTo("Gave up after 8 attempts in 60 min: HTTP 503 from localhost");
 		assertThat((Integer) JsonPath.read(status, "$.pendingDeliveries")).isZero();
 	}
 
@@ -661,7 +661,7 @@ abstract class AbstractIntegrationTests {
 		this.dispatcher.runOnce();
 		assertThat(RECEIVER.requests(hook)).hasSize(1);
 		String status = exchange(HttpMethod.GET, "/api/v1/channels/" + channel, null, project.key()).getBody();
-		assertThat((String) JsonPath.read(status, "$.lastError")).isEqualTo("HTTP 410: gone");
+		assertThat((String) JsonPath.read(status, "$.lastError")).isEqualTo("HTTP 410 from localhost: gone");
 	}
 
 	@Test
@@ -699,7 +699,8 @@ abstract class AbstractIntegrationTests {
 		this.dispatcher.runOnce();
 		assertThat(RECEIVER.requests(fast)).hasSize(1);
 		String status = exchange(HttpMethod.GET, "/api/v1/channels/" + slowChannel, null, project.key()).getBody();
-		assertThat((String) JsonPath.read(status, "$.lastError")).isEqualTo("timed out");
+		assertThat((String) JsonPath.read(status, "$.lastError"))
+			.isEqualTo("Timed out after 1 s waiting for localhost");
 		assertThat((Integer) JsonPath.read(status, "$.pendingDeliveries")).isEqualTo(1);
 	}
 
@@ -809,8 +810,263 @@ abstract class AbstractIntegrationTests {
 		ResponseEntity<String> failed = exchange(HttpMethod.POST, "/api/v1/channels/" + bad + "/test", null,
 				project.key());
 		assertThat(failed.getStatusCode().value()).isEqualTo(502);
-		assertThat((String) JsonPath.read(failed.getBody(), "$.detail")).isEqualTo("HTTP 401: Unauthorized");
+		assertThat((String) JsonPath.read(failed.getBody(), "$.detail"))
+			.isEqualTo("HTTP 401 from Telegram: check the bot token");
 		assertThat(failed.getBody()).doesNotContain(badToken);
+	}
+
+	@Test
+	void discordGetsAnEmbedAndIsRetriedWhenRateLimited() {
+		Project project = newProject();
+		String path = "/discord/" + UUID.randomUUID();
+		RECEIVER.script(path,
+				FakeReceiver.Response.of(429, "{\"message\":\"You are being rate limited.\",\"retry_after\":45.5}"),
+				FakeReceiver.Response.status(204));
+		String channel = insertWebhookUrlChannel(project, ChannelType.DISCORD, path);
+		goDown(project);
+		this.dispatcher.runOnce();
+		String status = exchange(HttpMethod.GET, "/api/v1/channels/" + channel, null, project.key()).getBody();
+		assertThat((String) JsonPath.read(status, "$.lastError"))
+			.isEqualTo("HTTP 429 from Discord: You are being rate limited.");
+
+		// Discord's retry_after is longer than the first 30 s backoff, so it wins.
+		CLOCK.advance(Duration.ofSeconds(45));
+		this.dispatcher.runOnce();
+		assertThat(RECEIVER.requests(path)).hasSize(1);
+		CLOCK.advance(Duration.ofSeconds(1));
+		this.dispatcher.runOnce();
+		assertThat(RECEIVER.requests(path)).hasSize(2);
+		String body = RECEIVER.requests(path).getLast().body();
+		assertThat((String) JsonPath.read(body, "$.username")).isEqualTo("Cronbell");
+		assertThat((List<Object>) JsonPath.read(body, "$.allowed_mentions.parse")).isEmpty();
+		assertThat((String) JsonPath.read(body, "$.embeds[0].title")).endsWith(" is DOWN: run failed");
+		assertThat((Integer) JsonPath.read(body, "$.embeds[0].color")).isEqualTo(0xD92D20);
+		assertThat((String) JsonPath.read(body, "$.embeds[0].url")).startsWith("https://cronbell.example.com/checks/");
+		status = exchange(HttpMethod.GET, "/api/v1/channels/" + channel, null, project.key()).getBody();
+		assertThat((Object) JsonPath.read(status, "$.lastError")).isNull();
+	}
+
+	@Test
+	void discordWaitsForTheLongerOfRetryAfterAndItsBody() {
+		Project project = newProject();
+		String path = "/discord/" + UUID.randomUUID();
+		RECEIVER.script(path,
+				new FakeReceiver.Response(429, "{\"message\":\"You are being rate limited.\",\"retry_after\":1}",
+						Map.of("Retry-After", "120"), Duration.ZERO),
+				FakeReceiver.Response.status(204));
+		insertWebhookUrlChannel(project, ChannelType.DISCORD, path);
+		goDown(project);
+		this.dispatcher.runOnce();
+		assertThat(RECEIVER.requests(path)).hasSize(1);
+
+		// Neither the body's 1 s nor the first 30 s backoff: the header's 120 s.
+		CLOCK.advance(Duration.ofSeconds(119));
+		this.dispatcher.runOnce();
+		assertThat(RECEIVER.requests(path)).hasSize(1);
+		CLOCK.advance(Duration.ofSeconds(1));
+		this.dispatcher.runOnce();
+		assertThat(RECEIVER.requests(path)).hasSize(2);
+	}
+
+	@Test
+	void unknownDiscordWebhookIsNotRetried() {
+		Project project = newProject();
+		String path = "/discord/" + UUID.randomUUID();
+		RECEIVER.always(path, FakeReceiver.Response.of(404, "{\"message\":\"Unknown Webhook\",\"code\":10015}"));
+		String channel = insertWebhookUrlChannel(project, ChannelType.DISCORD, path);
+		goDown(project);
+		this.dispatcher.runOnce();
+		CLOCK.advance(Duration.ofMinutes(10));
+		this.dispatcher.runOnce();
+		assertThat(RECEIVER.requests(path)).hasSize(1);
+		String status = exchange(HttpMethod.GET, "/api/v1/channels/" + channel, null, project.key()).getBody();
+		assertThat((String) JsonPath.read(status, "$.lastError"))
+			.isEqualTo("HTTP 404 from Discord: the webhook was deleted or its URL is wrong");
+	}
+
+	@Test
+	void ntfyGetsTitlePriorityTagsAndClickWithTheAccessToken() {
+		Project project = newProject();
+		String server = "/ntfy/" + UUID.randomUUID();
+		String token = "tk_" + UUID.randomUUID().toString().replace("-", "");
+		ResponseEntity<String> created = exchange(HttpMethod.POST, "/api/v1/channels", "{\"type\":\"ntfy\",\"config\":"
+				+ "{\"serverUrl\":\"" + RECEIVER.url(server) + "/\",\"topic\":\"ops\",\"token\":\"" + token + "\"}}",
+				project.key());
+		assertThat(created.getStatusCode().value()).as(created.getBody()).isEqualTo(201);
+		assertThat(created.getBody()).doesNotContain(token);
+		assertThat((String) JsonPath.read(created.getBody(), "$.config.serverUrl")).isEqualTo(RECEIVER.url(server));
+		String slug = uniqueSlug();
+		String key = createCheck(project, slug, "{\"cron\":\"0 * * * *\"}");
+		goDown(key);
+		this.dispatcher.runOnce();
+
+		FakeReceiver.Request down = RECEIVER.requests(server).getFirst();
+		assertThat(down.header("Authorization")).isEqualTo("Bearer " + token);
+		assertThat((String) JsonPath.read(down.body(), "$.topic")).isEqualTo("ops");
+		assertThat((String) JsonPath.read(down.body(), "$.title"))
+			.isEqualTo("[Cronbell] " + slug + " is DOWN: run failed");
+		assertThat((Integer) JsonPath.read(down.body(), "$.priority")).isEqualTo(4);
+		assertThat((List<String>) JsonPath.read(down.body(), "$.tags")).containsExactly("rotating_light");
+		assertThat((String) JsonPath.read(down.body(), "$.click"))
+			.isEqualTo("https://cronbell.example.com/checks/" + slug);
+
+		CLOCK.advance(Duration.ofMinutes(1));
+		get("/ping/" + key);
+		this.dispatcher.runOnce();
+		FakeReceiver.Request up = RECEIVER.requests(server).getLast();
+		assertThat((Integer) JsonPath.read(up.body(), "$.priority")).isEqualTo(3);
+		assertThat((List<String>) JsonPath.read(up.body(), "$.tags")).containsExactly("white_check_mark");
+	}
+
+	@Test
+	void ntfyRefusalsSayWhatToFix() {
+		Project project = newProject();
+		String server = "/ntfy/" + UUID.randomUUID();
+		RECEIVER.always(server, FakeReceiver.Response.of(403,
+				"{\"code\":40301,\"http\":403,\"error\":\"forbidden\",\"link\":\"https://ntfy.sh/docs/publish/#authentication\"}"));
+		String open = createChannel(project,
+				"{\"type\":\"ntfy\",\"config\":{\"serverUrl\":\"" + RECEIVER.url(server) + "\",\"topic\":\"ops\"}}");
+		ResponseEntity<String> failed = exchange(HttpMethod.POST, "/api/v1/channels/" + open + "/test", null,
+				project.key());
+		assertThat(failed.getStatusCode().value()).isEqualTo(502);
+		assertThat((String) JsonPath.read(failed.getBody(), "$.detail"))
+			.isEqualTo("HTTP 403 from ntfy: the topic needs an access token");
+	}
+
+	@Test
+	void anErrorBodyEchoingASecretNeverKeepsAPieceOfIt() {
+		Project project = newProject();
+		// The token starts at character 193 of the body and the error keeps 200.
+		String server = "/ntfy/" + UUID.randomUUID();
+		String token = "tk_" + UUID.randomUUID().toString().replace("-", "");
+		RECEIVER.always(server, FakeReceiver.Response.of(500, "a".repeat(185) + " token=" + token + " was refused"));
+		String ntfy = createChannel(project, "{\"type\":\"ntfy\",\"config\":{\"serverUrl\":\"" + RECEIVER.url(server)
+				+ "\",\"topic\":\"ops\",\"token\":\"" + token + "\"}}");
+		// Discord's webhook path, without the host, from character 182.
+		String path = "/discord/" + UUID.randomUUID();
+		RECEIVER.always(path, FakeReceiver.Response.of(502, "b".repeat(180) + " " + path + " is unavailable"));
+		String discord = insertWebhookUrlChannel(project, ChannelType.DISCORD, path);
+		goDown(project);
+		this.dispatcher.runOnce();
+
+		String ntfyError = JsonPath
+			.read(exchange(HttpMethod.GET, "/api/v1/channels/" + ntfy, null, project.key()).getBody(), "$.lastError");
+		assertThat(ntfyError).startsWith("HTTP 500 from ntfy: aaa").endsWith(" token=**** was…");
+		assertThat(ntfyError).doesNotContain(token.substring(0, 8));
+		String discordError = JsonPath.read(
+				exchange(HttpMethod.GET, "/api/v1/channels/" + discord, null, project.key()).getBody(), "$.lastError");
+		assertThat(discordError).startsWith("HTTP 502 from Discord: bbb").contains(" **** is");
+		assertThat(discordError).doesNotContain(path.substring(0, 18));
+	}
+
+	@Test
+	void unreachableChannelsGetAPlainReason() {
+		Project project = newProject();
+		String channel = createChannel(project,
+				"{\"type\":\"webhook\",\"config\":{\"url\":\"https://hooks.example.invalid/secret-path\"}}");
+		ResponseEntity<String> failed = exchange(HttpMethod.POST, "/api/v1/channels/" + channel + "/test", null,
+				project.key());
+		assertThat(failed.getStatusCode().value()).isEqualTo(502);
+		assertThat((String) JsonPath.read(failed.getBody(), "$.detail"))
+			.isEqualTo("Could not resolve hooks.example.invalid");
+	}
+
+	// --- Alert routing ---
+
+	@Test
+	void aCheckAlertsOnlyThePickedChannels() {
+		Project project = newProject();
+		String picked = "/hook/" + UUID.randomUUID();
+		String pickedId = createChannel(project,
+				"{\"type\":\"webhook\",\"config\":{\"url\":\"" + RECEIVER.url(picked) + "\"}}");
+		String other = "/hook/" + UUID.randomUUID();
+		String otherId = createChannel(project,
+				"{\"type\":\"webhook\",\"config\":{\"url\":\"" + RECEIVER.url(other) + "\"}}");
+		String slug = uniqueSlug();
+		ResponseEntity<String> created = exchange(HttpMethod.PUT, "/api/v1/checks/" + slug,
+				"{\"cron\":\"0 * * * *\",\"channels\":[\"" + pickedId + "\",\"" + pickedId + "\"]}", project.key());
+		assertThat(created.getStatusCode().value()).as(created.getBody()).isEqualTo(201);
+		assertThat((List<String>) JsonPath.read(created.getBody(), "$.channels")).containsExactly(pickedId);
+		goDown((String) JsonPath.read(created.getBody(), "$.pingKey"));
+		this.dispatcher.runOnce();
+		assertThat(RECEIVER.requests(picked)).hasSize(1);
+		assertThat(RECEIVER.requests(other)).isEmpty();
+
+		// The check's history shows the alert where it went, and only there.
+		String events = exchange(HttpMethod.GET, "/api/v1/checks/" + slug + "/events", null, project.key()).getBody();
+		String alerts = exchange(HttpMethod.GET, "/api/v1/checks/" + slug + "/alerts", null, project.key()).getBody();
+		assertThat((List<String>) JsonPath.read(alerts, "$[*].channelId")).containsExactly(pickedId);
+		assertThat((List<String>) JsonPath.read(alerts, "$[*].eventId"))
+			.containsExactly((String) JsonPath.read(events, "$[0].id"));
+		assertThat((List<String>) JsonPath.read(alerts, "$[*].status")).containsExactly("DELIVERED");
+
+		String channels = exchange(HttpMethod.GET, "/api/v1/channels", null, project.key()).getBody();
+		assertThat((List<Integer>) JsonPath.read(channels, "$[?(@.id == '" + pickedId + "')].pickedBy"))
+			.containsExactly(1);
+		assertThat((List<Integer>) JsonPath.read(channels, "$[?(@.id == '" + otherId + "')].pickedBy"))
+			.containsExactly(0);
+		assertThat((List<String>) field(project.key(), slug, "channels")).containsExactly(pickedId);
+	}
+
+	@Test
+	void leavingChannelsOutKeepsTheSelectionAndNullResetsIt() {
+		Project project = newProject();
+		String channel = createChannel(project, "{\"type\":\"email\",\"config\":{\"address\":\"a@example.com\"}}");
+		String slug = uniqueSlug();
+		createCheck(project, slug, "{\"cron\":\"0 * * * *\"}");
+		assertThat(field(project.key(), slug, "channels")).isNull();
+		String path = "/api/v1/checks/" + slug;
+		exchange(HttpMethod.PUT, path, "{\"cron\":\"0 * * * *\",\"channels\":[\"" + channel + "\"]}", project.key());
+
+		// The starter registers its checks at start-up without channels.
+		ResponseEntity<String> registered = exchange(HttpMethod.PUT, path, "{\"cron\":\"5 * * * *\"}", project.key());
+		assertThat((List<String>) JsonPath.read(registered.getBody(), "$.channels")).containsExactly(channel);
+
+		ResponseEntity<String> reset = exchange(HttpMethod.PUT, path, "{\"cron\":\"5 * * * *\",\"channels\":null}",
+				project.key());
+		assertThat((Object) JsonPath.read(reset.getBody(), "$.channels")).isNull();
+		exchange(HttpMethod.PUT, path, "{\"cron\":\"5 * * * *\",\"channels\":[\"" + channel + "\"]}", project.key());
+		ResponseEntity<String> empty = exchange(HttpMethod.PUT, path, "{\"cron\":\"5 * * * *\",\"channels\":[]}",
+				project.key());
+		assertThat((Object) JsonPath.read(empty.getBody(), "$.channels")).isNull();
+	}
+
+	@Test
+	void aCheckCannotPickAnotherProjectsChannel() {
+		Project project = newProject();
+		Project other = newProject();
+		String foreign = createChannel(other, "{\"type\":\"email\",\"config\":{\"address\":\"a@example.com\"}}");
+		String slug = uniqueSlug();
+		Map<String, String> invalid = Map.of("[\"" + foreign + "\"]",
+				"channels: no channel with id " + foreign + " in this project", "[\"nope\"]",
+				"channels: no channel with id nope in this project", "\"" + foreign + "\"",
+				"channels must be a list of channel ids", "[1]", "channels must be a list of channel ids");
+		invalid.forEach((channels, detail) -> {
+			ResponseEntity<String> response = exchange(HttpMethod.PUT, "/api/v1/checks/" + slug,
+					"{\"cron\":\"0 * * * *\",\"channels\":" + channels + "}", project.key());
+			assertThat(response.getStatusCode().value()).as(channels).isEqualTo(400);
+			assertThat((String) JsonPath.read(response.getBody(), "$.detail")).as(channels).contains(detail);
+		});
+		assertThat(exchange(HttpMethod.GET, "/api/v1/checks/" + slug, null, project.key()).getStatusCode().value())
+			.isEqualTo(404);
+	}
+
+	@Test
+	void deletingTheLastPickedChannelFallsBackToEveryChannel() {
+		Project project = newProject();
+		String picked = createChannel(project,
+				"{\"type\":\"webhook\",\"config\":{\"url\":\"" + RECEIVER.url("/hook/" + UUID.randomUUID()) + "\"}}");
+		String rest = "/hook/" + UUID.randomUUID();
+		createChannel(project, "{\"type\":\"webhook\",\"config\":{\"url\":\"" + RECEIVER.url(rest) + "\"}}");
+		String slug = uniqueSlug();
+		String key = createCheck(project, slug, "{\"cron\":\"0 * * * *\",\"channels\":[\"" + picked + "\"]}");
+		assertThat(
+				exchange(HttpMethod.DELETE, "/api/v1/channels/" + picked, null, project.key()).getStatusCode().value())
+			.isEqualTo(204);
+		assertThat(field(project.key(), slug, "channels")).isNull();
+		goDown(key);
+		this.dispatcher.runOnce();
+		assertThat(RECEIVER.requests(rest)).hasSize(1);
 	}
 
 	// --- Accounts and sessions ---
@@ -1641,12 +1897,15 @@ abstract class AbstractIntegrationTests {
 	}
 
 	/**
-	 * Slack needs https, so a channel pointing at the local receiver is stored directly.
+	 * Slack and Discord need https, so a channel pointing at the local receiver is stored
+	 * directly. Returns its id.
 	 */
-	void insertSlackChannel(Project project, String path) {
+	String insertWebhookUrlChannel(Project project, ChannelType type, String path) {
 		Instant now = CLOCK.instant();
-		this.channelRepository.insert(new Channel(UUID.randomUUID().toString(), project.id(), ChannelType.SLACK,
-				"slack", Map.of("webhookUrl", RECEIVER.url(path)), now, now));
+		String id = UUID.randomUUID().toString();
+		this.channelRepository
+			.insert(new Channel(id, project.id(), type, type.id(), Map.of("webhookUrl", RECEIVER.url(path)), now, now));
+		return id;
 	}
 
 	String createChannel(Project project, String json) {
@@ -1663,7 +1922,11 @@ abstract class AbstractIntegrationTests {
 
 	/** Creates a check in the project, pings it, then fails it. Returns its ping key. */
 	String goDown(Project project) {
-		String key = createCheck(project, uniqueSlug(), "{\"cron\":\"0 * * * *\"}");
+		return goDown(createCheck(project, uniqueSlug(), "{\"cron\":\"0 * * * *\"}"));
+	}
+
+	/** Pings the check, then fails it. Returns its ping key. */
+	String goDown(String key) {
 		get("/ping/" + key);
 		CLOCK.advance(Duration.ofMinutes(1));
 		post("/ping/" + key + "/fail");

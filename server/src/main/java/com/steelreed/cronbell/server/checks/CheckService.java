@@ -6,11 +6,14 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
+import com.steelreed.cronbell.server.checks.internal.CheckChannelRepository;
 import com.steelreed.cronbell.server.checks.internal.CheckRepository;
 import com.steelreed.cronbell.server.checks.internal.ChecksProperties;
 import com.steelreed.cronbell.server.checks.internal.StatusEventRepository;
@@ -40,16 +43,22 @@ public class CheckService {
 
 	/**
 	 * A check definition as sent by the client. Exactly one of {@code cron} and
-	 * {@code periodSeconds}.
+	 * {@code periodSeconds}. {@code channels} are the alert channels the check picks:
+	 * empty for every channel of the project, {@code null} to keep the current selection
+	 * (every channel for a new check).
 	 */
 	public record Definition(String name, String cron, String timeZone, Long periodSeconds, Long graceSeconds,
-			Long maxRuntimeSeconds) {
+			Long maxRuntimeSeconds, List<String> channels) {
 	}
 
 	public record Saved(Check check, boolean created) {
 	}
 
 	private final CheckRepository checks;
+
+	private final CheckChannelRepository checkChannels;
+
+	private final AlertChannels alertChannels;
 
 	private final StatusEventRepository history;
 
@@ -59,9 +68,11 @@ public class CheckService {
 
 	private final Clock clock;
 
-	public CheckService(CheckRepository checks, StatusEventRepository history, ApplicationEventPublisher events,
-			ChecksProperties properties, Clock clock) {
+	public CheckService(CheckRepository checks, CheckChannelRepository checkChannels, AlertChannels alertChannels,
+			StatusEventRepository history, ApplicationEventPublisher events, ChecksProperties properties, Clock clock) {
 		this.checks = checks;
+		this.checkChannels = checkChannels;
+		this.alertChannels = alertChannels;
 		this.history = history;
 		this.events = events;
 		this.properties = properties;
@@ -74,6 +85,21 @@ public class CheckService {
 
 	public Optional<Check> findById(String id) {
 		return this.checks.findById(id);
+	}
+
+	/**
+	 * The alert channels the check picked, or an empty list when it alerts every channel
+	 * of its project (DESIGN.md §8, Routing).
+	 */
+	public List<String> channels(String checkId) {
+		return this.checkChannels.findByCheck(checkId);
+	}
+
+	/**
+	 * Check id to the channels it picked, for the checks of the project that picked some.
+	 */
+	public Map<String, List<String>> channelsByCheck(String projectId) {
+		return this.checkChannels.findByProject(projectId);
 	}
 
 	/**
@@ -107,8 +133,10 @@ public class CheckService {
 	/**
 	 * Creates the check or updates the one with this slug, so registration is idempotent.
 	 * The ping key never changes. A changed schedule recomputes the next due time from
-	 * now.
-	 * @throws IllegalArgumentException if the definition is invalid
+	 * now. An existing check is locked first, as for a ping, so its state and its picked
+	 * channels are written together and never over a concurrent ping, pause or resume.
+	 * @throws IllegalArgumentException if the definition is invalid or picks a channel
+	 * that is not one of the project's
 	 * @throws CheckLimitReachedException if a new check would pass the project's limit
 	 */
 	@Transactional
@@ -119,13 +147,17 @@ public class CheckService {
 		}
 		Instant now = this.clock.instant().truncatedTo(ChronoUnit.MILLIS);
 		Check defined = validate(projectId, slug, definition, now);
-		var existing = this.checks.findBySlug(projectId, slug);
+		List<String> channels = pickedChannels(projectId, definition.channels());
+		var existing = this.checks.findBySlugForUpdate(projectId, slug);
 		if (existing.isEmpty()) {
 			Integer limit = this.properties.maxPerProject();
 			if (limit != null && this.checks.countByProject(projectId) >= limit) {
 				throw new CheckLimitReachedException(limit);
 			}
 			this.checks.insert(defined, now);
+			if (channels != null) {
+				this.checkChannels.replace(defined.id(), channels);
+			}
 			return new Saved(defined, true);
 		}
 		Check current = existing.get();
@@ -143,6 +175,9 @@ public class CheckService {
 				defined.scheduleKind(), defined.cronExpression(), defined.timeZone(), defined.periodSeconds(),
 				defined.graceSeconds(), defined.maxRuntimeSeconds(), state, current.createdAt());
 		this.checks.update(updated, now);
+		if (channels != null) {
+			this.checkChannels.replace(current.id(), channels);
+		}
 		return new Saved(updated, false);
 	}
 
@@ -195,6 +230,23 @@ public class CheckService {
 		this.checks.updateState(check.id(), paused, now);
 		this.history.recordChange(check, paused, now);
 		return check.withState(paused);
+	}
+
+	/**
+	 * The picked channels without duplicates, after checking that each is a channel of
+	 * the project. Another project's channel is refused like an unknown one.
+	 */
+	private List<String> pickedChannels(String projectId, List<String> picked) {
+		if (picked == null || picked.isEmpty()) {
+			return picked;
+		}
+		Set<String> known = this.alertChannels.idsOf(projectId);
+		for (String id : picked) {
+			if (id == null || !known.contains(id)) {
+				throw new IllegalArgumentException("channels: no channel with id " + id + " in this project");
+			}
+		}
+		return picked.stream().distinct().toList();
 	}
 
 	private Check lockBySlug(String projectId, String slug) {

@@ -1,7 +1,7 @@
 import { formatSchedule } from "./format";
 import type { Check } from "./types";
 
-const CURL = "curl -fsS -m 10 --retry 5 -o /dev/null";
+const CURL = "curl -fsS -m 10 --retry 5 --retry-max-time 60 -o /dev/null";
 
 /** Stands in for a schedule that cron cannot express; the comment above it says why. */
 const NO_SCHEDULE = "<schedule>";

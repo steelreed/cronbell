@@ -4,11 +4,13 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import com.steelreed.cronbell.server.checks.CheckService;
 import com.steelreed.cronbell.server.shared.database.Ids;
 
 import org.springframework.stereotype.Service;
@@ -21,8 +23,11 @@ public class ChannelService {
 	/** One test message per channel per this interval. */
 	public static final Duration TEST_INTERVAL = Duration.ofSeconds(10);
 
-	/** A channel with its recent delivery status. */
-	public record View(Channel channel, DeliveryRepository.ChannelStatus status) {
+	/**
+	 * A channel with its recent delivery status, and how many checks picked it (checks
+	 * that alert every channel are not counted).
+	 */
+	public record View(Channel channel, DeliveryRepository.ChannelStatus status, int pickedBy) {
 	}
 
 	/** Thrown when a channel is tested again too soon. */
@@ -42,32 +47,39 @@ public class ChannelService {
 
 	private final EmailSender email;
 
+	private final CheckService checks;
+
 	private final Clock clock;
 
 	private final Map<String, Instant> lastTests = new ConcurrentHashMap<>();
 
 	ChannelService(ChannelRepository channels, DeliveryRepository deliveries, Senders senders, EmailSender email,
-			Clock clock) {
+			CheckService checks, Clock clock) {
 		this.channels = channels;
 		this.deliveries = deliveries;
 		this.senders = senders;
 		this.email = email;
+		this.checks = checks;
 		this.clock = clock;
 	}
 
 	public List<View> list(String projectId) {
 		Map<String, DeliveryRepository.ChannelStatus> status = this.deliveries.statusByChannel(projectId);
+		Map<String, Integer> pickedBy = pickedBy(projectId);
 		return this.channels.findAllByProject(projectId)
 			.stream()
 			.map((channel) -> new View(channel,
-					status.getOrDefault(channel.id(), DeliveryRepository.ChannelStatus.NONE)))
+					status.getOrDefault(channel.id(), DeliveryRepository.ChannelStatus.NONE),
+					pickedBy.getOrDefault(channel.id(), 0)))
 			.toList();
 	}
 
 	public View get(String projectId, String id) {
 		Channel channel = find(projectId, id);
-		return new View(channel, this.deliveries.statusByChannel(projectId)
-			.getOrDefault(channel.id(), DeliveryRepository.ChannelStatus.NONE));
+		return new View(channel,
+				this.deliveries.statusByChannel(projectId)
+					.getOrDefault(channel.id(), DeliveryRepository.ChannelStatus.NONE),
+				pickedBy(projectId).getOrDefault(channel.id(), 0));
 	}
 
 	/**
@@ -129,6 +141,15 @@ public class ChannelService {
 			throw new TooManyTestsException();
 		}
 		this.senders.send(channel, Alert.test(now), "test-" + Ids.newId());
+	}
+
+	/** Channel id to the number of checks of the project that picked it. */
+	private Map<String, Integer> pickedBy(String projectId) {
+		Map<String, Integer> result = new HashMap<>();
+		for (List<String> picked : this.checks.channelsByCheck(projectId).values()) {
+			picked.forEach((channelId) -> result.merge(channelId, 1, Integer::sum));
+		}
+		return result;
 	}
 
 	private Channel find(String projectId, String id) {

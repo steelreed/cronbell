@@ -45,7 +45,7 @@ templates), on-call rotations, SSO.
 | **Grace** | How long after the due time a run may still arrive before it counts as missed. |
 | **Ping** | One message from a job: `start`, `success`, `fail`, or `log`. |
 | **Run** | A `start` followed by its `success` or `fail`, or a lone `success`/`fail`. |
-| **Channel** | Where alerts go: email, Telegram, Slack, webhook. |
+| **Channel** | Where alerts go: email, Telegram, Slack, Discord, ntfy, webhook. A check alerts every channel of its project, or only the channels it picked (§8, Routing). |
 
 ## 3. Check states
 
@@ -202,7 +202,7 @@ GET    /api/v1/invites/{token}        what the link offers: kind, projectName, i
 POST   /api/v1/invites/{token}/accept {"email", "password", "projectName"} -> the new session (public)
 GET    /api/v1/checks                 checks of the project
 GET    /api/v1/checks/{slug}          one check
-PUT    /api/v1/checks/{slug}          create (201) or update (200); the ping key never changes
+PUT    /api/v1/checks/{slug}          create (201) or update (200); the ping key never changes; optional "channels" (§8, Routing)
 DELETE /api/v1/checks/{slug}          204; its pings and pending alerts go with it
 GET    /api/v1/checks/{slug}/pings    latest pings, newest first (?limit=, default 50, at most 200)
 GET    /api/v1/checks/{slug}/events   status changes, newest first (?limit=, default 50, at most 200)
@@ -225,8 +225,9 @@ GET    /api/v1/stats/status           how each check spent each day: [{slug, nam
 GET    /api/v1/schedules/next         next runs of a cron expression: {cron, timeZone, runs} (?cron=, ?timeZone=, default UTC; ?count=, default 5, at most 10)
 ```
 
-A check has its definition, `status`, `downReason`, `lastPingAt`, `lastStartAt`, `lastSuccessAt`,
-`nextDueAt` and `nextRunAt`. `nextDueAt` is the run being waited for (§4), so for a late or missed
+A check has its definition, `channels` (the ids of the channels it picked, `null` for every
+channel), `status`, `downReason`, `lastPingAt`, `lastStartAt`, `lastSuccessAt`, `nextDueAt` and
+`nextRunAt`. `nextDueAt` is the run being waited for (§4), so for a late or missed
 run it stays in the past. `nextRunAt` is when the schedule next expects a run, seen from now:
 `nextDueAt` while that is ahead, else the next cron time after now; `null` for a period schedule
 that is overdue (it only moves on with a run), for a paused check and before the first ping. The
@@ -433,8 +434,9 @@ With Actuator, `/actuator/info` shows the registered checks, dropped pings and t
 
 ## 8. Alerts
 
-Channels in v0.1: email, Telegram bot, Slack incoming webhook, generic webhook (JSON POST).
-Every alert goes to **every channel of the check's project** (no per-check routing in v0.1).
+Channels: email, Telegram bot, Slack incoming webhook, Discord webhook, ntfy (ntfy.sh or
+self-hosted), generic webhook (JSON POST). An alert goes to **every channel of the check's
+project**, unless the check picked some (Routing below).
 
 ### Channels
 
@@ -445,6 +447,8 @@ A channel is `{"type", "name", "config"}`; `name` defaults to the type. Config p
 | `email` | `address` | — | one address; needs server SMTP settings (`CRONBELL_SMTP_*`), else `400` |
 | `telegram` | `botToken`, `chatId` | `botToken` | token `<digits>:<35+ chars>`; chat id is an integer (groups are negative) or `@channelname` |
 | `slack` | `webhookUrl` | `webhookUrl` | `https://` only (Slack-compatible receivers such as Mattermost work too) |
+| `discord` | `webhookUrl` | `webhookUrl` | `https://discord.com/api/webhooks/…` (also `discordapp.com` and the `ptb.`/`canary.` hosts) |
+| `ntfy` | `serverUrl` (optional), `topic`, `token` (optional) | `token` | server `https://` or `http://`, default `https://ntfy.sh`, no user name or password in it (a trailing `/` is dropped); topic 1-64 letters, digits, `_`, `-`; an access token, sent as `Authorization: Bearer`. User and password logins are not supported. |
 | `webhook` | `url`, `secret` (optional) | `url`, `secret` | `https://` or `http://`: self-hosted installs post to services on their own network. The cloud will restrict this to public `https://`. |
 
 Secrets are stored as given (the database already holds the ping keys, which are secrets too) and
@@ -453,7 +457,28 @@ URLs as `https://host/…`. On `PUT`, a secret field that is omitted, `null`, or
 value keeps the stored value, so a client can round-trip what it read; an empty optional secret
 removes it. Other fields are replaced (an omitted `name` returns to the default). Unknown config
 fields are `400`. Each channel in a response also has `lastAttemptAt`, `lastDeliveryAt` (last success),
-`lastError` (of the latest attempt, `null` if it succeeded) and `pendingDeliveries`.
+`lastError` (of the latest attempt, `null` if it succeeded), `pendingDeliveries`, and `pickedBy`
+(the checks that picked it; checks alerting every channel are not counted).
+
+### Routing
+
+A check alerts every channel of its project until it picks some; then it alerts only those. On
+`PUT /api/v1/checks/{slug}`, `channels` is:
+
+- left out: a new check alerts every channel; an update keeps the current selection, so the
+  starter, which registers its checks at start-up without `channels`, never resets what was
+  picked in the dashboard;
+- `null` or `[]`: every channel, now and added later;
+- a list of channel ids: only those (duplicates are dropped). An id that is not a channel of the
+  project, another project's included, is `400` (`channels: no channel with id … in this
+  project`), the same answer either way.
+
+Deleting a channel removes it from every selection. A check whose picked channels are all deleted
+alerts every channel again rather than none, and its `channels` reads `null`: a check that alerts
+no one is worse than one that alerts too many. The selection lives in the checks module
+(`check_channels`), which asks the alerts module for the project's channel ids to validate it. It
+is written with the check, under the check's row lock that pings, pause and resume also take, so
+a save never overwrites a state change made meanwhile.
 
 ### Messages
 
@@ -480,6 +505,13 @@ last 1,000 characters.
 - **Email**: subject is the first line, body the rest, plain text.
 - **Telegram**: Bot API `sendMessage`, `parse_mode=HTML`, `&`, `<`, `>` escaped, log in `<pre>`.
 - **Slack**: `{"text": …}` with mrkdwn (`&`, `<`, `>` escaped), log in a code block.
+- **Discord**: one embed: the first line as title linking to the check, the rest as description
+  (markdown characters escaped, the log in a code block), red for DOWN, green for UP, the alert
+  time as timestamp; posted as "Cronbell" with mentions off (`allowed_mentions.parse: []`), so a
+  log line with `@everyone` pings no one.
+- **ntfy**: JSON publish to the server's root URL: `topic`, `title` (the first line), `message`
+  (the rest, plain text), `priority` 4 (high) for DOWN and 3 (default) otherwise, `tags`
+  (`rotating_light`, `white_check_mark`, `bell` for a test) and `click` (the check's link).
 - **Webhook**: `POST`, `Content-Type: application/json`, body:
 
   ```json
@@ -504,7 +536,7 @@ Any 2xx answer is a success. Redirects are not followed.
 
 ### Delivery
 
-- **Outbox.** On UP → DOWN and DOWN → UP, one delivery row per channel of the project is written
+- **Outbox.** On UP → DOWN and DOWN → UP, one delivery row per channel the check alerts is written
   in the same transaction as the state change, with the rendered alert. Nothing is lost on a
   restart; a crash during a send repeats it (at least once; webhooks carry `Cronbell-Delivery`).
 - **Sender.** Every 5 s (`cronbell.notifier.interval`), and right after a commit that queued
@@ -515,10 +547,22 @@ Any 2xx answer is a success. Redirects are not followed.
 - **Timeouts.** Connect 5 s, read 10 s for HTTP; the same for SMTP. A stuck channel delays only
   its own deliveries.
 - **Retry.** Network errors, timeouts, `408`, `429` and `5xx` are retried after 30 s, then
-  doubling (1, 2, 4, 8 min…, at most 15 min), honouring `Retry-After` on `429`. Other `4xx`
-  (bad token, removed webhook) fail at once. A delivery not sent within **1 hour** of the alert
-  is given up. The latest error is kept on the row (status code and a short reason, never the
-  URL or a secret) and shown on the channel.
+  doubling (1, 2, 4, 8 min…, at most 15 min). A receiver that asks for a wait, in a
+  `Retry-After` header or in its body (Discord's and Telegram's `retry_after`), gets the longest
+  of the three. Other `4xx` (bad token, removed webhook) fail at once. A delivery not sent
+  within **1 hour** of the alert is given up. The latest error is kept on the row and shown on
+  the channel.
+- **Errors** are plain sentences that say what to fix, never a URL, a secret or an exception
+  name: `Could not resolve hooks.example.com`, `Connection refused by ntfy.internal:8080`,
+  `Timed out after 10 s waiting for hooks.example.com`, `TLS handshake with host:443 failed`,
+  `HTTP 401 from Telegram: check the bot token`, `HTTP 404 from Discord: the webhook was deleted
+  or its URL is wrong`, `HTTP 403 from ntfy: the topic needs an access token`, `HTTP 500 from
+  hooks.example.com: <first 200 characters of the body>`, `SMTP server smtp.example.com rejected
+  the user name or password (…)`. A network error names the host and port only, since a webhook
+  URL can itself be a secret; a given-up delivery reads `Gave up after 8 attempts in 60 min: …`.
+  A body that echoes a secret of the channel (a token, the webhook URL or its path) has it
+  replaced by `****` before it is cut to 200 characters, so a secret across the cut leaves no
+  part behind.
 - **Rate limits.** Alerts are only sent on transitions, so there is no per-channel limit in
   v0.1. `POST /channels/{id}/test` is limited to one call per 10 s per channel (`429`).
 - Finished deliveries are kept for history and pruned with the pings (§10).
@@ -606,9 +650,9 @@ back to the overview or the checks); a page that fails to render shows its error
 | Sign in | `/signin` | email and password; shows the rate-limit wait |
 | Overview | `/` | counts (checks, down, late, up; each opens the filtered list); what needs attention (DOWN first, then late, then never pinged) with the reason and since when, from the check's state; the last 30 days in the browser's zone, one square per check and day (`stats/status`: DOWN at day end, failure or downtime, all runs fine, no runs or paused; the day's runs, failures, missed runs and downtime on hover), problems first, 12 checks then "show all"; the recent status changes of the project (`/events`) with the reason or how long the downtime lasted; above them while the project is being set up, its first steps (create a check, receive the first ping, add an alert channel and send a test, and for owners, optional, invite a teammate) with the next one open, until the first three are done (the third once a channel exists, since a test is not stored as a delivery); a project without checks shows only the steps |
 | Checks | `/checks` | table: name and slug, schedule and time zone, status with reason (late = overdue within grace), the last 20 runs as ticks, last ping (relative, exact on hover), next run (a missed run by its time, with the next run); search, status filter with counts, sortable columns, problems first by default, 25 per page, all in the URL; row menu (open, pause or resume, copy ping URL, delete with confirmation); a list on phones; refreshed every 15 s; empty state: a button to create the first check, and behind "Using the API or the Spring Boot starter?" a ready `curl` to create and ping a check and the starter's two properties |
-| Check | `/checks/{slug}` | status and since when; uptime over 7 and 30 days and the average run over 7 days; the latest runs as ticks (90, 40 on phones; missed runs from the status history as hollow ticks) and run durations on an axis from 0 with the max runtime line; the history: each DOWN or pause, newest first, with the reason, start, end and duration, and where its alerts went (✓ delivered, ✗ failed, with the error on hover); recent runs, a start and its end paired as in the ping list, with result, duration and output (expand to read; cards on phones), or the raw pings with exit code and source; details; ping URL with copy and snippets (crontab, shell, Kubernetes CronJob, Spring Boot starter); pause/resume, edit, delete (confirmed); a check without pings when its page opens leads with the ping URL, waiting for the first ping (refreshed every 3 s) with a test ping sent from the browser to the ping URL, then when it arrived and the next run; its runs, history and pings show once there are some |
-| New / edit check | `/checks/new`, `/checks/{slug}/edit` | slug, name, cron or period, time zone (searchable, common zones first, UTC offsets), the next five runs of a cron schedule (`/schedules/next`), grace, max runtime |
-| Channels | `/channels` | channels with type, target, last delivery or last error; add and edit in a dialog per type (secrets shown masked, kept unless replaced); send test; delete (confirmed) |
+| Check | `/checks/{slug}` | status and since when; uptime over 7 and 30 days and the average run over 7 days; the latest runs as ticks (90, 40 on phones; missed runs from the status history as hollow ticks) and run durations on an axis from 0 with the max runtime line; the history: each DOWN or pause, newest first, with the reason, start, end and duration, and where its alerts went, the channels the check alerted at the time (✓ delivered, ✗ failed, with the error on hover); recent runs, a start and its end paired as in the ping list, with result, duration and output (expand to read; cards on phones), or the raw pings with exit code and source; details, with where alerts go; ping URL with copy and snippets (crontab, shell, Kubernetes CronJob, Spring Boot starter); pause/resume, edit, delete (confirmed); a check without pings when its page opens leads with the ping URL, waiting for the first ping (refreshed every 3 s) with a test ping sent from the browser to the ping URL, then when it arrived and the next run; its runs, history and pings show once there are some |
+| New / edit check | `/checks/new`, `/checks/{slug}/edit` | slug, name, cron or period, time zone (searchable, common zones first, UTC offsets), the next five runs of a cron schedule (`/schedules/next`), grace, max runtime, alerts to all channels or to ticked ones (at least one) |
+| Channels | `/channels` | channels with type, target, last delivery or last error, how many checks picked it; add and edit in a dialog per type (secrets shown masked, kept unless replaced); send test; delete (confirmed, saying how many checks picked it and that a check left with none alerts every channel) |
 | API keys | `/keys` | keys by name and prefix; create in a dialog that shows the key once with copy; revoke (confirmed); create and revoke for owners only |
 | Members | `/members` | members of the current project with role and "you"; remove (owners) or leave (confirmed); for owners, "Invite member" in a dialog that makes a link and shows it once with copy, and the member invites with status, expiry and delete (confirmed) |
 | Instance invites | `/admin/invites` | instance admin only: create a project invite with an optional note (link shown once with copy), the project invites with status, who accepted them and expiry; delete (confirmed); a pointer to Members for adding someone to the current project |
@@ -630,7 +674,7 @@ The cloud sells not having to run it, plus team features.
 | | Self-hosted | Cloud Free | Cloud Team (planned ~$9/mo) |
 |---|---|---|---|
 | Checks | unlimited | 20 | 200 |
-| Channels | all | email, Telegram | all, incl. Slack, webhook, Zalo later |
+| Channels | all | email, Telegram | all, incl. Slack, Discord, ntfy, webhook, Zalo later |
 | History | configurable (default 90 days) | 30 days | 1 year |
 | Members | unlimited | 1 | 10 |
 
@@ -649,6 +693,6 @@ Billing is not built in v0.1.
 - Password reset for self-hosted: today only by deleting the account row and running setup again,
   or by a future `cronbell admin reset-password` command.
 - Billing provider usable from Vietnam.
-- Alert routing: per-check channel selection and reminders while DOWN (v0.2?).
+- Reminders while a check stays DOWN (v0.2?).
 - Channel secrets at rest: encrypt with a server key (`CRONBELL_SECRET_KEY`) before the cloud
   launch? The cloud also needs webhook targets limited to public addresses (SSRF).

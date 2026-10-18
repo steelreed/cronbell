@@ -134,7 +134,7 @@ public class DeliveryDispatcher {
 	}
 
 	private static String giveUp(String error, int attempts) {
-		return "gave up after " + attempts + " attempts in " + RETRY_WINDOW.toMinutes() + " min"
+		return "Gave up after " + attempts + " attempts in " + RETRY_WINDOW.toMinutes() + " min"
 				+ ((error != null) ? ": " + error : "");
 	}
 

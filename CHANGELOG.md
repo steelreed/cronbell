@@ -32,6 +32,15 @@ All notable changes to Cronbell are listed here. The format follows
   open with its action, and the list goes away once the first three are done.
 - Integration guides in `docs/integrations/`: crontab, systemd timers, Kubernetes CronJob, GitHub
   Actions, Docker (with Ofelia) and scripts in Python, Node.js, Bash and PowerShell.
+- Discord and ntfy alert channels. Discord gets an embed (red for DOWN, green for UP, mentions
+  off) and its rate limits are retried after `retry_after`; ntfy posts to ntfy.sh or a self-hosted
+  server, with an optional access token, high priority for DOWN, tags and a link to the check.
+- Per-check alert channels: a check alerts every channel of its project, or only the channels it
+  picked (`"channels": [ids]` on `PUT /api/v1/checks/{slug}`, `null` for every channel; left out,
+  an update keeps the selection, so the starter does not reset it). A check whose picked channels
+  are all deleted alerts every channel again. Channels report `pickedBy`.
+- Dashboard: "Alert channels" in the check form, where alerts go on the check page, and how many
+  checks picked each channel.
 
 ### Changed
 
@@ -80,6 +89,18 @@ All notable changes to Cronbell are listed here. The format follows
   stayed signed in; it is now signed out like the other sessions. Of two concurrent password
   changes with the same current password, the second one overwrote the first; it is now refused
   with `409`.
+- Channel errors are plain sentences that say what to fix ("Could not resolve
+  hooks.example.com", "Connection refused by localhost:8080", "Timed out after 10 s waiting for
+  …", "HTTP 401 from Telegram: check the bot token") instead of exception names such as
+  `UnresolvedAddressException`.
+- A channel error that quoted the receiver's body could keep the start of a token or webhook URL
+  the body echoed: the body was cut to 200 characters before secrets were replaced, so a secret
+  across the cut no longer matched. Secrets, and the path of a webhook URL on its own, are now
+  replaced first.
+- A rate-limited channel that sent both a `Retry-After` header and a `retry_after` in its body
+  (Telegram, Discord) was retried after the body's wait even when the header asked for longer,
+  for example after 30 s instead of 120 s. The longest of the header, the body and the usual
+  backoff now wins.
 
 ## [0.1.0-beta.2] - 2026-10-17
 

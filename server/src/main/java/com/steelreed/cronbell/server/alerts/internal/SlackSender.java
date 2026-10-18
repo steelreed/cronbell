@@ -11,6 +11,9 @@ import org.springframework.stereotype.Component;
 @Component
 final class SlackSender implements ChannelSender {
 
+	/** What a 401, 403 or 404 from a chat webhook means. */
+	static final String WEBHOOK_GONE = "the webhook was deleted or its URL is wrong";
+
 	private final HttpPoster http;
 
 	private final JsonMapper json;
@@ -31,7 +34,12 @@ final class SlackSender implements ChannelSender {
 		HttpPoster.Response response = this.http.post(URI.create(channel.get(ChannelConfigs.WEBHOOK_URL)), Map.of(),
 				body);
 		if (!response.successful()) {
-			throw HttpPoster.failure(response, response.body(), null);
+			// Slack answers a short code such as no_service or channel_is_archived.
+			String detail = switch (response.status()) {
+				case 401, 403, 404 -> WEBHOOK_GONE;
+				default -> response.body();
+			};
+			throw HttpPoster.failure(response, channel, "Slack", detail, null);
 		}
 	}
 

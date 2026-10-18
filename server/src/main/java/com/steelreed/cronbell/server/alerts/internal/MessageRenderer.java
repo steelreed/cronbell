@@ -9,10 +9,12 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Turns an {@link Alert} into the text of each channel (DESIGN.md §8): plain text for
- * email, HTML for Telegram, mrkdwn for Slack, JSON for webhooks. Pure.
+ * email, HTML for Telegram, mrkdwn for Slack, an embed for Discord, JSON for ntfy and
+ * webhooks. Pure.
  */
 public final class MessageRenderer {
 
@@ -22,6 +24,16 @@ public final class MessageRenderer {
 
 	/** Version of the webhook JSON schema. */
 	public static final int WEBHOOK_VERSION = 1;
+
+	/** Discord embed colours: the dashboard's DOWN red and UP green. */
+	static final int DISCORD_DOWN = 0xD92D20;
+
+	static final int DISCORD_UP = 0x11804F;
+
+	/** ntfy priorities: 4 is "high" (a sound and a pop-over on phones), 3 the default. */
+	static final int NTFY_HIGH = 4;
+
+	static final int NTFY_DEFAULT = 3;
 
 	/**
 	 * The parts of a message: a title, detail lines, an optional log excerpt and link.
@@ -135,6 +147,70 @@ public final class MessageRenderer {
 	}
 
 	/**
+	 * The Discord webhook body: one embed whose title links to the check, with the detail
+	 * lines and the log in a code block, red for DOWN and green for UP. Mentions are off,
+	 * so a log line with {@code @everyone} pings no one. The title is not escaped: it
+	 * holds the slug, which cannot form markdown, and titles render little of it.
+	 */
+	public static Map<String, Object> discordPayload(Alert alert) {
+		Message m = message(alert);
+		StringBuilder description = new StringBuilder(
+				m.lines().stream().map(MessageRenderer::discord).collect(Collectors.joining("\n")));
+		if (m.log() != null) {
+			description.append("\n\n**")
+				.append(discord(m.logLabel()))
+				.append("**\n```\n")
+				.append(m.log().replace("```", "'''"))
+				.append("\n```");
+		}
+		Map<String, Object> embed = new LinkedHashMap<>();
+		embed.put("title", m.title());
+		if (m.url() != null) {
+			embed.put("url", m.url());
+		}
+		embed.put("description", description.toString());
+		switch (alert.kind()) {
+			case DOWN -> embed.put("color", DISCORD_DOWN);
+			case UP -> embed.put("color", DISCORD_UP);
+			case TEST -> {
+			}
+		}
+		embed.put("timestamp", alert.at().toString());
+		Map<String, Object> body = new LinkedHashMap<>();
+		body.put("username", "Cronbell");
+		body.put("allowed_mentions", Map.of("parse", List.of()));
+		body.put("embeds", List.of(embed));
+		return body;
+	}
+
+	/**
+	 * The ntfy message, published as JSON to the server's root URL: the title, the detail
+	 * lines and log as plain text, high priority for DOWN, an emoji tag, and a click link
+	 * to the check.
+	 */
+	public static Map<String, Object> ntfyPayload(Alert alert, String topic) {
+		Message m = message(alert);
+		StringBuilder text = new StringBuilder(String.join("\n", m.lines()));
+		if (m.log() != null) {
+			text.append("\n\n").append(m.logLabel()).append('\n').append(m.log());
+		}
+		Map<String, Object> body = new LinkedHashMap<>();
+		body.put("topic", topic);
+		body.put("title", m.title());
+		body.put("message", text.toString());
+		body.put("priority", (alert.kind() == Alert.Kind.DOWN) ? NTFY_HIGH : NTFY_DEFAULT);
+		body.put("tags", List.of(switch (alert.kind()) {
+			case DOWN -> "rotating_light";
+			case UP -> "white_check_mark";
+			case TEST -> "bell";
+		}));
+		if (m.url() != null) {
+			body.put("click", m.url());
+		}
+		return body;
+	}
+
+	/**
 	 * The webhook body (version {@value #WEBHOOK_VERSION}), as a map to serialize. Keeps
 	 * null values so the schema is stable.
 	 */
@@ -212,6 +288,11 @@ public final class MessageRenderer {
 	/** Escapes the control characters of Slack mrkdwn. */
 	static String slack(String text) {
 		return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+	}
+
+	/** Escapes Discord markdown: emphasis, code, spoilers, quotes, mentions and links. */
+	static String discord(String text) {
+		return text.replaceAll("([\\\\*_~`|<>\\[\\]])", "\\\\$1");
 	}
 
 }

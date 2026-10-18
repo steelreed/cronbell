@@ -27,7 +27,7 @@ describe("periodCron", () => {
 describe("crontabSnippet", () => {
   it("runs a cron check on its schedule in its zone", () => {
     expect(crontabSnippet(aCheck())).toBe(
-      "CRON_TZ=Asia/Ho_Chi_Minh\n0 3 * * * /path/to/job.sh; curl -fsS -m 10 --retry 5 -o /dev/null https://cron.example.com/ping/0b7c3a52-5b8e-4a3a-9a52-2b8e8f9c6d11/$?",
+      "CRON_TZ=Asia/Ho_Chi_Minh\n0 3 * * * /path/to/job.sh; curl -fsS -m 10 --retry 5 --retry-max-time 60 -o /dev/null https://cron.example.com/ping/0b7c3a52-5b8e-4a3a-9a52-2b8e8f9c6d11/$?",
     );
   });
 

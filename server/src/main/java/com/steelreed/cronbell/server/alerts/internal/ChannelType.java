@@ -7,7 +7,7 @@ import java.util.stream.Collectors;
 /** Where alerts go (DESIGN.md §8). In the API a type is its lower-case name. */
 public enum ChannelType {
 
-	EMAIL, TELEGRAM, SLACK, WEBHOOK;
+	EMAIL, TELEGRAM, SLACK, DISCORD, NTFY, WEBHOOK;
 
 	public String id() {
 		return name().toLowerCase(Locale.ROOT);

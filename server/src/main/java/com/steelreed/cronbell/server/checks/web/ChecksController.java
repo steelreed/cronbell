@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.OptionalDouble;
 import java.util.UUID;
 
@@ -19,6 +20,8 @@ import com.steelreed.cronbell.server.checks.internal.StatusEventRepository;
 import com.steelreed.cronbell.server.checks.internal.domain.Schedule;
 import com.steelreed.cronbell.server.checks.internal.domain.StatusTimeline;
 import com.steelreed.cronbell.server.shared.web.ManagementApi;
+import io.swagger.v3.oas.annotations.media.Schema;
+import tools.jackson.databind.JsonNode;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -55,12 +58,17 @@ class ChecksController {
 	}
 
 	private CheckResponse response(Check check) {
-		return CheckResponse.of(check, this.clock.instant(), null);
+		return CheckResponse.of(check, this.checks.channels(check.id()), this.clock.instant(), null);
 	}
 
 	@GetMapping
 	List<CheckResponse> list(@AuthenticationPrincipal ProjectPrincipal project) {
-		return this.checks.list(project.projectId()).stream().map(this::response).toList();
+		Map<String, List<String>> channels = this.checks.channelsByCheck(project.projectId());
+		Instant now = this.clock.instant();
+		return this.checks.list(project.projectId())
+			.stream()
+			.map((check) -> CheckResponse.of(check, channels.getOrDefault(check.id(), List.of()), now, null))
+			.toList();
 	}
 
 	/**
@@ -84,7 +92,7 @@ class ChecksController {
 			.map(Duration::toMillis)
 			.orElse(null);
 		Stats stats = new Stats(uptime(check, timeline, now, 7), uptime(check, timeline, now, 30), averageMs);
-		return CheckResponse.of(check, now, stats);
+		return CheckResponse.of(check, this.checks.channels(check.id()), now, stats);
 	}
 
 	/**
@@ -114,12 +122,31 @@ class ChecksController {
 		return response(this.checks.pause(project.projectId(), slug));
 	}
 
+	/**
+	 * {@code channels} is a node because a list cannot tell a left-out field from
+	 * {@code null}: left out, an update keeps the current selection, so the starter's
+	 * registration at start-up does not reset it; {@code null} or empty means every
+	 * channel.
+	 */
 	record CheckRequest(String name, String cron, String timeZone, Long periodSeconds, Long graceSeconds,
-			Long maxRuntimeSeconds) {
+			Long maxRuntimeSeconds, @Schema(implementation = String[].class) JsonNode channels) {
 
 		CheckService.Definition toDefinition() {
 			return new CheckService.Definition(this.name, this.cron, this.timeZone, this.periodSeconds,
-					this.graceSeconds, this.maxRuntimeSeconds);
+					this.graceSeconds, this.maxRuntimeSeconds, channelIds());
+		}
+
+		private List<String> channelIds() {
+			if (this.channels == null) {
+				return null;
+			}
+			if (this.channels.isNull()) {
+				return List.of();
+			}
+			if (!this.channels.isArray() || !this.channels.valueStream().allMatch(JsonNode::isString)) {
+				throw new IllegalArgumentException("channels must be a list of channel ids, or null for every channel");
+			}
+			return this.channels.valueStream().map(JsonNode::stringValue).toList();
 		}
 
 	}
@@ -133,23 +160,24 @@ class ChecksController {
 	}
 
 	/**
+	 * @param channels null when the check alerts every channel of the project
 	 * @param stats only in {@code GET /checks/{slug}}, null elsewhere
 	 */
 	record CheckResponse(String slug, String name, UUID pingKey, String pingUrl, ScheduleKind scheduleKind, String cron,
-			String timeZone, Long periodSeconds, long graceSeconds, Long maxRuntimeSeconds, CheckStatus status,
-			DownReason downReason, Instant lastPingAt, Instant lastStartAt, Instant lastSuccessAt, Instant nextDueAt,
-			Instant nextRunAt, Instant createdAt, Stats stats) {
+			String timeZone, Long periodSeconds, long graceSeconds, Long maxRuntimeSeconds, List<String> channels,
+			CheckStatus status, DownReason downReason, Instant lastPingAt, Instant lastStartAt, Instant lastSuccessAt,
+			Instant nextDueAt, Instant nextRunAt, Instant createdAt, Stats stats) {
 
-		static CheckResponse of(Check c, Instant now, Stats stats) {
+		static CheckResponse of(Check c, List<String> channels, Instant now, Stats stats) {
 			String pingUrl = ServletUriComponentsBuilder.fromCurrentContextPath()
 				.path("/ping/{key}")
 				.buildAndExpand(c.pingKey())
 				.toUriString();
 			var s = c.state();
 			return new CheckResponse(c.slug(), c.name(), c.pingKey(), pingUrl, c.scheduleKind(), c.cronExpression(),
-					c.timeZone().getId(), c.periodSeconds(), c.graceSeconds(), c.maxRuntimeSeconds(), s.status(),
-					s.downReason(), s.lastPingAt(), s.lastStartAt(), s.lastSuccessAt(), s.nextDueAt(),
-					nextRunAt(c, now), c.createdAt(), stats);
+					c.timeZone().getId(), c.periodSeconds(), c.graceSeconds(), c.maxRuntimeSeconds(),
+					channels.isEmpty() ? null : channels, s.status(), s.downReason(), s.lastPingAt(), s.lastStartAt(),
+					s.lastSuccessAt(), s.nextDueAt(), nextRunAt(c, now), c.createdAt(), stats);
 		}
 
 		/**

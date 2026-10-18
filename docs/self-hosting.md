@@ -94,8 +94,9 @@ Set at least:
   the newest pre-release. Until 0.1.0 is out there are only pre-releases, so `latest` does not
   exist yet.
 
-Email alerts need the `CRONBELL_SMTP_*` settings; Telegram, Slack and webhook channels need nothing
-here. Leave settings you don't use commented out: an empty value is not the same as unset.
+Email alerts need the `CRONBELL_SMTP_*` settings; Telegram, Slack, Discord, ntfy and webhook
+channels need nothing here. Leave settings you don't use commented out: an empty value is not
+the same as unset.
 `CRONBELL_BASE_URL` (links in alerts) and `SERVER_FORWARD_HEADERS_STRATEGY` are set by the
 compose file from `CRONBELL_DOMAIN`.
 

@@ -1,5 +1,6 @@
 package com.steelreed.cronbell.server.alerts.internal;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 
@@ -7,6 +8,7 @@ import jakarta.mail.MessagingException;
 import jakarta.mail.SendFailedException;
 import jakarta.mail.internet.MimeMessage;
 
+import org.springframework.mail.MailAuthenticationException;
 import org.springframework.mail.MailException;
 import org.springframework.mail.MailParseException;
 import org.springframework.mail.MailSendException;
@@ -21,10 +23,13 @@ final class EmailSender implements ChannelSender {
 
 	private final SmtpProperties smtp;
 
+	private final NotifierProperties notifier;
+
 	private final JavaMailSenderImpl mail;
 
 	EmailSender(SmtpProperties smtp, NotifierProperties notifier) {
 		this.smtp = smtp;
+		this.notifier = notifier;
 		this.mail = smtp.configured() ? createMailSender(smtp, notifier) : null;
 	}
 
@@ -72,18 +77,25 @@ final class EmailSender implements ChannelSender {
 			this.mail.send(message(channel.get(ChannelConfigs.ADDRESS), alert));
 		}
 		catch (MailParseException ex) {
-			throw DeliveryException.permanent("invalid message: " + describe(ex));
+			throw DeliveryException.permanent(scrub(DeliveryErrors.withReason("Could not build the email", ex)));
+		}
+		catch (MailAuthenticationException ex) {
+			throw DeliveryException.retryable("SMTP server " + this.smtp.host().trim()
+					+ " rejected the user name or password (CRONBELL_SMTP_USERNAME, CRONBELL_SMTP_PASSWORD)");
 		}
 		catch (MailSendException ex) {
 			boolean rejected = ex.getFailedMessages()
 				.values()
 				.stream()
 				.anyMatch((cause) -> cause instanceof SendFailedException);
-			String message = "SMTP: " + describe(ex);
-			throw rejected ? DeliveryException.permanent(message) : DeliveryException.retryable(message);
+			if (rejected) {
+				throw DeliveryException
+					.permanent(scrub(DeliveryErrors.withReason("SMTP server rejected the message", ex)));
+			}
+			throw DeliveryException.retryable(describe(ex));
 		}
 		catch (MailException ex) {
-			throw DeliveryException.retryable("SMTP: " + describe(ex));
+			throw DeliveryException.retryable(describe(ex));
 		}
 	}
 
@@ -103,11 +115,18 @@ final class EmailSender implements ChannelSender {
 		return message;
 	}
 
-	/** The root cause, without the password if the server echoed it. */
+	/** A network error, or what the SMTP server answered. */
 	private String describe(MailException ex) {
-		Throwable cause = ex.getMostSpecificCause();
-		String text = cause.getClass().getSimpleName()
-				+ ((cause.getMessage() != null) ? ": " + HttpPoster.oneLine(cause.getMessage()) : "");
+		String host = this.smtp.host().trim();
+		if (DeliveryErrors.find(ex, IOException.class) != null) {
+			return scrub(DeliveryErrors.network(ex, host, this.smtp.port(), this.notifier.connectTimeout(),
+					this.notifier.readTimeout()));
+		}
+		return scrub(DeliveryErrors.withReason("SMTP error from " + host, ex));
+	}
+
+	/** Without the password, in case the server echoed it. */
+	private String scrub(String text) {
 		String password = this.smtp.password();
 		return (password != null && !password.isEmpty()) ? text.replace(password, "****") : text;
 	}

@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
@@ -37,6 +38,13 @@ public class ChannelRepository {
 				  FROM channels
 				 WHERE project_id = ?
 				 ORDER BY created_at, id""".formatted(COLUMNS)).param(projectId).query(this::map).list();
+	}
+
+	public Set<String> findIdsByProject(String projectId) {
+		return Set.copyOf(this.jdbc.sql("SELECT id FROM channels WHERE project_id = ?")
+			.param(projectId)
+			.query(String.class)
+			.list());
 	}
 
 	public Optional<Channel> findById(String id) {

@@ -59,7 +59,10 @@ final class TelegramSender implements ChannelSender {
 			catch (JacksonException ex) {
 				// Not JSON (a proxy error page): keep the raw body.
 			}
-			throw HttpPoster.failure(response, detail, retryAfter);
+			if (response.status() == 401 || response.status() == 404) {
+				detail = "check the bot token";
+			}
+			throw HttpPoster.failure(response, channel, "Telegram", detail, retryAfter);
 		}
 	}
 

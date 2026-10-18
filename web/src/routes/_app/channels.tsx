@@ -1,16 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import {
-  EllipsisIcon,
-  HashIcon,
-  MailIcon,
-  PencilIcon,
-  PlusIcon,
-  SendIcon,
-  Trash2Icon,
-  WebhookIcon,
-} from "lucide-react";
-import { type FormEvent, type ReactNode, useId, useState } from "react";
+import { EllipsisIcon, PencilIcon, PlusIcon, SendIcon, Trash2Icon } from "lucide-react";
+import { type FormEvent, useId, useState } from "react";
+import { ChannelIcon } from "@/components/channel-icon";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormField } from "@/components/form-field";
 import { ErrorNote, ErrorState, LoadingList } from "@/components/page";
@@ -35,7 +27,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { api } from "@/lib/api";
-import { CHANNEL_FIELDS, CHANNEL_TYPES, channelConfig, channelTarget } from "@/lib/channels";
+import {
+  CHANNEL_FIELDS,
+  CHANNEL_TYPES,
+  channelConfig,
+  channelTarget,
+  fieldLabel,
+} from "@/lib/channels";
 import { channelsQuery } from "@/lib/queries";
 import { t } from "@/lib/strings";
 import type { Channel, ChannelType } from "@/lib/types";
@@ -44,13 +42,6 @@ import { useNow } from "@/lib/use-now";
 export const Route = createFileRoute("/_app/channels")({
   component: ChannelsPage,
 });
-
-const CHANNEL_ICONS: Record<ChannelType, ReactNode> = {
-  email: <MailIcon aria-hidden className="size-4" />,
-  telegram: <SendIcon aria-hidden className="size-4" />,
-  slack: <HashIcon aria-hidden className="size-4" />,
-  webhook: <WebhookIcon aria-hidden className="size-4" />,
-};
 
 /** Where alerts go: one row per channel with its last delivery, test, edit and delete. */
 function ChannelsPage() {
@@ -163,7 +154,7 @@ function ChannelRow({
     <li className="grid gap-3 px-4 py-4 sm:px-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-center md:gap-6">
       <div className="flex min-w-0 items-center gap-3">
         <span className="grid size-9 shrink-0 place-items-center rounded-lg border bg-page text-muted-foreground">
-          {CHANNEL_ICONS[channel.type]}
+          <ChannelIcon type={channel.type} />
         </span>
         <div className="min-w-0">
           <p className="truncate font-medium text-sm" title={channel.name}>
@@ -181,6 +172,9 @@ function ChannelRow({
         <DeliveryStatus channel={channel} now={now} />
         {channel.pendingDeliveries > 0 && (
           <p className="text-warn text-xs">{t.channels.pending(channel.pendingDeliveries)}</p>
+        )}
+        {channel.pickedBy > 0 && (
+          <p className="text-muted-foreground text-xs">{t.channels.pickedBy(channel.pickedBy)}</p>
         )}
         {test.isSuccess && (
           <p role="status" className="text-ok text-xs">
@@ -231,6 +225,7 @@ function ChannelRow({
           <>
             <span className="font-medium text-foreground">{channel.name}</span>{" "}
             {t.channels.deleteRest}
+            {channel.pickedBy > 0 && ` ${t.channels.deletePicked(channel.pickedBy)}`}
           </>
         }
         confirmLabel={t.channels.deleteButton}
@@ -295,11 +290,11 @@ function ChannelForm({ channel, onDone }: { channel?: Channel; onDone: () => voi
               setType(next as ChannelType);
               setErrors({});
             }}
-            className="grid w-full grid-cols-2 sm:grid-cols-4"
+            className="grid w-full grid-cols-2 sm:grid-cols-3"
           >
             {CHANNEL_TYPES.map((option) => (
               <ToggleGroupItem key={option} value={option} className="gap-2">
-                {CHANNEL_ICONS[option]}
+                <ChannelIcon type={option} />
                 {t.channels.types[option]}
               </ToggleGroupItem>
             ))}
@@ -321,7 +316,7 @@ function ChannelForm({ channel, onDone }: { channel?: Channel; onDone: () => voi
           <FormField
             key={`${type}-${field.key}`}
             id={fieldId}
-            label={t.channels.fields[field.key as keyof typeof t.channels.fields]}
+            label={fieldLabel(field)}
             hint={
               channel && field.secret
                 ? `${t.channels.secretKept}${masked ? ` (${masked})` : ""}`

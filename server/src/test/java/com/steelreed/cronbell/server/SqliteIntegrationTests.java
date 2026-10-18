@@ -77,9 +77,11 @@ class SqliteIntegrationTests extends AbstractProjectsIntegrationTests {
 	@Test
 	void upgradesABeta1Database() throws IOException {
 		Path file = Files.createTempFile("cronbell-upgrade", ".db");
-		String url = "jdbc:sqlite:" + file;
+		// Foreign keys on, as the server runs: V7 must not cascade-delete deliveries.
+		String url = "jdbc:sqlite:" + file + "?foreign_keys=true";
 		upgradeFromBeta1MakesTheSetupAccountInstanceAdmin(
 				Flyway.configure().dataSource(url, null, null).target("4").load(),
+				Flyway.configure().dataSource(url, null, null).target("6").load(),
 				Flyway.configure().dataSource(url, null, null).load(),
 				JdbcClient.create(new DriverManagerDataSource(url)));
 	}

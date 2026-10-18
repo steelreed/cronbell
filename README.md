@@ -25,8 +25,8 @@ usually hear about them from a customer. Cronbell turns "nothing happened" into 
    0 2 * * * /usr/local/bin/backup.sh && curl -fsS --retry 3 https://cronbell.example.com/ping/<key>
    ```
 
-3. When a run is missed, fails or takes too long, Cronbell alerts you by email, Telegram, Slack or
-   webhook.
+3. When a run is missed, fails or takes too long, Cronbell alerts you by email, Telegram, Slack,
+   Discord, ntfy or webhook.
 
 The ping API follows the UUID ping URLs of Healthchecks.io: `/ping/<key>` with `/start`, `/fail`,
 `/log`, an exit code (`/ping/<key>/$?`) and `?rid=`. Scripts that use those work once the base URL

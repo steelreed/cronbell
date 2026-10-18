@@ -17,9 +17,9 @@ Each direct sub-package of `com.steelreed.cronbell.server` is a module:
 
 | Module | Package | Owns |
 |---|---|---|
-| Checks | `checks` | Checks and their schedules (cron with time zones, periods), the state machine (DESIGN.md §3, §4), the detector, `CheckEvent`, the status history and uptime |
+| Checks | `checks` | Checks and their schedules (cron with time zones, periods), the channels each check picked, the state machine (DESIGN.md §3, §4), the detector, `CheckEvent`, the status history and uptime |
 | Pings | `pings` | The `/ping` endpoint (Healthchecks.io compatible), its rate limit, ping storage, the recent pings of a check |
-| Alerts | `alerts` | Channels (email, Telegram, Slack, webhooks), the delivery outbox, the dispatcher and retries, message rendering per channel type |
+| Alerts | `alerts` | Channels (email, Telegram, Slack, Discord, ntfy, webhooks), the delivery outbox, the dispatcher and retries, message rendering per channel type, plain error messages |
 | Accounts | `accounts` | Accounts and setup, projects, members and roles, invites, API keys, sessions and the current project, the security filter chain |
 | History | `history` | Daily pruning of old pings, status events and finished deliveries |
 | Shared | `shared` | Database support and web plumbing that every module uses and that depends on no module |
@@ -47,7 +47,7 @@ flowchart TD
     history --> pings
     history --> alerts
     history --> checks
-    alerts -- "listens to CheckEvent<br/>reads checks" --> checks
+    alerts -- "listens to CheckEvent<br/>reads checks and their channels<br/>implements AlertChannels" --> checks
     alerts -- "reads recent pings" --> pings
     pings -- "applies pings<br/>implements RunStats" --> checks
     checks --> accounts
@@ -61,8 +61,12 @@ average run duration and the runs per day of the status strip, come through `Run
 interface in the checks API that `pings.internal.PingRunStats` implements.
 
 The dependencies on `accounts` are only for `ProjectPrincipal`, the caller that every controller of
-the management API acts for. Spring Modulith also writes C4 component diagrams and a canvas per
-module (beans, events, configuration properties) when the tests run; a copy is kept in
+the management API acts for. The checks module stores which channels a check picked but must not
+depend on `alerts`, which depends on it: it declares `AlertChannels` (the channel ids of a
+project) and `alerts` implements it, so the arrow keeps pointing one way.
+
+Spring Modulith also writes C4 component diagrams and a canvas per module (beans, events,
+configuration properties) when the tests run; a copy is kept in
 [`docs/architecture`](docs/architecture).
 
 ## Inside a module
@@ -92,7 +96,7 @@ Public APIs per module:
 
 | Module | API |
 |---|---|
-| Checks | `Check`, `CheckState`, `CheckStatus`, `DownReason`, `PingKind`, `ScheduleKind`, `CheckEvent`, `StatusEvent`, `CheckNotFoundException`, `CheckLimitReachedException`, `CheckService`, `StatusHistory`, `RunStats` (implemented by pings) |
+| Checks | `Check`, `CheckState`, `CheckStatus`, `DownReason`, `PingKind`, `ScheduleKind`, `CheckEvent`, `StatusEvent`, `CheckNotFoundException`, `CheckLimitReachedException`, `CheckService`, `StatusHistory`, `RunStats` (implemented by pings), `AlertChannels` (implemented by alerts) |
 | Pings | `Ping`, `PingHistory` |
 | Alerts | `DeliveryHistory` |
 | Accounts | `ProjectPrincipal` |
@@ -116,7 +120,7 @@ sequenceDiagram
     Pings->>Pings: rate limit, insert ping
     Pings->>Checks: applyPing: CheckStateMachine.onPing, update state, status event
     Checks-->>Alerts: CheckEvent (WentDown / Recovered), BEFORE_COMMIT
-    Alerts->>Alerts: one PENDING delivery per channel of the project
+    Alerts->>Alerts: one PENDING delivery per channel the check alerts
     Note over Pings,Alerts: commit
     Checks-->>Dispatcher: CheckEvent, AFTER_COMMIT: wake up
     Dispatcher->>Dispatcher: claim due deliveries, send, retry with backoff for 1 h
@@ -129,7 +133,8 @@ sequenceDiagram
    records a `status_events` row if the status changed, and publishes a `CheckEvent` with that
    event's id when the check went DOWN or came back UP.
 3. `AlertOutbox` listens in the `BEFORE_COMMIT` phase and inserts one `deliveries` row per channel
-   of the project, with the status event's id. The outbox rows commit with the state change or not
+   the check alerts: the channels it picked (`CheckService.channels`), or every channel of the
+   project, each with the status event's id. The outbox rows commit with the state change or not
    at all.
 4. After commit, `DeliveryScheduler` wakes the dispatcher (it also runs every 5 s), which claims
    due rows (`FOR UPDATE SKIP LOCKED` on PostgreSQL), sends them on virtual threads and records the
@@ -204,16 +209,17 @@ its API, never its tables.
 | Module | Tables |
 |---|---|
 | Accounts | `projects`, `api_keys` and `invites` (SHA-256 hashes of keys and tokens), `accounts`, `project_members` |
-| Checks | `checks` (definition and current state: status, last ping, next due, open run), `status_events` (status changes), `detector_heartbeat` (when the detector last ran) |
+| Checks | `checks` (definition and current state: status, last ping, next due, open run), `status_events` (status changes), `detector_heartbeat` (when the detector last ran), `check_channels` (the channels a check picked; none: every channel) |
 | Pings | `pings` |
 | Alerts | `channels` (config as JSON), `deliveries` (the outbox; the alert as a JSON payload, and the status event it is for) |
 | Shared | `job_locks` (leases for jobs run by one instance at a time) |
 
 Foreign keys cascade from `projects` and `checks`, so deleting a check deletes its pings, status
-events and deliveries in the database. Ids are UUIDv7 strings made by `shared.database.Ids`; times are epoch
-milliseconds. `PingHistory.deleteBefore` reads `checks.run_started_at` in SQL to keep the pings of
-an open run: the one place a query looks at another module's table, kept because it has to be one
-statement.
+events and deliveries in the database. `check_channels` also cascades from `channels`, so deleting
+a channel drops it from every selection without the alerts module touching the checks module's
+table. Ids are UUIDv7 strings made by `shared.database.Ids`; times are epoch milliseconds.
+`PingHistory.deleteBefore` reads `checks.run_started_at` in SQL to keep the pings of an open run:
+the one place a query looks at another module's table, kept because it has to be one statement.
 
 ## Adding a feature
 

@@ -552,9 +552,12 @@ abstract class AbstractProjectsIntegrationTests extends AbstractIntegrationTests
 	/**
 	 * The V5 migration on a database of 0.1.0-beta.1 (one admin, the Default project,
 	 * checks, a channel, keys): the setup account becomes the instance admin. V6 starts
-	 * the status history of the checks that are DOWN or paused.
+	 * the status history of the checks that are DOWN or paused. V7 rebuilds the channels
+	 * and deliveries tables and keeps their rows, with the status event V6 gave each
+	 * delivery.
 	 */
-	void upgradeFromBeta1MakesTheSetupAccountInstanceAdmin(Flyway beta1, Flyway latest, JdbcClient jdbc) {
+	void upgradeFromBeta1MakesTheSetupAccountInstanceAdmin(Flyway beta1, Flyway history, Flyway latest,
+			JdbcClient jdbc) {
 		beta1.migrate();
 		jdbc.sql("INSERT INTO projects (id, name, created_at) VALUES ('p1', 'Default', 1)").update();
 		jdbc.sql("""
@@ -582,7 +585,20 @@ abstract class AbstractProjectsIntegrationTests extends AbstractIntegrationTests
 		jdbc.sql("""
 				INSERT INTO channels (id, project_id, type, name, config, created_at, updated_at)
 				VALUES ('ch1', 'p1', 'WEBHOOK', 'hook', '{}', 1, 1)""").update();
+		jdbc.sql("""
+				INSERT INTO deliveries (id, channel_id, check_id, event, payload, status, attempts, next_attempt_at,
+				                        created_at)
+				VALUES ('d1', 'ch1', 'c1', 'DOWN', '{}', 'PENDING', 0, 1, 1)""").update();
+		history.migrate();
+		jdbc.sql("UPDATE deliveries SET event_id = 'e1' WHERE id = 'd1'").update();
 		latest.migrate();
+		assertThat(jdbc.sql("SELECT channel_id, event_id FROM deliveries WHERE id = 'd1'")
+			.query((rs, row) -> List.of(rs.getString(1), rs.getString(2)))
+			.single()).containsExactly("ch1", "e1");
+		jdbc.sql("""
+				INSERT INTO channels (id, project_id, type, name, config, created_at, updated_at)
+				VALUES ('ch2', 'p1', 'NTFY', 'ntfy', '{}', 1, 1)""").update();
+		jdbc.sql("INSERT INTO check_channels (check_id, channel_id) VALUES ('c1', 'ch2')").update();
 		assertThat(jdbc.sql("SELECT instance_admin FROM accounts WHERE id = 'a1'").query(Integer.class).single())
 			.isEqualTo(1);
 		assertThat(jdbc.sql("SELECT session_version FROM accounts WHERE id = 'a1'").query(Integer.class).single())
