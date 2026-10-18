@@ -13,6 +13,9 @@ All notable changes to Cronbell are listed here. The format follows
   load or render shows the error with a retry instead of the router's raw message.
 - The header's breadcrumb ends with the page itself and names the check: "Checks / Nightly backup",
   "Checks / Nightly backup / Edit", "Checks / New check" (it showed only "Checks").
+- The instance admin's Invites page, easy to mix up with the member invite links on Members, is
+  now Instance invites at `/admin/invites`, in an Admin group of the sidebar that only the
+  instance admin sees, and points to Members for adding someone to the current project.
 
 ### Fixed
 

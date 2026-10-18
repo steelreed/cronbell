@@ -543,13 +543,13 @@ fonts; status is coloured text with a small dot, no badges). Dense and calm, dat
 can follow.
 
 The shell is a collapsible left sidebar (the project switcher at the top; Overview, Checks, Alert
-channels, API keys, then Members, Invites for the instance admin, and Account; theme and account
-at the bottom; a sheet on phones) and a header with the page title, or on deeper pages a
-breadcrumb ending with the page itself ("Checks / Nightly backup / Edit", the check by its name),
-and a command menu (⌘K, Ctrl+K or `/`: jump to a check by name or slug, go to a page, create a
-check, switch theme). The active page is marked with a grey fill and the product's amber on
-its icon. Theme: dark (default), light or system. In the light theme the page is white and cards
-are the `#F7F7F7` surface; in the dark theme the page is ink and cards `#131313`.
+channels, API keys; Settings: Members and Account; Admin, for the instance admin only: Instance
+invites; theme and account at the bottom; a sheet on phones) and a header with the page title, or
+on deeper pages a breadcrumb ending with the page itself ("Checks / Nightly backup / Edit", the
+check by its name), and a command menu (⌘K, Ctrl+K or `/`: jump to a check by name or slug, go to
+a page, create a check, switch theme). The active page is marked with a grey fill and the product's
+amber on its icon. Theme: dark (default), light or system. In the light theme the page is white and
+cards are the `#F7F7F7` surface; in the dark theme the page is ink and cards `#131313`.
 
 Every page has a skeleton while it loads and, when a load fails, the error with a retry. An
 unknown address or check shows one "not found" page inside the shell (404, what is missing, a link
@@ -566,7 +566,7 @@ back to the overview or the checks); a page that fails to render shows its error
 | Channels | `/channels` | channels with type, target, last delivery or last error; add and edit in a dialog per type (secrets shown masked, kept unless replaced); send test; delete (confirmed) |
 | API keys | `/keys` | keys by name and prefix; create in a dialog that shows the key once with copy; revoke (confirmed); create and revoke for owners only |
 | Members | `/members` | members of the current project with role and "you"; remove (owners) or leave (confirmed); for owners, "Invite member" in a dialog that makes a link and shows it once with copy, and the member invites with status, expiry and delete (confirmed) |
-| Invites | `/invites` | instance admin only: create a project invite with an optional note (link shown once with copy), the project invites with status, who accepted them and expiry; delete (confirmed) |
+| Instance invites | `/admin/invites` | instance admin only: create a project invite with an optional note (link shown once with copy), the project invites with status, who accepted them and expiry; delete (confirmed); a pointer to Members for adding someone to the current project |
 | Account | `/account` | email, change password (current and new), sign out |
 | Invite | `/invite/{token}` | public: who invites to what and until when; email, password (and project name for a project invite) to create the account, or "Accept as <email>" when signed in; a clear message for an invalid or expired link |
 

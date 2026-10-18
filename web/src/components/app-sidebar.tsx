@@ -33,8 +33,8 @@ import { NAV_ICONS } from "./nav-icon";
 import { ThemeIcon, ThemeMenu } from "./theme-menu";
 
 /**
- * The app's left sidebar: the project switcher, the project's pages, the settings, then theme
- * and account. Collapses to an icon rail on desktop and opens as a sheet on phones. The active
+ * The app's left sidebar: the project switcher, the project's pages, the settings, the instance
+ * admin's pages, then theme and account. Collapses to an icon rail on desktop and opens as a sheet on phones. The active
  * item is a grey fill with the product's amber on its icon, the only place amber marks state.
  */
 export function AppSidebar({ session, problems }: { session: Session; problems: number }) {
@@ -91,6 +91,14 @@ export function AppSidebar({ session, problems }: { session: Session; problems: 
             <SidebarMenu aria-label={t.nav.settings}>{group("settings")}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+        {session.account.instanceAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>{t.nav.admin}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu aria-label={t.nav.admin}>{group("admin")}</SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>

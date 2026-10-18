@@ -169,8 +169,18 @@ describe("invites page", () => {
         }),
       ),
     );
-    renderAt("/invites");
+    renderAt("/admin/invites");
     expect(await screen.findByText("Lan, beta tester")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Instance invites" })).toBeInTheDocument();
+    const admin = screen.getByRole("list", { name: "Admin" });
+    expect(within(admin).getByRole("link", { name: "Instance invites" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.getByRole("link", { name: "Invite them from Members" })).toHaveAttribute(
+      "href",
+      "/members",
+    );
     expect(screen.getByText("Pending")).toBeInTheDocument();
     expect(screen.getByText("Accepted")).toHaveClass("text-ok");
     expect(screen.getByText("by hoa@example.com · Hoa's backups")).toBeInTheDocument();
@@ -179,9 +189,9 @@ describe("invites page", () => {
 
   it("is not offered to other accounts", async () => {
     vi.stubGlobal("fetch", stubFetch(signedIn(MEMBER_SESSION)));
-    renderAt("/invites");
+    renderAt("/admin/invites");
     expect(await screen.findByText(/Only the instance admin/)).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Invites" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Instance invites" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Members" })).toBeInTheDocument();
   });
 });

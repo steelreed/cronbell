@@ -38,8 +38,8 @@ describe("navFor", () => {
   it("offers project invites to the instance admin only", () => {
     const admin = navFor({ account: { id: "a1", email: "a@example.com", instanceAdmin: true } });
     const other = navFor({ account: { id: "a2", email: "b@example.com", instanceAdmin: false } });
-    expect(admin.map((item) => item.to)).toContain("/invites");
-    expect(other.map((item) => item.to)).not.toContain("/invites");
+    expect(admin.map((item) => item.to)).toContain("/admin/invites");
+    expect(other.map((item) => item.to)).not.toContain("/admin/invites");
     expect(other.filter((item) => item.group === "settings").map((item) => item.to)).toEqual([
       "/members",
       "/account",

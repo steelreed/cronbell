@@ -1,13 +1,20 @@
 import { t } from "./strings";
 import type { Check, Session } from "./types";
 
-export type NavTo = "/" | "/checks" | "/channels" | "/keys" | "/members" | "/invites" | "/account";
+export type NavTo =
+  | "/"
+  | "/checks"
+  | "/channels"
+  | "/keys"
+  | "/members"
+  | "/account"
+  | "/admin/invites";
 
 export interface NavItem {
   to: NavTo;
   label: string;
-  /** Main pages of the project, or settings of the project and the account. */
-  group: "main" | "settings";
+  /** Main pages of the project, settings of the project and the account, or of the instance. */
+  group: "main" | "settings" | "admin";
   /** Shown to the instance admin only. */
   adminOnly?: boolean;
   match: (path: string) => boolean;
@@ -21,14 +28,14 @@ export const NAV: NavItem[] = [
   { to: "/channels", label: t.nav.channels, group: "main", match: starts("/channels") },
   { to: "/keys", label: t.nav.keys, group: "main", match: starts("/keys") },
   { to: "/members", label: t.nav.members, group: "settings", match: starts("/members") },
-  {
-    to: "/invites",
-    label: t.nav.invites,
-    group: "settings",
-    adminOnly: true,
-    match: starts("/invites"),
-  },
   { to: "/account", label: t.nav.account, group: "settings", match: starts("/account") },
+  {
+    to: "/admin/invites",
+    label: t.nav.instanceInvites,
+    group: "admin",
+    adminOnly: true,
+    match: starts("/admin/invites"),
+  },
 ];
 
 /** The pages this account sees: the instance admin also gets project invites. */

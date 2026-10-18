@@ -14,8 +14,9 @@ export const en = {
     keys: "API keys",
     settings: "Settings",
     members: "Members",
-    invites: "Invites",
     account: "Account",
+    admin: "Admin",
+    instanceInvites: "Instance invites",
     toggleSidebar: "Toggle sidebar",
   },
   theme: {
@@ -362,6 +363,8 @@ export const en = {
   },
   invites: {
     lead: "Invite someone to Cronbell with a project of their own. They choose their email and password when they open the link. You do not get access to their project.",
+    memberHint: "Adding someone to the current project?",
+    toMembers: "Invite them from Members",
     create: "Create invite",
     createProjectTitle: "Invite to a new project",
     createMemberTitle: "Invite a member",
