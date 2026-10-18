@@ -14,6 +14,7 @@ export function aCheck(overrides: Partial<Check> = {}): Check {
     periodSeconds: null,
     graceSeconds: 1800,
     maxRuntimeSeconds: null,
+    channels: null,
     status: "UP",
     downReason: null,
     lastPingAt: "2026-01-04T20:01:00Z",
@@ -38,6 +39,7 @@ export function aChannel(overrides: Partial<Channel> = {}): Channel {
     lastDeliveryAt: null,
     lastError: null,
     pendingDeliveries: 0,
+    pickedBy: 0,
     ...overrides,
   };
 }

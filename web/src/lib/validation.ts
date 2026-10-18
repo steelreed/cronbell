@@ -45,6 +45,9 @@ export interface CheckFormValues {
   graceUnit: Unit;
   maxRuntime: string;
   maxRuntimeUnit: Unit;
+  /** Every channel of the project, or only the picked ones (DESIGN.md §8, Routing). */
+  alertTo: "all" | "picked";
+  channels: string[];
 }
 
 export type CheckFormErrors = Partial<Record<keyof CheckFormValues, string>>;
@@ -84,6 +87,9 @@ export function validateCheckForm(
   if (maxRuntime !== null && (Number.isNaN(maxRuntime) || maxRuntime <= 0)) {
     errors.maxRuntime = t.form.errors.maxRuntime;
   }
+  if (values.alertTo === "picked" && values.channels.length === 0) {
+    errors.channels = t.form.errors.channels;
+  }
   return errors;
 }
 
@@ -97,6 +103,7 @@ export function toDefinition(values: CheckFormValues): CheckDefinition {
   else definition.periodSeconds = toSeconds(values.period, values.periodUnit) ?? undefined;
   const maxRuntime = toSeconds(values.maxRuntime, values.maxRuntimeUnit);
   if (maxRuntime !== null) definition.maxRuntimeSeconds = maxRuntime;
+  definition.channels = values.alertTo === "picked" ? values.channels : null;
   return definition;
 }
 

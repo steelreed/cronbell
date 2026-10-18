@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Channel } from "@/lib/types";
-import { aChannel, SESSION, stubFetch } from "@/test/fixtures";
+import { aChannel, aCheck, SESSION, stubFetch } from "@/test/fixtures";
 import { renderAt } from "@/test/render";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -19,7 +19,7 @@ function signedIn(routes: Routes): Routes {
 }
 
 const CHANNELS: Channel[] = [
-  aChannel(),
+  aChannel({ pickedBy: 2 }),
   aChannel({
     id: "ch-pager",
     type: "ntfy",
@@ -29,6 +29,22 @@ const CHANNELS: Channel[] = [
 ];
 
 describe("Channels page", () => {
+  it("shows how many checks picked a channel, and warns before deleting it", async () => {
+    vi.stubGlobal("fetch", stubFetch(signedIn({ "GET /api/v1/channels": () => [200, CHANNELS] })));
+    const user = userEvent.setup();
+    renderAt("/channels");
+    expect(await screen.findByText("Picked by 2 checks")).toBeInTheDocument();
+    expect(screen.getByText("ntfy.example.com/ops")).toBeInTheDocument();
+    expect(screen.getAllByText(/^Picked by/)).toHaveLength(1);
+
+    await user.click(screen.getByRole("button", { name: "Actions: Ops chat" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Delete" }));
+    const confirm = await screen.findByRole("alertdialog");
+    expect(
+      within(confirm).getByText(/2 checks pick it\. A check left with no picked channel/),
+    ).toBeInTheDocument();
+  });
+
   it("adds an ntfy channel on ntfy.sh with only a topic", async () => {
     const created: unknown[] = [];
     vi.stubGlobal(
@@ -70,5 +86,34 @@ describe("Channels page", () => {
       "placeholder",
       "https://discord.com/api/webhooks/…",
     );
+  });
+});
+
+describe("Check page", () => {
+  function checkPage(channels: string[] | null) {
+    vi.stubGlobal(
+      "fetch",
+      stubFetch(
+        signedIn({
+          "GET /api/v1/checks/nightly-backup": () => [200, aCheck({ channels })],
+          "GET /api/v1/checks/nightly-backup/pings": () => [200, []],
+          "GET /api/v1/channels": () => [200, CHANNELS],
+        }),
+      ),
+    );
+    renderAt("/checks/nightly-backup");
+  }
+
+  it("names the channels a check picked", async () => {
+    checkPage(["ch-pager"]);
+    const row = (await screen.findByText("Alerts to")).parentElement as HTMLElement;
+    expect(await within(row).findByText("Pager")).toBeInTheDocument();
+    expect(within(row).queryByText("Ops chat")).not.toBeInTheDocument();
+  });
+
+  it("says when a check alerts every channel", async () => {
+    checkPage(null);
+    const row = (await screen.findByText("Alerts to")).parentElement as HTMLElement;
+    expect(within(row).getByText("All channels")).toBeInTheDocument();
   });
 });

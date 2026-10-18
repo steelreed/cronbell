@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { PauseIcon, PencilIcon, PlayIcon } from "lucide-react";
+import { ChannelIcon } from "@/components/channel-icon";
 import { IntegratePanel } from "@/components/check/integrate-panel";
 import { PingsPanel } from "@/components/check/pings-panel";
 import { RunsPanel } from "@/components/check/runs-panel";
@@ -14,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
 import { useCheckActions } from "@/lib/check-actions";
 import { formatSchedule, formatSeconds } from "@/lib/format";
-import { checkQuery, pingsQuery } from "@/lib/queries";
+import { channelsQuery, checkQuery, pingsQuery } from "@/lib/queries";
 import { runsFromPings } from "@/lib/runs";
 import { attention } from "@/lib/status";
 import { t } from "@/lib/strings";
@@ -94,6 +95,7 @@ function CheckView({ check, now }: { check: Check; now: number }) {
                         <span className="text-muted-foreground">{t.check.sameAsGrace}</span>
                       ),
                   },
+                  { label: t.check.alertsTo, value: <AlertTargets check={check} /> },
                   { label: t.check.nextRun, value: <NextDue check={check} now={now} /> },
                   {
                     label: t.check.lastSuccess,
@@ -115,6 +117,32 @@ function CheckView({ check, now }: { check: Check; now: number }) {
         </div>
       </div>
     </>
+  );
+}
+
+/** The channels the check alerts: every channel, or the names of those it picked. */
+function AlertTargets({ check }: { check: Check }) {
+  const channels = useQuery(channelsQuery);
+  if (check.channels === null) {
+    return channels.data?.length === 0 ? (
+      <span className="text-muted-foreground">{t.check.noChannels}</span>
+    ) : (
+      t.check.allChannels
+    );
+  }
+  if (!channels.data) return <Bar className="w-24" />;
+  const picked = new Set(check.channels);
+  return (
+    <ul className="space-y-1">
+      {channels.data
+        .filter((channel) => picked.has(channel.id))
+        .map((channel) => (
+          <li key={channel.id} className="flex min-w-0 items-center gap-2">
+            <ChannelIcon type={channel.type} className="size-3.5 shrink-0 text-muted-foreground" />
+            <span className="truncate">{channel.name}</span>
+          </li>
+        ))}
+    </ul>
   );
 }
 

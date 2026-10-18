@@ -15,6 +15,8 @@ All notable changes to Cronbell are listed here. The format follows
   picked (`"channels": [ids]` on `PUT /api/v1/checks/{slug}`, `null` for every channel; left out,
   an update keeps the selection, so the starter does not reset it). A check whose picked channels
   are all deleted alerts every channel again. Channels report `pickedBy`.
+- Dashboard: "Alert channels" in the check form, where alerts go on the check page, and how many
+  checks picked each channel.
 
 ### Fixed
 

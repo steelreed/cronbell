@@ -21,6 +21,8 @@ const valid: CheckFormValues = {
   graceUnit: "m",
   maxRuntime: "",
   maxRuntimeUnit: "m",
+  alertTo: "all",
+  channels: [],
 };
 
 describe("validateCheckForm", () => {
@@ -59,6 +61,11 @@ describe("validateCheckForm", () => {
     expect(isCronLike("0 0 3 * * *")).toBe(true);
     expect(isCronLike("every day")).toBe(false);
   });
+
+  it("needs a ticked channel when alerts go to chosen channels", () => {
+    expect(validateCheckForm({ ...valid, alertTo: "picked" })).toHaveProperty("channels");
+    expect(validateCheckForm({ ...valid, alertTo: "picked", channels: ["ch1"] })).toEqual({});
+  });
 });
 
 describe("toDefinition", () => {
@@ -67,6 +74,7 @@ describe("toDefinition", () => {
       cron: "0 3 * * *",
       timeZone: "Asia/Ho_Chi_Minh",
       graceSeconds: 1800,
+      channels: null,
     });
     expect(
       toDefinition({
@@ -84,7 +92,14 @@ describe("toDefinition", () => {
       timeZone: "Asia/Ho_Chi_Minh",
       graceSeconds: 1800,
       maxRuntimeSeconds: 90,
+      channels: null,
     });
+  });
+
+  it("sends the chosen channels, or null for every channel", () => {
+    const picked = { ...valid, alertTo: "picked" as const, channels: ["ch1", "ch2"] };
+    expect(toDefinition(picked).channels).toEqual(["ch1", "ch2"]);
+    expect(toDefinition({ ...picked, alertTo: "all" }).channels).toBeNull();
   });
 });
 

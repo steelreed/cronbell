@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { type FormEvent, type ReactNode, useEffect, useId, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -11,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { formatRelative, formatRun } from "@/lib/format";
-import { nextRunsQuery } from "@/lib/queries";
+import { channelsQuery, nextRunsQuery } from "@/lib/queries";
 import { t } from "@/lib/strings";
 import type { Check, CheckDefinition } from "@/lib/types";
 import {
@@ -27,6 +28,7 @@ import {
   validateCheckForm,
 } from "@/lib/validation";
 import { canonicalZone } from "@/lib/zones";
+import { ChannelIcon } from "./channel-icon";
 import { FormField } from "./form-field";
 import { ErrorNote } from "./page";
 import { ZonePicker } from "./zone-picker";
@@ -45,6 +47,8 @@ export function initialValues(check?: Check): CheckFormValues {
       graceUnit: "m",
       maxRuntime: "",
       maxRuntimeUnit: "m",
+      alertTo: "all",
+      channels: [],
     };
   }
   const period = splitSeconds(check.periodSeconds ?? 3600);
@@ -62,6 +66,8 @@ export function initialValues(check?: Check): CheckFormValues {
     graceUnit: grace.unit,
     maxRuntime: maxRuntime.value,
     maxRuntimeUnit: maxRuntime.unit,
+    alertTo: check.channels ? "picked" : "all",
+    channels: check.channels ?? [],
   };
 }
 
@@ -275,6 +281,17 @@ export function CheckForm({
             </FormField>
           </div>
         </Section>
+
+        <Section title={t.form.sections.channels}>
+          <ChannelChoice
+            id={id}
+            alertTo={values.alertTo}
+            picked={values.channels}
+            error={errors.channels}
+            onAlertTo={(alertTo) => set("alertTo", alertTo)}
+            onPicked={(channels) => set("channels", channels)}
+          />
+        </Section>
       </div>
 
       <div className="flex flex-col-reverse gap-3 border-t px-4 py-4 sm:flex-row sm:items-center sm:justify-end sm:px-6">
@@ -327,6 +344,99 @@ function NextRuns({ cron, timeZone }: { cron: string; timeZone: string }) {
             </li>
           ))}
         </ol>
+      )}
+    </div>
+  );
+}
+
+/** Every channel of the project, or a ticked list of them. */
+function ChannelChoice({
+  id,
+  alertTo,
+  picked,
+  error,
+  onAlertTo,
+  onPicked,
+}: {
+  id: string;
+  alertTo: CheckFormValues["alertTo"];
+  picked: string[];
+  error?: string;
+  onAlertTo: (alertTo: CheckFormValues["alertTo"]) => void;
+  onPicked: (channels: string[]) => void;
+}) {
+  const channels = useQuery(channelsQuery);
+  const none = channels.isSuccess && channels.data.length === 0;
+  return (
+    <div className="space-y-3">
+      <span id={`${id}-alertTo-label`} className="block font-medium text-sm">
+        {t.form.alertTo}
+      </span>
+      <ToggleGroup
+        type="single"
+        variant="outline"
+        aria-labelledby={`${id}-alertTo-label`}
+        value={alertTo}
+        onValueChange={(next) => next && onAlertTo(next as CheckFormValues["alertTo"])}
+      >
+        <ToggleGroupItem value="all" className="px-4">
+          {t.form.allChannels}
+        </ToggleGroupItem>
+        <ToggleGroupItem value="picked" className="px-4" disabled={none && alertTo === "all"}>
+          {t.form.someChannels}
+        </ToggleGroupItem>
+      </ToggleGroup>
+      <p className="text-muted-foreground text-xs">
+        {none
+          ? t.form.noChannels
+          : alertTo === "all"
+            ? t.form.allChannelsHint
+            : t.form.someChannelsHint}
+      </p>
+      {alertTo === "picked" &&
+        (channels.isError ? (
+          <ErrorNote error={channels.error} />
+        ) : (
+          <fieldset
+            aria-labelledby={`${id}-alertTo-label`}
+            aria-describedby={error ? `${id}-channels-error` : undefined}
+            className="min-w-0 divide-y rounded-lg border"
+          >
+            {(channels.data ?? []).map((channel, index) => {
+              // The first box has the field's id, so a validation error focuses it.
+              const checkboxId = index === 0 ? `${id}-channels` : `${id}-channel-${channel.id}`;
+              return (
+                <label
+                  key={channel.id}
+                  htmlFor={checkboxId}
+                  className="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm"
+                >
+                  <Checkbox
+                    id={checkboxId}
+                    checked={picked.includes(channel.id)}
+                    onCheckedChange={(checked) =>
+                      onPicked(
+                        checked
+                          ? [...picked, channel.id]
+                          : picked.filter((channelId) => channelId !== channel.id),
+                      )
+                    }
+                    aria-invalid={error ? true : undefined}
+                  />
+                  <ChannelIcon type={channel.type} className="size-4 text-muted-foreground" />
+                  <span className="min-w-0 truncate">{channel.name}</span>
+                  <span className="ml-auto shrink-0 text-muted-foreground text-xs">
+                    {t.channels.types[channel.type]}
+                  </span>
+                </label>
+              );
+            })}
+          </fieldset>
+        ))}
+      {error && (
+        <p id={`${id}-channels-error`} className="text-problem text-xs">
+          {error}
+        </p>
       )}
     </div>
   );

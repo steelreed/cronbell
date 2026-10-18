@@ -17,6 +17,8 @@ export interface Check {
   periodSeconds: number | null;
   graceSeconds: number;
   maxRuntimeSeconds: number | null;
+  /** Ids of the channels the check alerts; null for every channel of the project. */
+  channels: string[] | null;
   status: CheckStatus;
   downReason: DownReason | null;
   lastPingAt: string | null;
@@ -35,6 +37,8 @@ export interface CheckDefinition {
   timeZone?: string;
   graceSeconds?: number;
   maxRuntimeSeconds?: number;
+  /** Left out, the selection is kept; null alerts every channel. */
+  channels?: string[] | null;
 }
 
 export interface Ping {
@@ -60,6 +64,8 @@ export interface Channel {
   lastDeliveryAt: string | null;
   lastError: string | null;
   pendingDeliveries: number;
+  /** Checks that picked this channel; checks alerting every channel are not counted. */
+  pickedBy: number;
 }
 
 export interface ApiKey {

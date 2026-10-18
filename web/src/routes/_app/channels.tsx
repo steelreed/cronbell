@@ -173,6 +173,9 @@ function ChannelRow({
         {channel.pendingDeliveries > 0 && (
           <p className="text-warn text-xs">{t.channels.pending(channel.pendingDeliveries)}</p>
         )}
+        {channel.pickedBy > 0 && (
+          <p className="text-muted-foreground text-xs">{t.channels.pickedBy(channel.pickedBy)}</p>
+        )}
         {test.isSuccess && (
           <p role="status" className="text-ok text-xs">
             {t.channels.testOk}
@@ -222,6 +225,7 @@ function ChannelRow({
           <>
             <span className="font-medium text-foreground">{channel.name}</span>{" "}
             {t.channels.deleteRest}
+            {channel.pickedBy > 0 && ` ${t.channels.deletePicked(channel.pickedBy)}`}
           </>
         }
         confirmLabel={t.channels.deleteButton}
