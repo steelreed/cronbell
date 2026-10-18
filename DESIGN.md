@@ -547,7 +547,8 @@ channels, API keys, then Members, Invites for the instance admin, and Account; t
 at the bottom; a sheet on phones) and a header with the page title, or the parent pages as a
 breadcrumb, and a command menu (⌘K, Ctrl+K or `/`: jump to a check by name or slug, go to a page,
 create a check, switch theme). The active page is marked with a grey fill and the product's amber on
-its icon. Theme: dark (default), light or system.
+its icon. Theme: dark (default), light or system. In the light theme the page is white and cards
+are the `#F7F7F7` surface; in the dark theme the page is ink and cards `#131313`.
 
 | Screen | Path | Content |
 |---|---|---|

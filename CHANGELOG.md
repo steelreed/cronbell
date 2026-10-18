@@ -17,6 +17,8 @@ All notable changes to Cronbell are listed here. The format follows
 - Paused checks were amber like late ones. A pause is deliberate, so it is grey everywhere; amber
   is left for late runs and checks waiting too long for their first ping.
 - The Up tile of the overview said "38% of checks"; it now says "on schedule".
+- The light theme had white cards on a grey page. As in the Steelreed design system, the page is
+  now white and cards, tables and code use the `#F7F7F7` surface.
 
 ## [0.1.0-beta.2] - 2026-10-17
 
