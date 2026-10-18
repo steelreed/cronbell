@@ -6,6 +6,11 @@ All notable changes to Cronbell are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Integration guides in `docs/integrations/`: crontab, systemd timers, Kubernetes CronJob, GitHub
+  Actions, Docker (with Ofelia) and scripts in Python, Node.js, Bash and PowerShell.
+
 ## [0.1.0-beta.2] - 2026-10-17
 
 ### Added
