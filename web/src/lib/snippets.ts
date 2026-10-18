@@ -1,14 +1,55 @@
+import { formatSchedule } from "./format";
 import type { Check } from "./types";
 
 const CURL = "curl -fsS -m 10 --retry 5 -o /dev/null";
 
+/** Stands in for a schedule that cron cannot express; the comment above it says why. */
+const NO_SCHEDULE = "<schedule>";
+
+/**
+ * The cron line of a period: every N minutes for a divisor of an hour, every N hours for a
+ * divisor of a day, or daily. Null for any other period: cron restarts its steps at every
+ * hour and day, so "every 7 minutes" would run at :56 and then :00.
+ */
+export function periodCron(seconds: number): string | null {
+  if (seconds === 60) return "* * * * *";
+  if (seconds === 3_600) return "0 * * * *";
+  if (seconds === 86_400) return "0 0 * * *";
+  const minutes = seconds / 60;
+  if (Number.isInteger(minutes) && minutes < 60 && 60 % minutes === 0) {
+    return `*/${minutes} * * * *`;
+  }
+  const hours = seconds / 3_600;
+  if (Number.isInteger(hours) && hours < 24 && 24 % hours === 0) return `0 */${hours} * * *`;
+  return null;
+}
+
+/**
+ * The check's schedule as 5-field cron, for crontab and Kubernetes. A 6-field cron keeps its
+ * minutes only when its seconds field is 0; neither has a seconds field.
+ */
+export function cronSchedule(
+  check: Pick<Check, "scheduleKind" | "cron" | "periodSeconds">,
+): string | null {
+  if (check.scheduleKind === "PERIOD") return periodCron(check.periodSeconds ?? 0);
+  const fields = (check.cron ?? "").trim().split(/\s+/);
+  if (fields.length !== 6) return fields.join(" ");
+  return fields[0] === "0" ? fields.slice(1).join(" ") : null;
+}
+
+function noScheduleNote(check: Check): string {
+  return `# ${formatSchedule(check)} has no exact cron schedule: replace ${NO_SCHEDULE}`;
+}
+
 /** A crontab line: run the job, then report its exit code. */
 export function crontabSnippet(check: Check): string {
-  const schedule = check.scheduleKind === "CRON" ? (check.cron ?? "* * * * *") : "*/5 * * * *";
+  const schedule = cronSchedule(check);
   const lines: string[] = [];
-  if (check.scheduleKind === "PERIOD") lines.push("# match the check's period");
-  if (check.timeZone !== "UTC") lines.push(`CRON_TZ=${check.timeZone}`);
-  lines.push(`${schedule} /path/to/job.sh; ${CURL} ${check.pingUrl}/$?`);
+  if (schedule === null) lines.push(noScheduleNote(check));
+  if (check.scheduleKind === "CRON" && check.timeZone !== "UTC") {
+    lines.push(`CRON_TZ=${check.timeZone}`);
+  }
+  lines.push(`${schedule ?? NO_SCHEDULE} /path/to/job.sh; ${CURL} ${check.pingUrl}/$?`);
   return lines.join("\n");
 }
 
@@ -22,13 +63,13 @@ export function shellSnippet(check: Check): string {
 }
 
 export function kubernetesSnippet(check: Check): string {
-  const schedule = check.scheduleKind === "CRON" ? (check.cron ?? "") : "*/5 * * * *";
-  return `apiVersion: batch/v1
+  const schedule = cronSchedule(check);
+  return `${schedule === null ? `${noScheduleNote(check)}\n` : ""}apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: ${check.slug.toLowerCase().replace(/[^a-z0-9-]/g, "-")}
 spec:
-  schedule: "${schedule}"
+  schedule: "${schedule ?? NO_SCHEDULE}"
   timeZone: "${check.timeZone}"
   jobTemplate:
     spec:
