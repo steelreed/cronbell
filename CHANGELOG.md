@@ -15,6 +15,8 @@ All notable changes to Cronbell are listed here. The format follows
 - First steps on the overview while a project is being set up: create a check, receive its first
   ping, add an alert channel and send a test, and optionally invite a teammate. The next step is
   open with its action, and the list goes away once the first three are done.
+- Integration guides in `docs/integrations/`: crontab, systemd timers, Kubernetes CronJob, GitHub
+  Actions, Docker (with Ofelia) and scripts in Python, Node.js, Bash and PowerShell.
 
 ### Changed
 
@@ -49,6 +51,10 @@ All notable changes to Cronbell are listed here. The format follows
   now white and cards, tables and code use the `#F7F7F7` surface.
 - On phones the status filter cut "New" in half and hid "Paused". The row still scrolls, now
   with a fade on the side that has more, and the chosen filter is scrolled into view.
+- A session that accepted an invite while the account's password was being changed elsewhere
+  stayed signed in; it is now signed out like the other sessions. Of two concurrent password
+  changes with the same current password, the second one overwrote the first; it is now refused
+  with `409`.
 
 ## [0.1.0-beta.2] - 2026-10-17
 

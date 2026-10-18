@@ -136,8 +136,9 @@ curl -fsS https://cron.example.com/ping/<pingKey>      # -> OK
 ```
 
 The check turns UP in the dashboard. Its page has ready-made crontab, shell and Kubernetes
-snippets. In the dashboard, **Create your first check** opens the form instead; the new check's
-page shows its ping URL and a **Send a test ping** button. Add an alert channel under **Channels** and send a test message.
+snippets; [`integrations/`](integrations) covers more ways to run jobs. In the dashboard, **Create your
+first check** opens the form instead; the new check's page shows its ping URL and a **Send a test
+ping** button. Add an alert channel under **Channels** and send a test message.
 
 ## 8. Back up
 

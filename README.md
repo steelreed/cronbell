@@ -32,6 +32,8 @@ The ping API follows the UUID ping URLs of Healthchecks.io: `/ping/<key>` with `
 `/log`, an exit code (`/ping/<key>/$?`) and `?rid=`. Scripts that use those work once the base URL
 and the key are changed. Slug URLs (`/ping/<ping-key>/<slug>`) and creating a check on its first
 ping (`?create=1`) are not supported, and a ping body is cut at 10 KB (send the tail of a long log).
+[`docs/integrations/`](docs/integrations) has guides for crontab, systemd timers, Kubernetes,
+GitHub Actions, Docker and scripts.
 
 **Spring Boot teams** can use
 [`cronbell-spring-boot-starter`](https://github.com/steelreed/cronbell-spring-boot-starter) (beta):
