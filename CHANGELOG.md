@@ -6,6 +6,14 @@ All notable changes to Cronbell are listed here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- No more alert storm after the server was down (outage, upgrade, host reboot). Every overdue check
+  used to go DOWN "missed run" or "running too long" on the first detector run, then "UP again"
+  with the next ping. The detector now leaves a heartbeat; after a gap of more than 2 minutes, the
+  checks that could have reported meanwhile get a new deadline, as on resume, and one log line says
+  how long the server was away.
+
 ## [0.1.0-beta.2] - 2026-10-17
 
 ### Added

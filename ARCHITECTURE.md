@@ -132,7 +132,10 @@ sequenceDiagram
 
 Every 15 s `checks.internal.Detector` claims UP checks that are overdue in batches of 100, runs
 `CheckStateMachine.detect` on each, stores the DOWN state and publishes `CheckEvent.WentDown`. From
-there the alert path is the same as for a ping.
+there the alert path is the same as for a ping. Each run then writes its time to
+`detector_heartbeat`. The first run after a start reads it first: after more than 2 minutes of
+silence, `CheckStateMachine.afterDowntime` gives the checks that could have reported in the gap a
+new deadline, without events (DESIGN.md §4, Downtime).
 
 ### History pruning
 
@@ -182,7 +185,7 @@ its API, never its tables.
 | Module | Tables |
 |---|---|
 | Accounts | `projects`, `api_keys` and `invites` (SHA-256 hashes of keys and tokens), `accounts`, `project_members` |
-| Checks | `checks` (definition and current state: status, last ping, next due, open run) |
+| Checks | `checks` (definition and current state: status, last ping, next due, open run), `detector_heartbeat` (when the detector last ran) |
 | Pings | `pings` |
 | Alerts | `channels` (config as JSON), `deliveries` (the outbox; the alert as a JSON payload) |
 | Shared | `job_locks` (leases for jobs run by one instance at a time) |

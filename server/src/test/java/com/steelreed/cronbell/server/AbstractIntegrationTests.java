@@ -370,6 +370,64 @@ abstract class AbstractIntegrationTests {
 		assertThat(this.events.forSlug(pausedSlug)).isEmpty();
 	}
 
+	@Test
+	void runsDueWhileTheServerWasAwayGetANewDeadlineInsteadOfAlerts() {
+		Project project = newProject();
+		String hook = "/hook/" + UUID.randomUUID();
+		createChannel(project, "{\"type\":\"webhook\",\"config\":{\"url\":\"" + RECEIVER.url(hook) + "\"}}");
+		String missed = uniqueSlug();
+		String missedKey = createCheck(project, missed, "{\"cron\":\"0 * * * *\",\"graceSeconds\":60}");
+		String running = uniqueSlug();
+		String runningKey = createCheck(project, running, "{\"cron\":\"0 * * * *\",\"maxRuntimeSeconds\":600}");
+		String failed = uniqueSlug();
+		String failedKey = createCheck(project, failed, "{\"cron\":\"0 * * * *\"}");
+		get("/ping/" + missedKey);
+		get("/ping/" + runningKey + "/start");
+		post("/ping/" + failedKey + "/fail");
+		this.dispatcher.runOnce();
+		assertThat(RECEIVER.requests(hook)).hasSize(1);
+		CLOCK.set("2026-01-05T10:00:30Z");
+		this.detector.runOnce();
+
+		// Stopped at 10:00:30, started again at 14:00: the 11:00 run and the end of the
+		// open run would have come while nobody listened.
+		CLOCK.set("2026-01-05T14:00:00Z");
+		assertThat(this.detector.resumeAfterDowntime()).isGreaterThanOrEqualTo(2);
+		this.detector.runOnce();
+		assertThat(field(project.key(), missed, "status")).isEqualTo("UP");
+		assertThat(field(project.key(), missed, "nextDueAt")).isEqualTo("2026-01-05T15:00:00Z");
+		assertThat(field(project.key(), running, "status")).isEqualTo("UP");
+		assertThat(field(project.key(), failed, "status")).isEqualTo("DOWN");
+		assertThat(this.events.forSlug(missed)).isEmpty();
+		assertThat(this.events.forSlug(running)).isEmpty();
+		this.dispatcher.runOnce();
+		assertThat(RECEIVER.requests(hook)).hasSize(1);
+		assertThat(this.detector.resumeAfterDowntime()).as("only once per gap").isZero();
+
+		// Still no run after the new deadline: DOWN as usual.
+		CLOCK.set("2026-01-05T15:01:01Z");
+		this.detector.runOnce();
+		assertThat(field(project.key(), missed, "status")).isEqualTo("DOWN");
+		assertThat(field(project.key(), missed, "downReason")).isEqualTo("MISSED");
+		assertThat(this.events.forSlug(missed)).hasSize(1).first().isInstanceOf(CheckEvent.WentDown.class);
+	}
+
+	@Test
+	void aShortRestartOrAFirstStartChangesNoDeadline() {
+		String slug = uniqueSlug();
+		String key = createCheck(slug, "{\"cron\":\"0 * * * *\",\"graceSeconds\":60}");
+		get("/ping/" + key);
+		this.jdbc.sql("UPDATE detector_heartbeat SET beat_at = NULL").update();
+		CLOCK.set("2026-01-05T11:00:30Z");
+		assertThat(this.detector.resumeAfterDowntime()).isZero();
+		this.detector.runOnce();
+		CLOCK.set("2026-01-05T11:02:30Z");
+		assertThat(this.detector.resumeAfterDowntime()).isZero();
+		this.detector.runOnce();
+		assertThat(field(slug, "status")).isEqualTo("DOWN");
+		assertThat(field(slug, "downReason")).isEqualTo("MISSED");
+	}
+
 	// --- Management API ---
 
 	@Test

@@ -128,4 +128,27 @@ public final class CheckStateMachine {
 		return Outcome.unchanged(s);
 	}
 
+	/**
+	 * Gives a check a new deadline after the server was away from {@code from} to
+	 * {@code now} (DESIGN.md §4, Downtime). An UP check whose open run, or whose run due
+	 * by now, could have reported while nobody listened is treated as resumed: no open
+	 * run, the next due time computed from now. Any other check is returned unchanged.
+	 * Mirrors {@code CheckRepository.claimAffectedByDowntime}.
+	 */
+	public static CheckState afterDowntime(CheckState s, Schedule schedule, Duration grace, Duration maxRuntime,
+			Instant from, Instant now) {
+		if (s.status() != CheckStatus.UP) {
+			return s;
+		}
+		boolean runCouldHaveEnded = s.runStartedAt() != null && s.runStartedAt().plus(maxRuntime).isAfter(from);
+		boolean runCouldHaveCome = s.nextDueAt() != null && !s.nextDueAt().isAfter(now)
+				&& s.nextDueAt().plus(grace).isAfter(from)
+				&& (s.lastPingAt() == null || s.lastPingAt().isBefore(s.nextDueAt()));
+		if (!runCouldHaveEnded && !runCouldHaveCome) {
+			return s;
+		}
+		return new CheckState(CheckStatus.UP, null, s.lastPingAt(), s.lastStartAt(), s.lastSuccessAt(),
+				schedule.next(now), null, null);
+	}
+
 }

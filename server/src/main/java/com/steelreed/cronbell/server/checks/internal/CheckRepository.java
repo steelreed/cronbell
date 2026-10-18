@@ -105,6 +105,31 @@ public class CheckRepository {
 		return this.jdbc.sql(sql).param("now", now.toEpochMilli()).param("limit", limit).query(MAPPER).list();
 	}
 
+	/**
+	 * Claims UP checks that could have reported while the server was away from
+	 * {@code from} to {@code now}: an open run whose deadline is after {@code from}, or a
+	 * run due by now, not pinged since, whose deadline is after {@code from}. Mirrors
+	 * {@code CheckStateMachine.afterDowntime}; locks as {@link #claimOverdue} does.
+	 */
+	public List<Check> claimAffectedByDowntime(Instant from, Instant now, int limit) {
+		String sql = """
+				SELECT %s
+				  FROM checks
+				 WHERE status = 'UP'
+				   AND ((run_started_at IS NOT NULL
+				         AND run_started_at + COALESCE(max_runtime_seconds, grace_seconds) * 1000 > :from)
+				     OR (next_due_at IS NOT NULL AND next_due_at <= :now AND next_due_at + grace_seconds * 1000 > :from
+				         AND (last_ping_at IS NULL OR last_ping_at < next_due_at)))
+				 ORDER BY next_due_at
+				 LIMIT :limit%s""".formatted(COLUMNS, this.database.forUpdateSkipLocked());
+		return this.jdbc.sql(sql)
+			.param("from", from.toEpochMilli())
+			.param("now", now.toEpochMilli())
+			.param("limit", limit)
+			.query(MAPPER)
+			.list();
+	}
+
 	public void insert(Check check, Instant now) {
 		CheckState s = check.state();
 		this.jdbc.sql("""

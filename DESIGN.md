@@ -118,6 +118,17 @@ Rules:
   them after.
 - Detection must be safe to run on several server instances: it claims due checks with
   `SELECT … FOR UPDATE SKIP LOCKED`.
+- **Downtime.** Every detector run leaves a heartbeat in the database (`detector_heartbeat`). When
+  the server starts and the last heartbeat is more than 2 minutes old (a constant, a few detector
+  runs), the server was away (stopped, upgraded, the host rebooted) and pings sent meanwhile were
+  lost: the jobs probably ran, Cronbell could not hear them. Before its first detection the server
+  treats as resumed (§3) every UP check whose open run could have finished in the gap (its
+  `max_runtime` ends after the last heartbeat), or whose run fell due by now without a ping and
+  with its grace ending after the last heartbeat: the open run is dropped and `due` is computed
+  from now, so the job has a full period plus grace to report. Nothing is alerted and no status
+  changes; a check that was already DOWN stays DOWN, and one still silent after its new deadline
+  goes DOWN as usual. One INFO line says `Server was away from <last heartbeat> to <now>; N checks
+  given a new deadline`. Shorter restarts, and a first start (no heartbeat yet), change nothing.
 
 ## 5. Ping API
 
