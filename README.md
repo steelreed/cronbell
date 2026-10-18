@@ -7,7 +7,7 @@
 scheduled tasks and background workers, in any language. Each job reports its runs; Cronbell knows
 when the next run is due and alerts you when a run is missed, late, failing or unusually slow.
 
-> **Status: beta.** `0.1.0-beta.2` is out and runs real jobs; `0.1.0` is planned for October 27,
+> **Status: beta.** `0.1.0-beta.3` is out and runs real jobs; `0.1.0` is planned for November 3,
 > 2026. Releases and notes: [CHANGELOG.md](CHANGELOG.md).
 
 ## Why
@@ -44,7 +44,7 @@ it finds every `@Scheduled`, Quartz and ShedLock job and reports each run withou
 One container, SQLite by default, PostgreSQL optional:
 
 ```bash
-docker run -d -p 8080:8080 -v cronbell-data:/data ghcr.io/steelreed/cronbell:0.1.0-beta.2
+docker run -d -p 8080:8080 -v cronbell-data:/data ghcr.io/steelreed/cronbell:0.1.0-beta.3
 ```
 
 Open `http://localhost:8080` and create the admin account.

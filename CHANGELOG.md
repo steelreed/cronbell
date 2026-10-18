@@ -6,23 +6,23 @@ All notable changes to Cronbell are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0-beta.3] - 2026-10-18
+
 ### Added
 
-- Status history: every change of a check (UP, DOWN with its reason and run, paused, resumed) is
-  stored with the status change and pruned with the rest of the history, keeping each check's
-  latest. `GET /api/v1/checks/{slug}/events` and `GET /api/v1/events` (the whole project) list
-  them; `GET /api/v1/checks/{slug}/alerts` lists the deliveries of each change per channel.
-  Existing checks that are DOWN or paused start their history at upgrade.
-- `GET /api/v1/checks/{slug}` has `stats`: uptime over 7 and 30 days (paused time left out) and
-  the average run duration over 7 days.
-- `GET /api/v1/stats/status`: how each check spent each of the last days (DOWN, issues, OK or no
-  data), with runs, failures, missed runs and time DOWN.
+- Discord and ntfy alert channels. Discord gets an embed (red for DOWN, green for UP, mentions
+  off) and its rate limits are retried after `retry_after`; ntfy posts to ntfy.sh or a self-hosted
+  server, with an optional access token, high priority for DOWN, tags and a link to the check.
+- Per-check alert channels: in the check form ("Alert channels"), a check alerts every channel of
+  its project or only the channels it picked. The check page says where its alerts go, and each
+  channel how many checks picked it. A check whose picked channels are all deleted alerts every
+  channel again.
 - Check page: a History panel with each downtime and pause (why, from when to when, how long) and
   where its alerts went, delivered or failed; uptime over 7 and 30 days and the average run; missed
   runs among the run ticks.
 - Overview: the last 30 days as one square per check and day, problems first, with the day's runs,
-  failures, missed runs and downtime on hover; and the project's recent status changes next to
-  what needs attention.
+  failures, missed runs and downtime on hover (it replaces the "Runs, last 14 days" chart); and
+  the project's recent status changes next to what needs attention.
 - A check that has never pinged opens on its ping URL, waiting for the first ping (refreshed
   every 3 seconds), with a **Send a test ping** button that pings it from the browser; then it
   says when the ping arrived and when the next run is due. Its empty Runs and Recent pings panels
@@ -32,15 +32,18 @@ All notable changes to Cronbell are listed here. The format follows
   open with its action, and the list goes away once the first three are done.
 - Integration guides in `docs/integrations/`: crontab, systemd timers, Kubernetes CronJob, GitHub
   Actions, Docker (with Ofelia) and scripts in Python, Node.js, Bash and PowerShell.
-- Discord and ntfy alert channels. Discord gets an embed (red for DOWN, green for UP, mentions
-  off) and its rate limits are retried after `retry_after`; ntfy posts to ntfy.sh or a self-hosted
-  server, with an optional access token, high priority for DOWN, tags and a link to the check.
-- Per-check alert channels: a check alerts every channel of its project, or only the channels it
-  picked (`"channels": [ids]` on `PUT /api/v1/checks/{slug}`, `null` for every channel; left out,
-  an update keeps the selection, so the starter does not reset it). A check whose picked channels
-  are all deleted alerts every channel again. Channels report `pickedBy`.
-- Dashboard: "Alert channels" in the check form, where alerts go on the check page, and how many
-  checks picked each channel.
+- Status history in the API: every change of a check (UP, DOWN with its reason and run, paused,
+  resumed) is stored and pruned with the rest of the history, keeping each check's latest.
+  `GET /api/v1/checks/{slug}/events` and `GET /api/v1/events` (the whole project) list them;
+  `GET /api/v1/checks/{slug}/alerts` lists the deliveries of each change per channel. Existing
+  checks that are DOWN or paused start their history at upgrade.
+- `GET /api/v1/checks/{slug}` has `stats`: uptime over 7 and 30 days (paused time left out) and
+  the average run duration over 7 days.
+- `GET /api/v1/stats/status`: how each check spent each of the last days (DOWN, issues, OK or no
+  data), with runs, failures, missed runs and time DOWN.
+- Alert channels per check in the API: `"channels": [ids]` on `PUT /api/v1/checks/{slug}`, `null`
+  for every channel. Left out, an update keeps the selection, so the Spring Boot starter does not
+  reset it. Channels report `pickedBy`.
 
 ### Changed
 
@@ -48,14 +51,12 @@ All notable changes to Cronbell are listed here. The format follows
   output; "Raw pings" shows every ping as before.
 - Durations read the same everywhere ("850ms", "12.4s", "1m 17s", "5h 46m"), and the duration
   chart's axis starts at 0.
-- The overview's "Runs, last 14 days" chart is replaced by the 30-day status strip.
 - With no checks, the overview and the checks list lead with one button, "Create your first
   check", which opens the form and then the new check's page. The `curl` recipe for scripts, now
   with the Spring Boot starter's two properties, sits behind "Using the API or the Spring Boot
   starter?".
-- The README no longer says every Healthchecks.io script keeps working: it lists what does (UUID
-  ping URLs with `/start`, `/fail`, `/log`, exit codes and `rid`) and what does not (slug URLs,
-  `?create=1`, bodies beyond 10 KB), and how to watch Cronbell itself.
+- The ping snippets in the dashboard and the integration guides stop retrying after a bounded time
+  (`--retry-max-time`), so a slow or unreachable Cronbell cannot hold up the job.
 - One "not found" page for unknown addresses and checks, inside the app with the sidebar and a
   link back (the global one had no sidebar, a missing check was a bare line). A page that fails to
   load or render shows the error with a retry instead of the router's raw message.
@@ -64,6 +65,9 @@ All notable changes to Cronbell are listed here. The format follows
 - The instance admin's Invites page, easy to mix up with the member invite links on Members, is
   now Instance invites at `/admin/invites`, in an Admin group of the sidebar that only the
   instance admin sees, and points to Members for adding someone to the current project.
+- The README no longer says every Healthchecks.io script keeps working: it lists what does (UUID
+  ping URLs with `/start`, `/fail`, `/log`, exit codes and `rid`) and what does not (slug URLs,
+  `?create=1`, bodies beyond 10 KB), and how to watch Cronbell itself.
 
 ### Fixed
 
@@ -74,8 +78,9 @@ All notable changes to Cronbell are listed here. The format follows
   how long the server was away.
 - The crontab and Kubernetes snippets of a period check always said `*/5 * * * *`. They now use
   the cron line of the period (`0 * * * *` for every hour, `*/15 * * * *` for 15 minutes, daily,
-  every 2, 3, 4, 6, 8 or 12 hours) and say so when a period has none. A 6-field cron drops its
-  zero seconds field, which crontab does not have.
+  every 2, 3, 4, 6, 8 or 12 hours), run it in UTC (`CRON_TZ=UTC`, `timeZone: Etc/UTC`) so a
+  daylight saving change does not make the check late, and say so when a period has none. A
+  6-field cron drops its zero seconds field, which crontab does not have.
 - Ping sources read `0:0:0:0:0:0:0:1`; IPv6 addresses are now compressed (`::1`) and
   IPv4-mapped ones shown as IPv4.
 - Paused checks were amber like late ones. A pause is deliberate, so it is grey everywhere; amber

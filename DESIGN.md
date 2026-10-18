@@ -677,10 +677,10 @@ The cloud sells not having to run it, plus team features.
 | Channels | all | email, Telegram | all, incl. Slack, Discord, ntfy, webhook, Zalo later |
 | History | configurable (default 90 days) | 30 days | 1 year |
 | Members | unlimited | 1 | 10 |
+| Support | GitHub issues | GitHub issues | email |
 
 `CRONBELL_PROJECT_MAX_CHECKS` (§6, Projects and invites) is how a hosted instance caps checks per
 project before billing exists.
-| Support | GitHub issues | GitHub issues | email |
 
 Billing is not built in v0.1.
 
