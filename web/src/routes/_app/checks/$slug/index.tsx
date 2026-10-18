@@ -7,11 +7,12 @@ import { RunsPanel } from "@/components/check/runs-panel";
 import { CheckActionsMenu } from "@/components/checks/row-actions";
 import { Dash, DescriptionList } from "@/components/description-list";
 import { NextDue } from "@/components/next-due";
+import { CheckNotFound } from "@/components/not-found";
 import { Bar, ErrorNote, ErrorState, PageHeader, Panel } from "@/components/page";
 import { StatusText } from "@/components/status-text";
 import { Time } from "@/components/time";
 import { Button } from "@/components/ui/button";
-import { ApiError } from "@/lib/api";
+import { isNotFound } from "@/lib/api";
 import { useCheckActions } from "@/lib/check-actions";
 import { formatSchedule, formatSeconds } from "@/lib/format";
 import { checkQuery, pingsQuery } from "@/lib/queries";
@@ -32,14 +33,8 @@ function CheckPage() {
   const now = useNow();
   if (check.isPending) return <CheckSkeleton />;
   if (check.isError) {
-    const missing = check.error instanceof ApiError && check.error.status === 404;
-    return missing ? (
-      <div className="mx-auto max-w-md py-16 text-center">
-        <h1 className="font-semibold text-xl">{t.check.notFound}</h1>
-        <Button asChild className="mt-6">
-          <Link to="/checks">{t.check.backToChecks}</Link>
-        </Button>
-      </div>
+    return isNotFound(check.error) ? (
+      <CheckNotFound slug={slug} />
     ) : (
       <Panel>
         <ErrorState error={check.error} onRetry={() => check.refetch()} />

@@ -13,6 +13,7 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as SigninRouteImport } from './routes/signin'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppSplatRouteImport } from './routes/_app/$'
 import { Route as AppAccountRouteImport } from './routes/_app/account'
 import { Route as AppChannelsRouteImport } from './routes/_app/channels'
 import { Route as AppInvitesRouteImport } from './routes/_app/invites'
@@ -41,6 +42,11 @@ const SigninRoute = SigninRouteImport.update({
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSplatRoute = AppSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAccountRoute = AppAccountRouteImport.update({
@@ -98,6 +104,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/setup': typeof SetupRoute
   '/signin': typeof SigninRoute
+  '/$': typeof AppSplatRoute
   '/account': typeof AppAccountRoute
   '/channels': typeof AppChannelsRoute
   '/invites': typeof AppInvitesRoute
@@ -112,6 +119,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/setup': typeof SetupRoute
   '/signin': typeof SigninRoute
+  '/$': typeof AppSplatRoute
   '/account': typeof AppAccountRoute
   '/channels': typeof AppChannelsRoute
   '/invites': typeof AppInvitesRoute
@@ -129,6 +137,7 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/setup': typeof SetupRoute
   '/signin': typeof SigninRoute
+  '/_app/$': typeof AppSplatRoute
   '/_app/account': typeof AppAccountRoute
   '/_app/channels': typeof AppChannelsRoute
   '/_app/invites': typeof AppInvitesRoute
@@ -147,6 +156,7 @@ export interface FileRouteTypes {
     | '/'
     | '/setup'
     | '/signin'
+    | '/$'
     | '/account'
     | '/channels'
     | '/invites'
@@ -161,6 +171,7 @@ export interface FileRouteTypes {
   to:
     | '/setup'
     | '/signin'
+    | '/$'
     | '/account'
     | '/channels'
     | '/invites'
@@ -177,6 +188,7 @@ export interface FileRouteTypes {
     | '/_app'
     | '/setup'
     | '/signin'
+    | '/_app/$'
     | '/_app/account'
     | '/_app/channels'
     | '/_app/invites'
@@ -225,6 +237,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/$': {
+      id: '/_app/$'
+      path: '/$'
+      fullPath: '/$'
+      preLoaderRoute: typeof AppSplatRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/account': {
@@ -301,6 +320,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteChildren {
+  AppSplatRoute: typeof AppSplatRoute
   AppAccountRoute: typeof AppAccountRoute
   AppChannelsRoute: typeof AppChannelsRoute
   AppInvitesRoute: typeof AppInvitesRoute
@@ -314,6 +334,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppSplatRoute: AppSplatRoute,
   AppAccountRoute: AppAccountRoute,
   AppChannelsRoute: AppChannelsRoute,
   AppInvitesRoute: AppInvitesRoute,

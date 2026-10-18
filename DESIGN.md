@@ -550,6 +550,10 @@ create a check, switch theme). The active page is marked with a grey fill and th
 its icon. Theme: dark (default), light or system. In the light theme the page is white and cards
 are the `#F7F7F7` surface; in the dark theme the page is ink and cards `#131313`.
 
+Every page has a skeleton while it loads and, when a load fails, the error with a retry. An
+unknown address or check shows one "not found" page inside the shell (404, what is missing, a link
+back to the overview or the checks); a page that fails to render shows its error with a retry.
+
 | Screen | Path | Content |
 |---|---|---|
 | Setup | `/setup` | first run only: admin email and password |

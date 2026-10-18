@@ -226,8 +226,6 @@ export const en = {
       body: "Output",
     },
     kinds: { START: "start", SUCCESS: "success", FAIL: "fail", LOG: "log" },
-    notFound: "This check does not exist.",
-    backToChecks: "Back to checks",
     sameAsGrace: "same as grace",
     showOutput: "Show output",
     hideOutput: "Hide output",
@@ -427,8 +425,15 @@ export const en = {
       "It may have expired, been used or been withdrawn. Ask the person who invited you for a new link.",
     goToSignIn: "Go to sign in",
   },
-  notFound: "Page not found.",
-  goToOverview: "Go to overview",
+  notFound: {
+    title: "Page not found",
+    lead: "The address may be mistyped, or the page has moved.",
+    checkTitle: "Check not found",
+    checkLead: (slug: string) =>
+      `There is no check ${slug} in this project. It may have been deleted, or be in another project.`,
+    toOverview: "Go to overview",
+    toChecks: "Back to checks",
+  },
 };
 
 export type Strings = typeof en;
