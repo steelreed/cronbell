@@ -5,7 +5,7 @@
 
 **Know when a cron job stops running.** Cronbell is open-source monitoring for cron jobs,
 scheduled tasks and background workers, in any language. Each job reports its runs; Cronbell knows
-when the next run is due and alerts you when a run is missed, late, failing or unusually slow.
+when the next run is due and alerts you when a run is missed, fails or runs longer than it should.
 
 ![Cronbell overview in dark mode: ten checks with a 30-day status strip per check, one check DOWN after a failed run, and the recent status changes of the project](docs/images/overview.png)
 
