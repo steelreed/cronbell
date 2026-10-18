@@ -12,6 +12,8 @@ All notable changes to Cronbell are listed here. The format follows
   the cron line of the period (`0 * * * *` for every hour, `*/15 * * * *` for 15 minutes, daily,
   every 2, 3, 4, 6, 8 or 12 hours) and say so when a period has none. A 6-field cron drops its
   zero seconds field, which crontab does not have.
+- Ping sources read `0:0:0:0:0:0:0:1`; IPv6 addresses are now compressed (`::1`) and
+  IPv4-mapped ones shown as IPv4.
 
 ## [0.1.0-beta.2] - 2026-10-17
 
