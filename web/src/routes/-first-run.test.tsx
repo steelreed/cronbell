@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Check, Ping } from "@/lib/types";
@@ -34,6 +34,75 @@ const aPing: Ping = {
   userAgent: null,
   durationMs: null,
 };
+
+const channel = (lastDeliveryAt: string | null) => ({
+  id: "c1",
+  type: "EMAIL",
+  name: "Ops",
+  lastDeliveryAt,
+});
+
+async function findSteps() {
+  const heading = await screen.findByRole("heading", { name: "Get started" });
+  return heading.closest("section") as HTMLElement;
+}
+
+describe("first steps on the overview", () => {
+  it("opens the next step and links to the check waiting for its ping", async () => {
+    vi.stubGlobal(
+      "fetch",
+      stubFetch({
+        ...signedIn,
+        "GET /api/v1/checks": () => [200, [fresh]],
+        "GET /api/v1/channels": () => [200, []],
+      }),
+    );
+    renderAt("/");
+    const steps = await findSteps();
+    expect(within(steps).getByText("1 of 3 done")).toBeInTheDocument();
+    const current = within(steps)
+      .getAllByRole("listitem")
+      .find((item) => item.getAttribute("aria-current") === "step");
+    expect(current).toHaveTextContent("Receive the first ping");
+    expect(within(steps).getByRole("link", { name: "Open Nightly backup" })).toHaveAttribute(
+      "href",
+      "/checks/nightly-backup",
+    );
+    expect(within(steps).getByText(/Invite a teammate/)).toBeInTheDocument();
+  });
+
+  it("asks for a test once a channel exists but has delivered nothing", async () => {
+    vi.stubGlobal(
+      "fetch",
+      stubFetch({
+        ...signedIn,
+        "GET /api/v1/checks": () => [200, [aCheck()]],
+        "GET /api/v1/channels": () => [200, [channel(null)]],
+      }),
+    );
+    renderAt("/");
+    const steps = await findSteps();
+    expect(within(steps).getByText("2 of 3 done")).toBeInTheDocument();
+    expect(within(steps).getByRole("link", { name: "Send a test" })).toHaveAttribute(
+      "href",
+      "/channels",
+    );
+  });
+
+  it("goes away once a check has pinged and a channel has delivered", async () => {
+    vi.stubGlobal(
+      "fetch",
+      stubFetch({
+        ...signedIn,
+        "GET /api/v1/checks": () => [200, [aCheck()]],
+        "GET /api/v1/channels": () => [200, [channel("2026-01-05T09:00:00Z")]],
+      }),
+    );
+    renderAt("/");
+    expect(await screen.findByText("Up")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Get started" })).not.toBeInTheDocument();
+  });
+});
 
 describe("a check waiting for its first ping", () => {
   it("leads with the ping URL, sends a test ping and shows it arrive", async () => {

@@ -12,6 +12,9 @@ All notable changes to Cronbell are listed here. The format follows
   every 3 seconds), with a **Send a test ping** button that pings it from the browser; then it
   says when the ping arrived and when the next run is due. Its empty Runs and Recent pings panels
   stay hidden until there is a ping.
+- First steps on the overview while a project is being set up: create a check, receive its first
+  ping, add an alert channel and send a test, and optionally invite a teammate. The next step is
+  open with its action, and the list goes away once the first three are done.
 
 ### Changed
 
