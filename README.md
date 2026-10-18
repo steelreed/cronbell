@@ -7,6 +7,8 @@
 scheduled tasks and background workers, in any language. Each job reports its runs; Cronbell knows
 when the next run is due and alerts you when a run is missed, late, failing or unusually slow.
 
+![Cronbell overview in dark mode: ten checks with a 30-day status strip per check, one check DOWN after a failed run, and the recent status changes of the project](docs/images/overview.png)
+
 > **Status: beta.** `0.1.0-beta.3` is out and runs real jobs; `0.1.0` is planned for November 3,
 > 2026. Releases and notes: [CHANGELOG.md](CHANGELOG.md).
 
@@ -38,6 +40,17 @@ GitHub Actions, Docker and scripts.
 **Spring Boot teams** can use
 [`cronbell-spring-boot-starter`](https://github.com/steelreed/cronbell-spring-boot-starter) (beta):
 it finds every `@Scheduled`, Quartz and ShedLock job and reports each run without code changes.
+
+## Screenshots
+
+The page of a check: uptime over 7 and 30 days, every run as a tick and a duration bar, and the
+history of each downtime with the channels that were alerted.
+
+![Check page of a nightly database backup: 100% uptime over 7 days and 98.9% over 30, run ticks and durations with one failed run, and its downtime in the history with the Slack, ntfy and Telegram alerts delivered](docs/images/check.png)
+
+The check form previews the next runs of a cron schedule in its time zone.
+
+![Check form for a nightly database backup: cron 0 2 * * * in Europe/Berlin, the next five runs, a 30-minute grace period and a one-hour maximum runtime](docs/images/check-form.png)
 
 ## Self-host
 
