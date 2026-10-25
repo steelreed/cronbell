@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>4.1.1</version>
+		<version>4.1.2</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.steelreed</groupId>
@@ -37,7 +37,7 @@
 		<spring-javaformat.version>0.0.48</spring-javaformat.version>
 		<springdoc.version>3.1.1</springdoc.version>
 		<greenmail.version>2.1.14</greenmail.version>
-		<spring-modulith.version>2.1.1</spring-modulith.version>
+		<spring-modulith.version>2.1.2</spring-modulith.version>
 		<archunit.version>1.5.1</archunit.version>
 	</properties>
 	<dependencyManagement>
